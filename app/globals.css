@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-dark-900: #0a0e17;
+  --color-dark-800: #111827;
+  --color-dark-700: #1a2332;
+  --color-dark-600: #243044;
+  --color-dark-500: #374357;
+  --color-accent: #3b82f6;
+  --color-accent-dim: #2563eb;
+  --color-bull: #10b981;
+  --color-bull-dim: #059669;
+  --color-bear: #ef4444;
+  --color-bear-dim: #dc2626;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-dark-900);
+  color: #e2e8f0;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Tabular numbers for data cells */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-dark-800);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-dark-500);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-dark-600);
+}
+
+/* Loading shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--color-dark-700) 25%, var(--color-dark-600) 50%, var(--color-dark-700) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
