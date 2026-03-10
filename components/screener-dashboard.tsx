@@ -247,6 +247,10 @@ export default function ScreenerDashboard() {
     if (saved === null) return smartModeDefault;
     return saved === '1';
   });
+  const [showHeader, setShowHeader] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('crypto-rsi-show-header') !== '0';
+  });
   const [countdown, setCountdown] = useState(30);
   const [lastFetchTime, setLastFetchTime] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -335,6 +339,9 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-smart-mode', smartMode ? '1' : '0');
   }, [smartMode]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-show-header', showHeader ? '1' : '0');
+  }, [showHeader]);
 
   // Auto-adjust refresh interval when pair count changes (500 pairs needs more time)
   useEffect(() => {
@@ -530,6 +537,7 @@ export default function ScreenerDashboard() {
   return (
     <div className="max-w-[1800px] mx-auto px-4 py-6">
       {/* ── Header ── */}
+      {showHeader && (
       <header className="mb-5 rounded-2xl border border-dark-700 bg-gradient-to-r from-dark-900 via-dark-800 to-dark-900 p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
         <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
           <div>
@@ -587,9 +595,10 @@ export default function ScreenerDashboard() {
           </div>
         </div>
       </header>
+      )}
 
       {/* ── Stats bar (2 rows) ── */}
-      {meta && (
+      {showHeader && meta && (
         <div className="space-y-3 mb-5">
           {/* Row 1: core market metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -686,6 +695,18 @@ export default function ScreenerDashboard() {
           title="Adaptive performance mode"
         >
           ⚡ Smart {smartMode ? 'On' : 'Off'}
+        </button>
+
+        <button
+          onClick={() => setShowHeader((v) => !v)}
+          className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
+            showHeader
+              ? 'bg-dark-700 text-gray-300 border-dark-600 hover:bg-dark-600'
+              : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
+          }`}
+          title="Toggle dashboard header and stat cards"
+        >
+          {showHeader ? '▴ Hide Header' : '▾ Show Header'}
         </button>
 
         {/* Column picker */}
