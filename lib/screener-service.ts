@@ -15,15 +15,16 @@ const BINANCE_APIS = [
   'https://data-api.binance.vision',
 ] as const;
 const FETCH_HEADERS: HeadersInit = {
-  'User-Agent': 'Mozilla/5.0 (compatible; CryptoRSI/1.0)',
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0',
   'Accept': 'application/json',
 };
 const RSI_PERIOD = 14;
-const KLINE_LIMIT = 900; // 900 1m candles (~15h): minimum for derived 1h RSI(14) + 15m indicators
-const BATCH_SIZE = 50; // baseline parallel kline fetches per batch
-const BATCH_DELAY_MS = 120; // low baseline delay – Binance allows 1200 req/min
-const FETCH_RETRY_COUNT = 2; // retry failed kline fetches
-const MAX_KLINE_FETCH = 80; // cap kline fetches per cycle (rolling refresh)
+const KLINE_LIMIT = 900; // 900 1m candles (~15h): for derived 1h RSI(14) + 15m indicators
+const BATCH_SIZE = 20; // conservative batch to avoid rate limits
+const BATCH_DELAY_MS = 500; // generous delay between batches
+const FETCH_RETRY_COUNT = 4; // retry across multiple endpoints
+const MAX_KLINE_FETCH = 40; // cap kline fetches per cycle (rolling refresh)
+const KLINE_TIMEOUT_MS = 15_000; // 15s per kline fetch
 
 // ── In-memory symbol cache ──
 let symbolCache: { data: string[]; ts: number } | null = null;
@@ -146,8 +147,9 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
   for (const base of BINANCE_APIS) {
     try {
       const res = await fetch(`${base}/api/v3/ticker/24hr`, {
-        signal: AbortSignal.timeout(10000),
+        signal: AbortSignal.timeout(12000),
         headers: FETCH_HEADERS,
+        cache: 'no-store' as RequestCache,
       });
       if (!res.ok) throw new Error(`Binance ticker API ${res.status} from ${base}`);
 
@@ -180,9 +182,9 @@ async function getTopSymbols(count: number): Promise<string[]> {
     const usdtPairs = [...tickers.values()]
       .filter((t) => {
         if (!t.symbol.endsWith('USDT')) return false;
-        // Exclude leverage tokens, stablecoins, and low-quality pairs
+        // Exclude leverage tokens, stablecoins, wrapped/pegged tokens, and fiat pairs
         const base = t.symbol.slice(0, -4);
-        if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|EUR|GBP|AUD|BRL|TRY)$/.test(base)) return false;
+        if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|PYUSD|USD1|PAXG|WBTC|WBETH|BFUSD|EUR|GBP|AUD|BRL|TRY|BIDR|IDRT|UAH|NGN|PLN|RON|ARS|CZK)$/.test(base)) return false;
         if (/UP$|DOWN$|BEAR$|BULL$/.test(base)) return false;
         const vol = parseFloat(t.quoteVolume);
         return Number.isFinite(vol) && vol > 0;
@@ -207,21 +209,30 @@ async function fetchWithRetry(
   retries = FETCH_RETRY_COUNT,
 ): Promise<BinanceKline[]> {
   let lastError: unknown;
+  // Randomize starting endpoint so parallel fetches spread across all APIs
+  const startIdx = Math.floor(Math.random() * BINANCE_APIS.length);
   for (let attempt = 0; attempt <= retries; attempt++) {
-    const base = BINANCE_APIS[attempt % BINANCE_APIS.length];
+    const base = BINANCE_APIS[(startIdx + attempt) % BINANCE_APIS.length];
     try {
-      const res = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(10000), headers: FETCH_HEADERS });
+      const res = await fetch(`${base}${path}`, {
+        signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
+        headers: FETCH_HEADERS,
+        cache: 'no-store' as RequestCache,
+      });
       if (res.status === 429) {
-        // Rate limited — wait and retry
-        const wait = Math.min(2000 * (attempt + 1), 5000);
+        const wait = Math.min(2000 * (attempt + 1), 8000);
+        console.warn(`[kline] 429 rate-limited from ${base}, waiting ${wait}ms`);
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
-      if (!res.ok) throw new Error(`${label}: ${res.status} from ${base}`);
+      if (!res.ok) throw new Error(`${label}: HTTP ${res.status} from ${base}`);
       return res.json();
     } catch (err) {
       lastError = err;
-      if (attempt === retries) throw err;
+      if (attempt === retries) {
+        console.warn(`[kline] ${label}: all ${retries + 1} attempts failed:`, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
     }
   }
@@ -252,14 +263,14 @@ async function fetchKlinesBatched(
   fetcher: (symbol: string) => Promise<BinanceKline[]>,
 ): Promise<PromiseSettledResult<BinanceKline[]>[]> {
   const results: PromiseSettledResult<BinanceKline[]>[] = [];
-  const batchSize = symbols.length >= 400 ? 40 : symbols.length >= 200 ? 45 : BATCH_SIZE;
-  const batchDelay = symbols.length >= 60 ? 180 : BATCH_DELAY_MS;
+  // Conservative batching: small batches with generous delays
+  const batchSize = Math.min(BATCH_SIZE, symbols.length >= 30 ? 15 : BATCH_SIZE);
+  const batchDelay = BATCH_DELAY_MS;
 
   for (let i = 0; i < symbols.length; i += batchSize) {
     const batch = symbols.slice(i, i + batchSize);
     const batchResults = await Promise.allSettled(batch.map(fetcher));
     results.push(...batchResults);
-    // Delay between batches to respect Binance rate limits
     if (i + batchSize < symbols.length) {
       await new Promise((r) => setTimeout(r, batchDelay));
     }
@@ -317,12 +328,20 @@ function buildEntryFromKlines(
   nowTs: number,
 ): ScreenerEntry | null {
   try {
+    if (!Array.isArray(klines) || klines.length === 0) {
+      console.warn(`[screener] ${sym}: klines empty or not an array`);
+      return null;
+    }
     // Filter out klines with invalid data
     const validKlines = klines.filter((k) => {
+      if (!Array.isArray(k) || k.length < 6) return false;
       const close = parseFloat(k[4]);
       return Number.isFinite(close) && close > 0;
     });
-    if (validKlines.length < RSI_PERIOD + 2) return null;
+    if (validKlines.length < RSI_PERIOD + 2) {
+      console.warn(`[screener] ${sym}: only ${validKlines.length} valid klines out of ${klines.length} (need ${RSI_PERIOD + 2})`);
+      return null;
+    }
 
   const closes1m = validKlines.map((k) => parseFloat(k[4]));
   const highs1m = validKlines.map((k) => parseFloat(k[2]));
@@ -438,6 +457,7 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
   const work = (async (): Promise<ScreenerResponse> => {
     const start = Date.now();
     const nowTs = Date.now();
+    console.log(`[screener] runRefresh(${symbolCount}) starting...`);
 
     // 1. Get top symbols + ticker data in parallel
     const [symbols, tickers] = await Promise.all([
@@ -447,21 +467,30 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
     const staleBefore = nowTs - INDICATOR_CACHE_TTL;
+    const uncachedSymbols = symbols.filter((sym) => !indicatorCache.has(sym));
     let symbolsToRefresh = symbols.filter((sym) => {
       const cached = indicatorCache.get(sym);
       return !cached || cached.ts < staleBefore;
     });
 
-    // Rolling refresh: cap kline fetches per cycle.
-    // Prioritise uncached (new) symbols, then oldest cached.
-    if (symbolsToRefresh.length > MAX_KLINE_FETCH) {
+    // Bootstrap mode: prioritise full coverage so all selected pairs get indicators quickly.
+    // Rolling mode: once coverage is warm, keep each cycle bounded.
+    const refreshCap = uncachedSymbols.length > 0
+      ? (symbolCount <= 150 ? symbolCount : Math.min(symbolCount, 120))
+      : MAX_KLINE_FETCH;
+
+    if (symbolsToRefresh.length > refreshCap) {
       symbolsToRefresh.sort((a, b) => {
         const ta = indicatorCache.get(a)?.ts ?? 0;
         const tb = indicatorCache.get(b)?.ts ?? 0;
-        return ta - tb; // oldest first
+        return ta - tb; // oldest first (uncached = 0, so they come first)
       });
-      symbolsToRefresh = symbolsToRefresh.slice(0, MAX_KLINE_FETCH);
+      symbolsToRefresh = symbolsToRefresh.slice(0, refreshCap);
     }
+
+    console.log(
+      `[screener] coverage pre-refresh: ${symbols.length - uncachedSymbols.length}/${symbols.length}, refreshing ${symbolsToRefresh.length}`,
+    );
 
     const klines1mResults = symbolsToRefresh.length > 0
       ? await fetchKlinesBatched(symbolsToRefresh, fetchKlines)
@@ -476,7 +505,18 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
     }
     if (failedCount > 0) {
       console.warn(`[screener] ${failedCount}/${symbolsToRefresh.length} kline fetches failed`);
+      // Log first few failure reasons for diagnosis
+      let logged = 0;
+      for (const [sym, result] of klineResultBySymbol) {
+        if (result.status === 'rejected' && logged < 3) {
+          console.warn(`[screener] ${sym} failed:`, result.reason instanceof Error ? result.reason.message : String(result.reason));
+          logged++;
+        }
+      }
     }
+
+    const successCount = symbolsToRefresh.length - failedCount;
+    console.log(`[screener] Klines: ${successCount} ok, ${failedCount} failed out of ${symbolsToRefresh.length} symbols`);
 
     // 3. Process each symbol
     const entries: ScreenerEntry[] = [];
@@ -486,11 +526,16 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
       const refreshResult = klineResultBySymbol.get(sym);
 
       if (refreshResult?.status === 'fulfilled') {
-        const freshEntry = buildEntryFromKlines(sym, refreshResult.value, ticker, nowTs);
-        if (freshEntry) {
-          entries.push(freshEntry);
-          indicatorCache.set(sym, { entry: freshEntry, ts: nowTs });
-          continue;
+        const klines = refreshResult.value;
+        if (!klines || klines.length === 0) {
+          console.warn(`[screener] ${sym}: kline fetch returned empty`);
+        } else {
+          const freshEntry = buildEntryFromKlines(sym, klines, ticker, nowTs);
+          if (freshEntry) {
+            entries.push(freshEntry);
+            indicatorCache.set(sym, { entry: freshEntry, ts: nowTs });
+            continue;
+          }
         }
       }
 
@@ -509,7 +554,10 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
 
     pruneIndicatorCache();
 
+    const withIndicators = entries.filter(e => e.rsi15m !== null).length;
     const computeTimeMs = Date.now() - start;
+    console.log(`[screener] Done: ${entries.length} entries (${withIndicators} with indicators, ${entries.length - withIndicators} ticker-only) in ${computeTimeMs}ms`);
+
     const response: ScreenerResponse = {
       data: entries,
       meta: buildMeta(entries, computeTimeMs),

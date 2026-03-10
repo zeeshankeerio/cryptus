@@ -272,6 +272,10 @@ export default function ScreenerDashboard() {
     });
   }, [data, livePrices]);
 
+  const indicatorReadyCount = useMemo(() => (
+    data.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
+  ), [data]);
+
   // Close column picker on click outside
   useEffect(() => {
     if (!showColPicker) return;
@@ -532,6 +536,12 @@ export default function ScreenerDashboard() {
                 <span className="font-medium text-gray-200 tabular-nums">{meta.computeTimeMs}ms</span>
               </div>
             )}
+            {data.length > 0 && (
+              <div className="inline-flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-800/80 px-3 py-1.5 text-gray-300">
+                <span className="text-gray-500">Indicators</span>
+                <span className="font-medium text-gray-200 tabular-nums">{indicatorReadyCount}/{data.length}</span>
+              </div>
+            )}
             <div className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 ${
               isConnected
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
@@ -716,6 +726,14 @@ export default function ScreenerDashboard() {
           <button onClick={() => fetchData()} className="px-3 py-1 bg-red-500/20 rounded-lg hover:bg-red-500/30 transition-colors">
             Retry
           </button>
+        </div>
+      )}
+
+      {/* ── Indicators computing notice ── */}
+      {!loading && data.length > 0 && indicatorReadyCount < data.length && (
+        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-sm flex items-center gap-3">
+          <span className="animate-spin text-base">⟳</span>
+          <span>Computing indicators... {indicatorReadyCount}/{data.length} ready. Prices are live and remaining pairs will fill in automatically.</span>
         </div>
       )}
 
