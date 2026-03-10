@@ -8,14 +8,23 @@ export const maxDuration = 60; // Allow up to 60s for 500-coin fetches on Vercel
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const count = Math.min(
-      Math.max(parseInt(searchParams.get('count') ?? '100', 10) || 100, 10),
-      500,
-    );
+    const rawCount = parseInt(searchParams.get('count') ?? '100', 10);
+    // Sanitize: NaN defaults to 100, clamp to [10, 500]
+    const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 500);
 
     const result = await getScreenerData(count);
-    // Aggressive CDN caching — stale-first logic on the server already
-    // returns cached data instantly, so the CDN layer adds a second shield.
+
+    // Return 503 if the service returned zero data (upstream failure)
+    if (result.data.length === 0) {
+      return NextResponse.json(
+        { error: 'No data available — upstream API may be temporarily unreachable', data: [], meta: result.meta },
+        {
+          status: 503,
+          headers: { 'Cache-Control': 'no-store', 'Retry-After': '10' },
+        },
+      );
+    }
+
     const sMaxAge = count >= 300 ? 15 : 8;
     const swr = count >= 300 ? 120 : 60;
 
@@ -25,10 +34,10 @@ export async function GET(request: Request) {
       },
     });
   } catch (err) {
-    console.error('Screener API error:', err);
+    console.error('[screener-api] Unhandled error:', err instanceof Error ? err.message : err);
     return NextResponse.json(
-      { error: 'Failed to fetch screener data' },
-      { status: 502 },
+      { error: 'Internal server error' },
+      { status: 502, headers: { 'Cache-Control': 'no-store', 'Retry-After': '5' } },
     );
   }
 }

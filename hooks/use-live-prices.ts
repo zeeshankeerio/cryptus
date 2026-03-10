@@ -20,6 +20,8 @@ interface BinanceMiniTicker {
 const WS_URL = 'wss://stream.binance.com:9443/ws/!miniTicker@arr';
 const FLUSH_INTERVAL_MS = 2000;
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
+const MAX_BUFFER_SIZE = 1000; // prevent unbounded buffer growth
+const STALE_THRESHOLD_MS = 300_000; // 5 min — drop stale ticks
 
 export function useLivePrices(symbols: Set<string>) {
   const [livePrices, setLivePrices] = useState<Map<string, LiveTick>>(new Map());
@@ -41,10 +43,17 @@ export function useLivePrices(symbols: Set<string>) {
       if (typeof document !== 'undefined' && document.hidden) return;
       const buf = bufferRef.current;
       if (buf.size === 0) return;
+      const now = Date.now();
       setLivePrices((prev) => {
         const next = new Map(prev);
         buf.forEach((tick, sym) => next.set(sym, tick));
         buf.clear();
+        // Prune stale ticks that haven't been updated in 5 minutes
+        if (next.size > 0) {
+          for (const [sym, tick] of next) {
+            if (now - tick.updatedAt > STALE_THRESHOLD_MS) next.delete(sym);
+          }
+        }
         return next;
       });
     }, FLUSH_INTERVAL_MS);
@@ -79,13 +88,19 @@ export function useLivePrices(symbols: Set<string>) {
             if (!tracked.has(t.s)) continue;
             const close = parseFloat(t.c);
             const open = parseFloat(t.o);
-            const change24h = open > 0 ? Math.round(((close - open) / open) * 10000) / 100 : 0;
+            if (!Number.isFinite(close) || close <= 0) continue;
+            const change24h = Number.isFinite(open) && open > 0
+              ? Math.round(((close - open) / open) * 10000) / 100
+              : 0;
+            const volume = parseFloat(t.q);
             bufferRef.current.set(t.s, {
               price: close,
               change24h,
-              volume24h: parseFloat(t.q),
+              volume24h: Number.isFinite(volume) ? volume : 0,
               updatedAt: now,
             });
+            // Cap buffer size to prevent memory issues if symbols set is huge
+            if (bufferRef.current.size > MAX_BUFFER_SIZE) break;
           }
         } catch {
           // Ignore malformed messages

@@ -127,12 +127,14 @@ export function calculateBollinger(
   const lower = mean - stdDevMultiplier * stdDev;
   const current = closes[closes.length - 1];
   const range = upper - lower;
+  // Clamp position to [0, 1] to handle outliers beyond the bands
+  const pos = range > 0 ? Math.max(0, Math.min(1, (current - lower) / range)) : 0.5;
 
   return {
     upper: round(upper),
     middle: round(mean),
     lower: round(lower),
-    position: range > 0 ? round((current - lower) / range) : 0.5,
+    position: round(pos),
   };
 }
 
@@ -224,7 +226,7 @@ export function calculateVwap(
   closes: number[],
   volumes: number[],
 ): number | null {
-  if (closes.length === 0) return null;
+  if (closes.length === 0 || highs.length === 0 || lows.length === 0 || volumes.length === 0) return null;
 
   let cumTPV = 0;
   let cumVol = 0;
@@ -248,10 +250,11 @@ export function detectVolumeSpike(
   if (volumes.length < lookback + 1) return false;
 
   const recent = volumes.slice(-lookback - 1, -1);
+  if (recent.length === 0) return false;
   const avg = recent.reduce((a, b) => a + b, 0) / recent.length;
   const current = volumes[volumes.length - 1];
 
-  return avg > 0 && current >= avg * threshold;
+  return Number.isFinite(avg) && avg > 0 && Number.isFinite(current) && current >= avg * threshold;
 }
 
 // ── Strategy Scoring ────────────────────────────────────────────
@@ -351,8 +354,9 @@ export function computeStrategyScore(params: {
     score *= 1.15;
   }
 
-  // Normalize to -100..+100
-  const normalized = factors > 0 ? Math.round(Math.max(-100, Math.min(100, score / factors))) : 0;
+  // Normalize to -100..+100, guard against NaN
+  const raw = factors > 0 ? score / factors : 0;
+  const normalized = Number.isFinite(raw) ? Math.round(Math.max(-100, Math.min(100, raw))) : 0;
 
   let signal: StrategySignal;
   let label: string;

@@ -33,7 +33,8 @@ export function calculateRsi(closes: number[], period: number = 14): number | nu
     }
   }
 
-  if (avgLoss === 0) return 100;
+  if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
   const rs = avgGain / avgLoss;
-  return Math.round((100 - 100 / (1 + rs)) * 100) / 100;
+  const rsi = 100 - 100 / (1 + rs);
+  return Math.round(Math.max(0, Math.min(100, rsi)) * 100) / 100;
 }

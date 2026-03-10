@@ -178,7 +178,15 @@ async function getTopSymbols(count: number): Promise<string[]> {
   try {
     const tickers = await fetchTickers();
     const usdtPairs = [...tickers.values()]
-      .filter((t) => t.symbol.endsWith('USDT'))
+      .filter((t) => {
+        if (!t.symbol.endsWith('USDT')) return false;
+        // Exclude leverage tokens, stablecoins, and low-quality pairs
+        const base = t.symbol.slice(0, -4);
+        if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|EUR|GBP|AUD|BRL|TRY)$/.test(base)) return false;
+        if (/UP$|DOWN$|BEAR$|BULL$/.test(base)) return false;
+        const vol = parseFloat(t.quoteVolume);
+        return Number.isFinite(vol) && vol > 0;
+      })
       .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
       .slice(0, Math.max(count, 500))
       .map((t) => t.symbol);
@@ -308,25 +316,31 @@ function buildEntryFromKlines(
   ticker: BinanceTicker | undefined,
   nowTs: number,
 ): ScreenerEntry | null {
-  if (klines.length < RSI_PERIOD + 2) return null;
+  try {
+    // Filter out klines with invalid data
+    const validKlines = klines.filter((k) => {
+      const close = parseFloat(k[4]);
+      return Number.isFinite(close) && close > 0;
+    });
+    if (validKlines.length < RSI_PERIOD + 2) return null;
 
-  const closes1m = klines.map((k) => parseFloat(k[4]));
-  const highs1m = klines.map((k) => parseFloat(k[2]));
-  const lows1m = klines.map((k) => parseFloat(k[3]));
-  const volumes1m = klines.map((k) => parseFloat(k[5]));
+  const closes1m = validKlines.map((k) => parseFloat(k[4]));
+  const highs1m = validKlines.map((k) => parseFloat(k[2]));
+  const lows1m = validKlines.map((k) => parseFloat(k[3]));
+  const volumes1m = validKlines.map((k) => parseFloat(k[5]));
 
   const rsi1m = calculateRsi(closes1m, RSI_PERIOD);
 
-  const agg5m = aggregateKlines(klines, 5);
+  const agg5m = aggregateKlines(validKlines, 5);
   const closes5m = agg5m.map((c) => c.close);
   const rsi5m = closes5m.length >= RSI_PERIOD + 1 ? calculateRsi(closes5m, RSI_PERIOD) : null;
 
-  const agg15m = aggregateKlines(klines, 15);
+  const agg15m = aggregateKlines(validKlines, 15);
   const closes15m = agg15m.map((c) => c.close);
   const rsi15m = closes15m.length >= RSI_PERIOD + 1 ? calculateRsi(closes15m, RSI_PERIOD) : null;
 
   let rsi1h: number | null = null;
-  const agg1h = aggregateKlines(klines, 60);
+  const agg1h = aggregateKlines(validKlines, 60);
   const closes1h = agg1h.map((c) => c.close);
   if (closes1h.length >= RSI_PERIOD + 1) {
     rsi1h = calculateRsi(closes1h, RSI_PERIOD);
@@ -341,8 +355,8 @@ function buildEntryFromKlines(
 
   const todayUtcMs = new Date().setUTCHours(0, 0, 0, 0);
   let vwapStart = 0;
-  for (let j = 0; j < klines.length; j++) {
-    if (klines[j][0] >= todayUtcMs) {
+  for (let j = 0; j < validKlines.length; j++) {
+    if (validKlines[j][0] >= todayUtcMs) {
       vwapStart = j;
       break;
     }
@@ -409,6 +423,10 @@ function buildEntryFromKlines(
     strategyLabel: strategy.label,
     updatedAt: nowTs,
   };
+  } catch (err) {
+    console.warn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 const refreshInFlight = new Map<number, Promise<ScreenerResponse>>();
@@ -450,8 +468,14 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
       : [];
 
     const klineResultBySymbol = new Map<string, PromiseSettledResult<BinanceKline[]>>();
+    let failedCount = 0;
     for (let i = 0; i < symbolsToRefresh.length; i++) {
-      klineResultBySymbol.set(symbolsToRefresh[i], klines1mResults[i]);
+      const result = klines1mResults[i];
+      klineResultBySymbol.set(symbolsToRefresh[i], result);
+      if (result.status === 'rejected') failedCount++;
+    }
+    if (failedCount > 0) {
+      console.warn(`[screener] ${failedCount}/${symbolsToRefresh.length} kline fetches failed`);
     }
 
     // 3. Process each symbol

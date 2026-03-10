@@ -229,8 +229,17 @@ export default function ScreenerDashboard() {
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('strategyScore');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [refreshInterval, setRefreshInterval] = useState(30);
-  const [pairCount, setPairCount] = useState(100);
+  const [refreshInterval, setRefreshInterval] = useState(() => {
+    if (typeof window === 'undefined') return 30;
+    const saved = localStorage.getItem('crypto-rsi-refresh');
+    return saved ? Number(saved) : 30;
+  });
+  const [pairCount, setPairCount] = useState(() => {
+    if (typeof window === 'undefined') return 100;
+    const saved = localStorage.getItem('crypto-rsi-pairs');
+    const n = saved ? Number(saved) : 100;
+    return PAIR_COUNTS.includes(n) ? n : 100;
+  });
   const [countdown, setCountdown] = useState(30);
   const [lastFetchTime, setLastFetchTime] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -305,6 +314,14 @@ export default function ScreenerDashboard() {
     });
   }, []);
 
+  // Persist user preferences
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-refresh', String(refreshInterval));
+  }, [refreshInterval]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-pairs', String(pairCount));
+  }, [pairCount]);
+
   // Auto-adjust refresh interval when pair count changes (500 pairs needs more time)
   useEffect(() => {
     if (pairCount >= 300 && refreshInterval > 0 && refreshInterval < 30) {
@@ -324,9 +341,14 @@ export default function ScreenerDashboard() {
       const res = await fetch(`/api/screener?count=${pairCount}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!res.ok) throw new Error(`API error ${res.status}`);
 
       const json: ScreenerResponse = await res.json();
+
+      // 503 with data means partial result — still usable
+      if (!res.ok && !(res.status === 503 && json.data?.length > 0)) {
+        throw new Error(`API error ${res.status}`);
+      }
+
       setData(json.data);
       dataLenRef.current = json.data.length;
       setMeta(json.meta);
@@ -345,9 +367,22 @@ export default function ScreenerDashboard() {
     }
   }, [pairCount]);
 
-  // ── Initial fetch ──
+  // ── Initial fetch with auto-retry ──
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
-    fetchData();
+    retryCountRef.current = 0;
+    const doFetch = async () => {
+      await fetchData();
+      // If initial load failed and no data, retry with backoff (max 3 retries)
+      if (dataLenRef.current === 0 && retryCountRef.current < 3) {
+        retryCountRef.current++;
+        const delay = retryCountRef.current * 3000;
+        retryTimerRef.current = setTimeout(doFetch, delay);
+      }
+    };
+    doFetch();
+    return () => clearTimeout(retryTimerRef.current);
   }, [fetchData]);
 
   // ── Auto-refresh (skips when tab is hidden) ──
@@ -426,6 +461,7 @@ export default function ScreenerDashboard() {
       const av = a[sortKey as keyof ScreenerEntry];
       const bv = b[sortKey as keyof ScreenerEntry];
 
+      // Null values always sort to bottom regardless of direction
       if (av === null && bv === null) return 0;
       if (av === null) return 1;
       if (bv === null) return -1;
