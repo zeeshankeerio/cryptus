@@ -20,11 +20,10 @@ const FETCH_HEADERS: HeadersInit = {
 };
 const RSI_PERIOD = 14;
 const KLINE_LIMIT = 900; // 900 1m candles (~15h): for derived 1h RSI(14) + 15m indicators
-const BATCH_SIZE = 20; // conservative batch to avoid rate limits
-const BATCH_DELAY_MS = 500; // generous delay between batches
-const FETCH_RETRY_COUNT = 4; // retry across multiple endpoints
-const MAX_KLINE_FETCH = 40; // cap kline fetches per cycle (rolling refresh)
-const KLINE_TIMEOUT_MS = 15_000; // 15s per kline fetch
+const BATCH_SIZE = 16; // worker-pool concurrency baseline
+const FETCH_RETRY_COUNT = 3; // retries across rotating endpoints
+const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
+const KLINE_TIMEOUT_MS = 12_000; // 12s per kline fetch
 
 // ── In-memory symbol cache ──
 let symbolCache: { data: string[]; ts: number } | null = null;
@@ -262,20 +261,27 @@ async function fetchKlinesBatched(
   symbols: string[],
   fetcher: (symbol: string) => Promise<BinanceKline[]>,
 ): Promise<PromiseSettledResult<BinanceKline[]>[]> {
-  const results: PromiseSettledResult<BinanceKline[]>[] = [];
-  // Conservative batching: small batches with generous delays
-  const batchSize = Math.min(BATCH_SIZE, symbols.length >= 30 ? 15 : BATCH_SIZE);
-  const batchDelay = BATCH_DELAY_MS;
+  const results = new Array<PromiseSettledResult<BinanceKline[]>>(symbols.length);
+  const concurrency = symbols.length >= 400 ? 20
+    : symbols.length >= 250 ? 18
+      : symbols.length >= 120 ? 16
+        : BATCH_SIZE;
 
-  for (let i = 0; i < symbols.length; i += batchSize) {
-    const batch = symbols.slice(i, i + batchSize);
-    const batchResults = await Promise.allSettled(batch.map(fetcher));
-    results.push(...batchResults);
-    if (i + batchSize < symbols.length) {
-      await new Promise((r) => setTimeout(r, batchDelay));
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= symbols.length) return;
+      try {
+        const value = await fetcher(symbols[idx]);
+        results[idx] = { status: 'fulfilled', value };
+      } catch (reason) {
+        results[idx] = { status: 'rejected', reason };
+      }
     }
-  }
+  });
 
+  await Promise.all(workers);
   return results;
 }
 
@@ -476,7 +482,7 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
     // Bootstrap mode: prioritise full coverage so all selected pairs get indicators quickly.
     // Rolling mode: once coverage is warm, keep each cycle bounded.
     const refreshCap = uncachedSymbols.length > 0
-      ? (symbolCount <= 150 ? symbolCount : Math.min(symbolCount, 120))
+      ? (symbolCount <= 150 ? symbolCount : Math.min(symbolCount, symbolCount >= 400 ? 220 : 160))
       : MAX_KLINE_FETCH;
 
     if (symbolsToRefresh.length > refreshCap) {
