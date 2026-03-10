@@ -11,7 +11,13 @@ const BINANCE_APIS = [
   'https://api1.binance.com',
   'https://api2.binance.com',
   'https://api3.binance.com',
+  'https://api4.binance.com',
+  'https://data-api.binance.vision',
 ] as const;
+const FETCH_HEADERS: HeadersInit = {
+  'User-Agent': 'Mozilla/5.0 (compatible; CryptoRSI/1.0)',
+  'Accept': 'application/json',
+};
 const RSI_PERIOD = 14;
 const KLINE_LIMIT = 900; // 900 1m candles (~15h): minimum for derived 1h RSI(14) + 15m indicators
 const BATCH_SIZE = 50; // baseline parallel kline fetches per batch
@@ -84,6 +90,24 @@ function withTickerOverlay(entry: ScreenerEntry, ticker: BinanceTicker | undefin
   };
 }
 
+function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number): ScreenerEntry {
+  return {
+    symbol: sym,
+    price: toNum(ticker.lastPrice, 0),
+    change24h: toNum(ticker.priceChangePercent, 0),
+    volume24h: toNum(ticker.quoteVolume, 0),
+    rsi1m: null, rsi5m: null, rsi15m: null, rsi1h: null,
+    signal: 'neutral',
+    ema9: null, ema21: null, emaCross: 'none',
+    macdLine: null, macdSignal: null, macdHistogram: null,
+    bbUpper: null, bbMiddle: null, bbLower: null, bbPosition: null,
+    stochK: null, stochD: null,
+    vwap: null, vwapDiff: null, volumeSpike: false,
+    strategyScore: 0, strategySignal: 'neutral', strategyLabel: 'N/A',
+    updatedAt: nowTs,
+  };
+}
+
 function buildMeta(entries: ScreenerEntry[], computeTimeMs: number, fetchedAt = Date.now()): ScreenerResponse['meta'] {
   return {
     total: entries.length,
@@ -122,7 +146,8 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
   for (const base of BINANCE_APIS) {
     try {
       const res = await fetch(`${base}/api/v3/ticker/24hr`, {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(10000),
+        headers: FETCH_HEADERS,
       });
       if (!res.ok) throw new Error(`Binance ticker API ${res.status} from ${base}`);
 
@@ -177,7 +202,7 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     const base = BINANCE_APIS[attempt % BINANCE_APIS.length];
     try {
-      const res = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(10000), headers: FETCH_HEADERS });
       if (res.status === 429) {
         // Rate limited — wait and retry
         const wait = Math.min(2000 * (attempt + 1), 5000);
@@ -448,6 +473,13 @@ function runRefresh(symbolCount: number): Promise<ScreenerResponse> {
       const cached = indicatorCache.get(sym);
       if (cached) {
         entries.push(withTickerOverlay(cached.entry, ticker, nowTs));
+        continue;
+      }
+
+      // Ticker-only fallback: show price data even when indicators unavailable
+      // (common on Vercel cold starts where kline endpoints may be blocked)
+      if (ticker) {
+        entries.push(buildTickerOnlyEntry(sym, ticker, nowTs));
       }
     }
 

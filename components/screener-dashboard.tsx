@@ -235,6 +235,7 @@ export default function ScreenerDashboard() {
   const [lastFetchTime, setLastFetchTime] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const fetchingRef = useRef(false);
+  const dataLenRef = useRef(0);
 
   // Column visibility
   const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(() =>
@@ -327,14 +328,14 @@ export default function ScreenerDashboard() {
 
       const json: ScreenerResponse = await res.json();
       setData(json.data);
+      dataLenRef.current = json.data.length;
       setMeta(json.meta);
       setLastFetchTime(Date.now());
       setError(null);
       setLoading(false);
     } catch (err) {
       // Background fetch failures are silent when we already have data
-      // — WebSocket keeps prices live between indicator refreshes
-      if (data.length === 0) {
+      if (dataLenRef.current === 0) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       }
       setLoading(false);
@@ -342,7 +343,7 @@ export default function ScreenerDashboard() {
       fetchingRef.current = false;
       setRefreshing(false);
     }
-  }, [pairCount, data.length]);
+  }, [pairCount]);
 
   // ── Initial fetch ──
   useEffect(() => {
@@ -373,14 +374,14 @@ export default function ScreenerDashboard() {
   // ── Resume refresh on tab focus ──
   useEffect(() => {
     const handler = () => {
-      if (!document.hidden && refreshInterval > 0 && data.length > 0) {
+      if (!document.hidden && refreshInterval > 0 && dataLenRef.current > 0) {
         fetchData(true);
         setCountdown(refreshInterval);
       }
     };
     document.addEventListener('visibilitychange', handler);
     return () => document.removeEventListener('visibilitychange', handler);
-  }, [refreshInterval, fetchData, data.length]);
+  }, [refreshInterval, fetchData]);
 
   // ── Sorting ──
   const handleSort = useCallback(
@@ -886,7 +887,7 @@ export default function ScreenerDashboard() {
           {showWatchlistOnly && ` · watchlist only`}
         </span>
         <span className="flex items-center gap-2">
-          <span>Data from Binance{isConnected ? ' · Live WebSocket' : ' · REST API'} · RSI 14 · EMA 9/21 · MACD 12/26/9 · BB 20</span>
+          <span>Data from{isConnected ? ' · Live WebSocket' : ' · REST API'} · RSI 14 · EMA 9/21 · MACD 12/26/9 · BB 20</span>
           <Link href="/guide" className="text-blue-500 hover:text-blue-400 transition-colors">📖 Guide</Link>
         </span>
       </footer>

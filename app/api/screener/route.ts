@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getScreenerData } from '@/lib/screener-service';
 
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60s for 500-coin fetches on Vercel
 
 export async function GET(request: Request) {
