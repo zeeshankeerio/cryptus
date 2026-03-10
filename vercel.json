@@ -1,8 +1,7 @@
 {
-  "crons": [
-    {
-      "path": "/api/warm",
-      "schedule": "*/2 * * * *"
+  "functions": {
+    "app/api/screener/route.ts": {
+      "maxDuration": 60
     }
-  ]
+  }
 }
