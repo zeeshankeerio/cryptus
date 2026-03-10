@@ -44,7 +44,7 @@ const INDICATORS: Indicator[] = [
     parameters: [
       { name: 'Period', value: '14', description: 'Standard Wilder period for all timeframes' },
       { name: 'Timeframes', value: '1m, 5m, 15m, 1h', description: 'Multi-timeframe analysis from 1-minute to 1-hour candles' },
-      { name: 'Data source', value: 'Binance REST API', description: '1000 × 1m candles aggregated into higher timeframes' },
+      { name: 'Data source', value: 'REST API', description: '1000 × 1m candles aggregated into higher timeframes' },
     ],
     interpretation: [
       { condition: 'RSI ≤ 20', meaning: 'Deeply oversold — strong buy signal', color: 'text-emerald-400' },
@@ -426,7 +426,7 @@ export default function IndicatorGuide() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Source</div>
-            <div className="text-white font-medium">Binance WebSocket</div>
+            <div className="text-white font-medium">Paid WebSocket</div>
             <div className="text-gray-400 text-xs mt-1">Live prices via <code className="text-blue-400">!miniTicker@arr</code> stream — sub-second price updates for all tracked pairs</div>
           </div>
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">

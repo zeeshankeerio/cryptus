@@ -463,10 +463,6 @@ export default function ScreenerDashboard() {
                 <span className="font-medium text-gray-200 tabular-nums">{meta.computeTimeMs}ms</span>
               </div>
             )}
-            <div className="inline-flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-800/80 px-3 py-1.5 text-gray-300">
-              <span className="text-gray-500">Updated</span>
-              <span className="font-medium text-gray-200">{timeAgo(lastFetchTime)}</span>
-            </div>
             <div className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 ${
               isConnected
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
