@@ -16,6 +16,16 @@ interface SmartTuningState {
   lastComputeMs: number;
 }
 
+const SCREENER_DEBUG = process.env.SCREENER_DEBUG === '1';
+
+function debugLog(message: string, ...args: unknown[]) {
+  if (SCREENER_DEBUG) console.log(message, ...args);
+}
+
+function debugWarn(message: string, ...args: unknown[]) {
+  if (SCREENER_DEBUG) console.warn(message, ...args);
+}
+
 const BINANCE_APIS = [
   'https://api.binance.com',
   'https://api1.binance.com',
@@ -263,7 +273,7 @@ async function fetchWithRetry(
       });
       if (res.status === 429) {
         const wait = Math.min(2000 * (attempt + 1), 8000);
-        console.warn(`[kline] 429 rate-limited from ${base}, waiting ${wait}ms`);
+        debugWarn(`[kline] 429 rate-limited from ${base}, waiting ${wait}ms`);
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
@@ -272,7 +282,7 @@ async function fetchWithRetry(
     } catch (err) {
       lastError = err;
       if (attempt === retries) {
-        console.warn(`[kline] ${label}: all ${retries + 1} attempts failed:`, err instanceof Error ? err.message : String(err));
+        debugWarn(`[kline] ${label}: all ${retries + 1} attempts failed:`, err instanceof Error ? err.message : String(err));
         throw err;
       }
       await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
@@ -378,7 +388,7 @@ function buildEntryFromKlines(
 ): ScreenerEntry | null {
   try {
     if (!Array.isArray(klines) || klines.length === 0) {
-      console.warn(`[screener] ${sym}: klines empty or not an array`);
+      debugWarn(`[screener] ${sym}: klines empty or not an array`);
       return null;
     }
     // Filter out klines with invalid data
@@ -388,7 +398,7 @@ function buildEntryFromKlines(
       return Number.isFinite(close) && close > 0;
     });
     if (validKlines.length < RSI_PERIOD + 2) {
-      console.warn(`[screener] ${sym}: only ${validKlines.length} valid klines out of ${klines.length} (need ${RSI_PERIOD + 2})`);
+      debugWarn(`[screener] ${sym}: only ${validKlines.length} valid klines out of ${klines.length} (need ${RSI_PERIOD + 2})`);
       return null;
     }
 
@@ -492,7 +502,7 @@ function buildEntryFromKlines(
     updatedAt: nowTs,
   };
   } catch (err) {
-    console.warn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
+    debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
     return null;
   }
 }
@@ -507,7 +517,7 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
   const work = (async (): Promise<ScreenerResponse> => {
     const start = Date.now();
     const nowTs = Date.now();
-    console.log(`[screener] runRefresh(${symbolCount}, smart=${smartMode}) starting...`);
+    debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}) starting...`);
 
     // 1. Get top symbols + ticker data in parallel
     const [symbols, tickers] = await Promise.all([
@@ -548,7 +558,7 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       symbolsToRefresh = symbolsToRefresh.slice(0, refreshCap);
     }
 
-    console.log(
+    debugLog(
       `[screener] coverage pre-refresh: ${symbols.length - uncachedSymbols.length}/${symbols.length}, refreshing ${symbolsToRefresh.length}, cap=${refreshCap}`,
     );
 
@@ -569,14 +579,14 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       let logged = 0;
       for (const [sym, result] of klineResultBySymbol) {
         if (result.status === 'rejected' && logged < 3) {
-          console.warn(`[screener] ${sym} failed:`, result.reason instanceof Error ? result.reason.message : String(result.reason));
+          debugWarn(`[screener] ${sym} failed:`, result.reason instanceof Error ? result.reason.message : String(result.reason));
           logged++;
         }
       }
     }
 
     const successCount = symbolsToRefresh.length - failedCount;
-    console.log(`[screener] Klines: ${successCount} ok, ${failedCount} failed out of ${symbolsToRefresh.length} symbols`);
+    debugLog(`[screener] Klines: ${successCount} ok, ${failedCount} failed out of ${symbolsToRefresh.length} symbols`);
 
     // 3. Process each symbol
     const entries: ScreenerEntry[] = [];
@@ -588,7 +598,7 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       if (refreshResult?.status === 'fulfilled') {
         const klines = refreshResult.value;
         if (!klines || klines.length === 0) {
-          console.warn(`[screener] ${sym}: kline fetch returned empty`);
+          debugWarn(`[screener] ${sym}: kline fetch returned empty`);
         } else {
           const freshEntry = buildEntryFromKlines(sym, klines, ticker, nowTs);
           if (freshEntry) {
@@ -616,7 +626,7 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
 
     const withIndicators = entries.filter((e) => e.rsi15m !== null).length;
     const computeTimeMs = Date.now() - start;
-    console.log(`[screener] Done: ${entries.length} entries (${withIndicators} with indicators, ${entries.length - withIndicators} ticker-only) in ${computeTimeMs}ms`);
+    debugLog(`[screener] Done: ${entries.length} entries (${withIndicators} with indicators, ${entries.length - withIndicators} ticker-only) in ${computeTimeMs}ms`);
 
     if (smartMode) {
       const failureRate = symbolsToRefresh.length > 0 ? failedCount / symbolsToRefresh.length : 0;
