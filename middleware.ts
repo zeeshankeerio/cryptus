@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { betterFetch } from "@better-fetch/fetch";
+import type { auth } from "@/lib/auth";
+
+type Session = typeof auth.$Infer.Session;
 
 export async function middleware(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
@@ -19,11 +22,22 @@ export async function middleware(request: NextRequest) {
   let session = null;
   if (hasSessionCookie) {
     try {
-      // Direct session call is much more stable in Node middleware than a fetch
-      const sessionData = await auth.api.getSession({
-        headers: request.headers,
-      });
-      session = sessionData;
+      // Use the public URL for production to ensure reliability, 
+      // but fallback to localhost for development.
+      const baseURL = process.env.NODE_ENV === "production" 
+        ? "https://rsiq.onrender.com" 
+        : `http://localhost:${process.env.PORT || 3000}`;
+
+      const { data } = await betterFetch<Session>(
+        "/api/auth/get-session",
+        {
+          baseURL,
+          headers: {
+            cookie: request.headers.get("cookie") || "",
+          },
+        },
+      );
+      session = data;
     } catch (e) {
       console.error("[middleware] Session check failed:", e);
     }
