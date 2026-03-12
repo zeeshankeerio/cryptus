@@ -41,8 +41,9 @@ const FETCH_HEADERS: HeadersInit = {
   'Accept': 'application/json',
 };
 const RSI_PERIOD = 14;
-const KLINE_LIMIT = 900; // 900 1m candles (~15h): for derived 1h RSI(14) + 15m indicators
-const BATCH_SIZE = 16; // worker-pool concurrency baseline
+const KLINE_LIMIT = 450; // 450 1m candles (~7.5h): Perfect for 15m MACD/EMA/RSI + 5m/1m
+const KLINE_LIMIT_1H = 40; // 40 1h candles: Perfect for 1h RSI (needs > 28 for Wilder stability)
+const BATCH_SIZE = 16;
 const FETCH_RETRY_COUNT = 3; // retries across rotating endpoints
 const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
 const KLINE_TIMEOUT_MS = 12_000; // 12s per kline fetch
@@ -387,7 +388,15 @@ async function fetchWithRetry(
  */
 async function fetchKlines(symbol: string): Promise<BinanceKline[]> {
   const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&limit=${KLINE_LIMIT}`;
-  return fetchWithRetry(path, `Klines ${symbol}`);
+  return fetchWithRetry(path, `Klines 1m ${symbol}`);
+}
+
+/**
+ * Fetch 1h klines for a single symbol.
+ */
+async function fetchKlines1h(symbol: string): Promise<BinanceKline[]> {
+  const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1h&limit=${KLINE_LIMIT_1H}`;
+  return fetchWithRetry(path, `Klines 1h ${symbol}`);
 }
 
 async function fetchTickersSafe(): Promise<Map<string, BinanceTicker>> {
@@ -471,148 +480,143 @@ function deriveSignal(rsi: number | null): ScreenerEntry['signal'] {
   return 'neutral';
 }
 
-function buildEntryFromKlines(
+function buildEntry(
   sym: string,
-  klines: BinanceKline[],
+  klines1m: BinanceKline[],
+  klines1h: BinanceKline[] | null,
   ticker: BinanceTicker | undefined,
   nowTs: number,
 ): ScreenerEntry | null {
   try {
-    if (!Array.isArray(klines) || klines.length === 0) {
-      debugWarn(`[screener] ${sym}: klines empty or not an array`);
-      return null;
+    const validKlines = klines1m.filter((k) => k !== null && k.length >= 6);
+    if (validKlines.length < RSI_PERIOD + 1) return null;
+
+    const closes1m = validKlines.map((k) => parseFloat(k[4]));
+    const highs1m = validKlines.map((k) => parseFloat(k[2]));
+    const lows1m = validKlines.map((k) => parseFloat(k[3]));
+    const volumes1m = validKlines.map((k) => parseFloat(k[5]));
+
+    const rsi1m = calculateRsi(closes1m, RSI_PERIOD);
+
+    const agg5m = aggregateKlines(validKlines, 5);
+    const closes5m = agg5m.map((c) => c.close);
+    const rsi5m = closes5m.length >= RSI_PERIOD + 1 ? calculateRsi(closes5m, RSI_PERIOD) : null;
+
+    const agg15m = aggregateKlines(validKlines, 15);
+    const closes15m = agg15m.map((c) => c.close);
+    const rsi15m = closes15m.length >= RSI_PERIOD + 1 ? calculateRsi(closes15m, RSI_PERIOD) : null;
+
+    let rsi1h: number | null = null;
+    if (klines1h && klines1h.length >= RSI_PERIOD + 1) {
+      const closes1h = klines1h.map((k) => parseFloat(k[4]));
+      rsi1h = calculateRsi(closes1h, RSI_PERIOD);
+    } else {
+      // Fallback to aggregation if 1h fetch failed or was skipped
+      const agg1h = aggregateKlines(validKlines, 60);
+      const closes1h = agg1h.map((c) => c.close);
+      if (closes1h.length >= RSI_PERIOD + 1) {
+        rsi1h = calculateRsi(closes1h, RSI_PERIOD);
+      }
     }
-    // Filter out klines with invalid data
-    const validKlines = klines.filter((k) => {
-      if (!Array.isArray(k) || k.length < 6) return false;
-      const close = parseFloat(k[4]);
-      return Number.isFinite(close) && close > 0;
+
+    const ema9 = latestEma(closes15m, 9);
+    const ema21 = latestEma(closes15m, 21);
+    const emaCross = detectEmaCross(closes15m, 9, 21);
+    const macd = calculateMacd(closes15m);
+    const bb = calculateBollinger(closes15m);
+    const stochRsi = calculateStochRsi(closes15m);
+
+    const todayUtcMs = new Date().setUTCHours(0, 0, 0, 0);
+    let vwapStart = 0;
+    for (let j = 0; j < validKlines.length; j++) {
+      if (validKlines[j][0] >= todayUtcMs) {
+        vwapStart = j;
+        break;
+      }
+    }
+
+    const vwap = calculateVwap(
+      highs1m.slice(vwapStart),
+      lows1m.slice(vwapStart),
+      closes1m.slice(vwapStart),
+      volumes1m.slice(vwapStart),
+    );
+
+    const priceFromKline = closes1m[closes1m.length - 1];
+    const price = toNum(ticker?.lastPrice, priceFromKline);
+    const vwapDiff = vwap !== null && vwap > 0
+      ? Math.round(((price - vwap) / vwap) * 10000) / 100
+      : null;
+
+    const volumeSpike = detectVolumeSpike(volumes1m);
+    const signal = deriveSignal(rsi15m ?? rsi5m ?? rsi1m);
+
+    // Intelligence indicators
+    const rsiState1m = calculateRsiWithState(closes1m, RSI_PERIOD);
+    const rsiDivergence = detectRsiDivergence(closes15m, RSI_PERIOD, 40);
+    const momentum = calculateROC(closes15m, 10);
+    const confluenceResult = calculateConfluence({
+      rsi1m, rsi5m, rsi15m, rsi1h,
+      macdHistogram: macd?.histogram ?? null,
+      emaCross,
+      stochK: stochRsi?.k ?? null,
+      bbPosition: bb?.position ?? null,
     });
-    if (validKlines.length < RSI_PERIOD + 2) {
-      debugWarn(`[screener] ${sym}: only ${validKlines.length} valid klines out of ${klines.length} (need ${RSI_PERIOD + 2})`);
-      return null;
-    }
 
-  const closes1m = validKlines.map((k) => parseFloat(k[4]));
-  const highs1m = validKlines.map((k) => parseFloat(k[2]));
-  const lows1m = validKlines.map((k) => parseFloat(k[3]));
-  const volumes1m = validKlines.map((k) => parseFloat(k[5]));
+    const strategy = computeStrategyScore({
+      rsi1m,
+      rsi5m,
+      rsi15m,
+      rsi1h,
+      macdHistogram: macd?.histogram ?? null,
+      bbPosition: bb?.position ?? null,
+      stochK: stochRsi?.k ?? null,
+      stochD: stochRsi?.d ?? null,
+      emaCross,
+      vwapDiff,
+      volumeSpike,
+      price,
+      confluence: confluenceResult.score,
+      rsiDivergence,
+      momentum,
+    });
 
-  const rsi1m = calculateRsi(closes1m, RSI_PERIOD);
-
-  const agg5m = aggregateKlines(validKlines, 5);
-  const closes5m = agg5m.map((c) => c.close);
-  const rsi5m = closes5m.length >= RSI_PERIOD + 1 ? calculateRsi(closes5m, RSI_PERIOD) : null;
-
-  const agg15m = aggregateKlines(validKlines, 15);
-  const closes15m = agg15m.map((c) => c.close);
-  const rsi15m = closes15m.length >= RSI_PERIOD + 1 ? calculateRsi(closes15m, RSI_PERIOD) : null;
-
-  let rsi1h: number | null = null;
-  const agg1h = aggregateKlines(validKlines, 60);
-  const closes1h = agg1h.map((c) => c.close);
-  if (closes1h.length >= RSI_PERIOD + 1) {
-    rsi1h = calculateRsi(closes1h, RSI_PERIOD);
-  }
-
-  const ema9 = latestEma(closes15m, 9);
-  const ema21 = latestEma(closes15m, 21);
-  const emaCross = detectEmaCross(closes15m, 9, 21);
-  const macd = calculateMacd(closes15m);
-  const bb = calculateBollinger(closes15m);
-  const stochRsi = calculateStochRsi(closes15m);
-
-  const todayUtcMs = new Date().setUTCHours(0, 0, 0, 0);
-  let vwapStart = 0;
-  for (let j = 0; j < validKlines.length; j++) {
-    if (validKlines[j][0] >= todayUtcMs) {
-      vwapStart = j;
-      break;
-    }
-  }
-
-  const vwap = calculateVwap(
-    highs1m.slice(vwapStart),
-    lows1m.slice(vwapStart),
-    closes1m.slice(vwapStart),
-    volumes1m.slice(vwapStart),
-  );
-
-  const priceFromKline = closes1m[closes1m.length - 1];
-  const price = toNum(ticker?.lastPrice, priceFromKline);
-  const vwapDiff = vwap !== null && vwap > 0
-    ? Math.round(((price - vwap) / vwap) * 10000) / 100
-    : null;
-
-  const volumeSpike = detectVolumeSpike(volumes1m);
-  const signal = deriveSignal(rsi15m ?? rsi5m ?? rsi1m);
-
-  // Intelligence indicators
-  const rsiState1m = calculateRsiWithState(closes1m, RSI_PERIOD);
-  const rsiDivergence = detectRsiDivergence(closes15m, RSI_PERIOD, 40);
-  const momentum = calculateROC(closes15m, 10);
-  const confluenceResult = calculateConfluence({
-    rsi1m, rsi5m, rsi15m, rsi1h,
-    macdHistogram: macd?.histogram ?? null,
-    emaCross,
-    stochK: stochRsi?.k ?? null,
-    bbPosition: bb?.position ?? null,
-  });
-
-  const strategy = computeStrategyScore({
-    rsi1m,
-    rsi5m,
-    rsi15m,
-    rsi1h,
-    macdHistogram: macd?.histogram ?? null,
-    bbPosition: bb?.position ?? null,
-    stochK: stochRsi?.k ?? null,
-    stochD: stochRsi?.d ?? null,
-    emaCross,
-    vwapDiff,
-    volumeSpike,
-    price,
-    confluence: confluenceResult.score,
-    rsiDivergence,
-    momentum,
-  });
-
-  return {
-    symbol: sym,
-    price,
-    change24h: toNum(ticker?.priceChangePercent, 0),
-    volume24h: toNum(ticker?.quoteVolume, 0),
-    rsi1m,
-    rsi5m,
-    rsi15m,
-    signal,
-    rsi1h,
-    ema9,
-    ema21,
-    emaCross,
-    macdLine: macd?.macdLine ?? null,
-    macdSignal: macd?.signalLine ?? null,
-    macdHistogram: macd?.histogram ?? null,
-    bbUpper: bb?.upper ?? null,
-    bbMiddle: bb?.middle ?? null,
-    bbLower: bb?.lower ?? null,
-    bbPosition: bb?.position ?? null,
-    stochK: stochRsi?.k ?? null,
-    stochD: stochRsi?.d ?? null,
-    vwap,
-    vwapDiff,
-    volumeSpike,
-    strategyScore: strategy.score,
-    strategySignal: strategy.signal,
-    strategyLabel: strategy.label,
-    strategyReasons: strategy.reasons,
-    confluence: confluenceResult.score,
-    confluenceLabel: confluenceResult.label,
-    rsiDivergence,
-    momentum,
-    rsiState1m,
-    updatedAt: nowTs,
-  };
+    return {
+      symbol: sym,
+      price,
+      change24h: toNum(ticker?.priceChangePercent, 0),
+      volume24h: toNum(ticker?.quoteVolume, 0),
+      rsi1m,
+      rsi5m,
+      rsi15m,
+      signal,
+      rsi1h,
+      ema9,
+      ema21,
+      emaCross,
+      macdLine: macd?.macdLine ?? null,
+      macdSignal: macd?.signalLine ?? null,
+      macdHistogram: macd?.histogram ?? null,
+      bbUpper: bb?.upper ?? null,
+      bbMiddle: bb?.middle ?? null,
+      bbLower: bb?.lower ?? null,
+      bbPosition: bb?.position ?? null,
+      stochK: stochRsi?.k ?? null,
+      stochD: stochRsi?.d ?? null,
+      vwap,
+      vwapDiff,
+      volumeSpike,
+      strategyScore: strategy.score,
+      strategySignal: strategy.signal,
+      strategyLabel: strategy.label,
+      strategyReasons: strategy.reasons,
+      confluence: confluenceResult.score,
+      confluenceLabel: confluenceResult.label,
+      rsiDivergence,
+      momentum,
+      rsiState1m,
+      updatedAt: nowTs,
+    };
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
     return null;
@@ -679,24 +683,40 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       `[screener] coverage pre-refresh: ${symbols.length - uncachedSymbols.length}/${symbols.length}, refreshing ${symbolsToRefresh.length}, cap=${refreshCap}`,
     );
 
-    const klines1mResults = symbolsToRefresh.length > 0
-      ? await fetchKlinesBatched(symbolsToRefresh, fetchKlines)
-      : [];
-
-    const klineResultBySymbol = new Map<string, PromiseSettledResult<BinanceKline[]>>();
+    const klineResultBySymbol1m = new Map<string, PromiseSettledResult<BinanceKline[]>>();
+    const klineResultBySymbol1h = new Map<string, PromiseSettledResult<BinanceKline[]>>();
     let failedCount = 0;
-    for (let i = 0; i < symbolsToRefresh.length; i++) {
-      const result = klines1mResults[i];
-      klineResultBySymbol.set(symbolsToRefresh[i], result);
-      if (result.status === 'rejected') failedCount++;
+
+    if (symbolsToRefresh.length > 0) {
+      const [klines1mResults, klines1hResults] = await Promise.all([
+        fetchKlinesBatched(symbolsToRefresh, fetchKlines),
+        fetchKlinesBatched(symbolsToRefresh, fetchKlines1h),
+      ]);
+
+      for (let i = 0; i < symbolsToRefresh.length; i++) {
+        const sym = symbolsToRefresh[i];
+        const res1m = klines1mResults[i];
+        const res1h = klines1hResults[i];
+
+        klineResultBySymbol1m.set(sym, res1m);
+        klineResultBySymbol1h.set(sym, res1h);
+
+        if (res1m.status === 'rejected' && res1h.status === 'rejected') {
+          failedCount++;
+        }
+      }
     }
+
     if (failedCount > 0) {
       console.warn(`[screener] ${failedCount}/${symbolsToRefresh.length} kline fetches failed`);
       // Log first few failure reasons for diagnosis
       let logged = 0;
-      for (const [sym, result] of klineResultBySymbol) {
-        if (result.status === 'rejected' && logged < 3) {
-          debugWarn(`[screener] ${sym} failed:`, result.reason instanceof Error ? result.reason.message : String(result.reason));
+      for (const sym of symbolsToRefresh) {
+        const res1m = klineResultBySymbol1m.get(sym);
+        const res1h = klineResultBySymbol1h.get(sym);
+        if (res1m?.status === 'rejected' && res1h?.status === 'rejected' && logged < 3) {
+          debugWarn(`[screener] ${sym} 1m failed:`, res1m.reason instanceof Error ? res1m.reason.message : String(res1m.reason));
+          debugWarn(`[screener] ${sym} 1h failed:`, res1h.reason instanceof Error ? res1h.reason.message : String(res1h.reason));
           logged++;
         }
       }
@@ -710,14 +730,17 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
 
     for (const sym of symbols) {
       const ticker = tickers.get(sym);
-      const refreshResult = klineResultBySymbol.get(sym);
+      const res1m = klineResultBySymbol1m.get(sym);
+      const res1h = klineResultBySymbol1h.get(sym);
 
-      if (refreshResult?.status === 'fulfilled') {
-        const klines = refreshResult.value;
-        if (!klines || klines.length === 0) {
+      if (res1m?.status === 'fulfilled') {
+        const klines1m = res1m.value;
+        const klines1h = res1h?.status === 'fulfilled' ? res1h.value : null;
+        
+        if (!klines1m || klines1m.length === 0) {
           debugWarn(`[screener] ${sym}: kline fetch returned empty`);
         } else {
-          const freshEntry = buildEntryFromKlines(sym, klines, ticker, nowTs);
+          const freshEntry = buildEntry(sym, klines1m, klines1h, ticker, nowTs);
           if (freshEntry) {
             entries.push(freshEntry);
             indicatorCache.set(sym, { entry: freshEntry, ts: nowTs });
