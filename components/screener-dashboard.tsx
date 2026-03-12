@@ -3,22 +3,20 @@
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, Bell, Settings, Filter, Star, Info, 
+import {
+  Search, Bell, Settings, Filter, Star, Info,
   RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
-  Flame, ShieldCheck, Activity, BrainCircuit, Gauge
+  Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
+  LogOut, User as UserIcon
 } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
+import { useSession, signOut } from '@/lib/auth-client';
+import { useRouter } from 'next/navigation';
+import { cn } from '@/lib/utils';
+import Image from 'next/image';
 import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } from '@/lib/types';
 import { useLivePrices } from '@/hooks/use-live-prices';
 import { approximateRsi } from '@/lib/rsi';
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 // ─── Formatting helpers ────────────────────────────────────────
 
@@ -61,39 +59,39 @@ function formatTimeAgo(ts: number): string {
 
 function getRsiColor(rsi: number | null): string {
   if (rsi === null) return 'text-slate-600';
-  if (rsi <= 20) return 'text-emerald-400 font-bold';
-  if (rsi <= 30) return 'text-emerald-400';
-  if (rsi <= 40) return 'text-emerald-300/70';
-  if (rsi >= 80) return 'text-red-400 font-bold';
-  if (rsi >= 70) return 'text-red-400';
-  if (rsi >= 60) return 'text-orange-300/70';
+  if (rsi <= 20) return 'text-[#39FF14] font-black';
+  if (rsi <= 30) return 'text-[#39FF14] font-bold';
+  if (rsi <= 40) return 'text-[#39FF14]/80';
+  if (rsi >= 80) return 'text-[#FF4B5C] font-black';
+  if (rsi >= 70) return 'text-[#FF4B5C] font-bold';
+  if (rsi >= 60) return 'text-[#FF4B5C]/80';
   return 'text-slate-300';
 }
 
 function getRsiBg(rsi: number | null): string {
   if (rsi === null) return '';
-  if (rsi <= 25) return 'bg-emerald-500/[0.08]';
-  if (rsi <= 30) return 'bg-emerald-500/[0.04]';
-  if (rsi >= 75) return 'bg-red-500/[0.08]';
-  if (rsi >= 70) return 'bg-red-500/[0.04]';
+  if (rsi <= 25) return 'bg-[#39FF14]/[0.05]';
+  if (rsi <= 30) return 'bg-[#39FF14]/[0.02]';
+  if (rsi >= 75) return 'bg-[#722f37]/[0.08]';
+  if (rsi >= 70) return 'bg-[#722f37]/[0.04]';
   return '';
 }
 
 function getScoreBarColor(score: number): string {
-  if (score >= 40) return 'bg-emerald-400';
-  if (score >= 15) return 'bg-emerald-300/70';
-  if (score <= -40) return 'bg-red-400';
-  if (score <= -15) return 'bg-red-300/70';
-  return 'bg-slate-500';
+  if (score >= 40) return 'bg-[#39FF14]';
+  if (score >= 15) return 'bg-[#39FF14]/70';
+  if (score <= -40) return 'bg-[#FF4B5C]';
+  if (score <= -15) return 'bg-[#FF4B5C]/70';
+  return 'bg-slate-700';
 }
 
 // ─── Signal Badge ──────────────────────────────────────────────
 
 function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   const styles: Record<string, string> = {
-    oversold: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
-    overbought: 'bg-red-500/15 text-red-400 border-red-500/30',
-    neutral: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
+    oversold: 'bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/20',
+    overbought: 'bg-[#722f37]/20 text-[#FF4B5C] border-[#722f37]/30',
+    neutral: 'bg-slate-800/50 text-slate-400 border-slate-700/50',
   };
   return (
     <span className={cn("inline-flex items-center px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tight rounded-full border", styles[signal])}>
@@ -106,11 +104,11 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
 
 function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[] }) {
   const styles: Record<string, string> = {
-    'strong-buy': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-    'buy': 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25',
+    'strong-buy': 'bg-[#39FF14]/20 text-[#39FF14] border-[#39FF14]/40',
+    'buy': 'bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/20',
     'neutral': 'bg-slate-500/15 text-slate-400 border-slate-500/30',
-    'sell': 'bg-red-500/10 text-red-300 border-red-500/25',
-    'strong-sell': 'bg-red-500/20 text-red-400 border-red-500/40',
+    'sell': 'bg-[#722f37]/10 text-[#FF4B5C]/80 border-[#722f37]/20',
+    'strong-sell': 'bg-[#722f37]/20 text-[#FF4B5C] border-[#722f37]/40',
   };
   const title = reasons?.length ? reasons.join(' \u00B7 ') : undefined;
   return (
@@ -122,25 +120,25 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
 
 // ─── Screener Row (Memoized) ───────────────────────────────────
 
-const ScreenerRow = memo(function ScreenerRow({ 
-  entry, 
-  idx, 
-  watchlist, 
-  toggleWatchlist, 
+const ScreenerRow = memo(function ScreenerRow({
+  entry,
+  idx,
+  watchlist,
+  toggleWatchlist,
   visibleCols,
   useAnimations,
   rsiPeriod
-}: { 
-  entry: ScreenerEntry; 
-  idx: number; 
-  watchlist: Set<string>; 
+}: {
+  entry: ScreenerEntry;
+  idx: number;
+  watchlist: Set<string>;
   toggleWatchlist: (s: string) => void;
   visibleCols: Set<ColumnId>;
   useAnimations: boolean;
   rsiPeriod: number;
 }) {
   const isStarred = watchlist.has(entry.symbol);
-  
+
   // Intelligence: Signal Pulse state
   const [isFlash, setIsFlash] = useState(false);
   const prevSignal = useRef(entry.strategySignal);
@@ -158,10 +156,10 @@ const ScreenerRow = memo(function ScreenerRow({
     <motion.tr
       layout={useAnimations}
       initial={useAnimations ? { opacity: 0 } : undefined}
-      animate={{ 
+      animate={{
         opacity: 1,
-        backgroundColor: isFlash 
-          ? (entry.strategySignal.includes('buy') ? 'rgba(52, 211, 153, 0.1)' : entry.strategySignal.includes('sell') ? 'rgba(248, 113, 113, 0.1)' : 'rgba(255, 255, 255, 0.05)')
+        backgroundColor: isFlash
+          ? (entry.strategySignal.includes('buy') ? 'rgba(57, 255, 20, 0.1)' : entry.strategySignal.includes('sell') ? 'rgba(114, 47, 55, 0.2)' : 'rgba(255, 255, 255, 0.05)')
           : 'transparent'
       }}
       exit={useAnimations ? { opacity: 0, scale: 0.98 } : undefined}
@@ -192,7 +190,7 @@ const ScreenerRow = memo(function ScreenerRow({
       </td>
       <td className={cn(
         "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
-        entry.change24h > 0 ? "text-emerald-400" : entry.change24h < 0 ? "text-red-400" : "text-slate-600"
+        entry.change24h > 0 ? "text-[#39FF14]" : entry.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"
       )}>
         <div className="flex items-center justify-end gap-1.5">
           {entry.change24h > 0 ? <TrendingUp size={12} /> : entry.change24h < 0 ? <TrendingDown size={12} /> : null}
@@ -211,22 +209,22 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('rsiCustom') && (
         <td className={cn(
           "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono relative transition-all duration-300",
-          entry.rsiPeriodAtCreation !== rsiPeriod ? "bg-slate-800/10 opacity-30" : "bg-blue-500/5",
+          entry.rsiPeriodAtCreation !== rsiPeriod ? "bg-slate-800/10 opacity-30" : "bg-[#39FF14]/5",
           getRsiColor(entry.rsiCustom)
         )}>
           <div className="flex items-center justify-end gap-1.5 flex-wrap max-w-[120px] ml-auto">
             {entry.isLiveRsi && entry.rsiPeriodAtCreation === rsiPeriod && (
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse border border-blue-200/50" title="Real-Time Analysis" />
+              <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse border border-[#39FF14]/50" title="Real-Time Analysis" />
             )}
-            
+
             {/* Intelligence: Early Signal Badge - Only show if periods match to ensure formula accuracy */}
             {entry.rsiPeriodAtCreation === rsiPeriod && entry.rsiCustom !== null && entry.rsi15m !== null && (
               <>
                 {entry.rsiCustom <= 30 && entry.rsi15m > 30 && (
-                  <span className="text-[7px] px-1 bg-emerald-500/30 text-emerald-200 rounded-full animate-pulse border border-emerald-400/30" title="Early Oversold (Custom Period)">EARLY BUY</span>
+                  <span className="text-[7px] px-1 bg-[#39FF14]/30 text-[#39FF14] rounded-full animate-pulse border border-[#39FF14]/30" title="Early Oversold (Custom Period)">EARLY BUY</span>
                 )}
                 {entry.rsiCustom >= 70 && entry.rsi15m < 70 && (
-                  <span className="text-[7px] px-1 bg-rose-500/30 text-rose-200 rounded-full animate-pulse border border-rose-400/30" title="Early Overbought (Custom Period)">EARLY SELL</span>
+                  <span className="text-[7px] px-1 bg-[#722f37]/30 text-[#FF4B5C] rounded-full animate-pulse border border-[#FF4B5C]/30" title="Early Overbought (Custom Period)">EARLY SELL</span>
                 )}
               </>
             )}
@@ -234,7 +232,7 @@ const ScreenerRow = memo(function ScreenerRow({
             {entry.rsiPeriodAtCreation === rsiPeriod && entry.rsiDivergenceCustom && entry.rsiDivergenceCustom !== 'none' && (
               <span className={cn(
                 "text-[8px] px-1 rounded-sm font-black tracking-tighter uppercase",
-                entry.rsiDivergenceCustom === 'bullish' ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+                entry.rsiDivergenceCustom === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#722f37]/20 text-[#FF4B5C]"
               )}>
                 {entry.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
               </span>
@@ -250,9 +248,9 @@ const ScreenerRow = memo(function ScreenerRow({
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
           <span className={cn(
             "px-2 py-1 rounded border",
-            entry.emaCross === 'bullish' ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5" :
-            entry.emaCross === 'bearish' ? "text-red-400 border-red-500/20 bg-red-500/5" :
-            "text-slate-700 border-transparent"
+            entry.emaCross === 'bullish' ? "text-[#39FF14] border-[#39FF14]/20 bg-[#39FF14]/5" :
+              entry.emaCross === 'bearish' ? "text-[#FF4B5C] border-[#722f37]/20 bg-[#722f37]/5" :
+                "text-slate-700 border-transparent"
           )}>
             {entry.emaCross || '—'}
           </span>
@@ -262,7 +260,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('macdHistogram') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          entry.macdHistogram === null ? "text-slate-700" : entry.macdHistogram > 0 ? "text-emerald-400" : "text-red-400"
+          entry.macdHistogram === null ? "text-slate-700" : entry.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
           {formatNum(entry.macdHistogram, 4)}
         </td>
@@ -271,7 +269,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('bbPosition') && (
         <td className={cn(
           "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          entry.bbPosition === null ? "text-slate-700" : entry.bbPosition < 0.2 ? "text-emerald-400" : entry.bbPosition > 0.8 ? "text-red-400" : "text-slate-400"
+          entry.bbPosition === null ? "text-slate-700" : entry.bbPosition < 0.2 ? "text-[#39FF14]" : entry.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
         )}>
           {formatNum(entry.bbPosition)}
         </td>
@@ -287,7 +285,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('confluence') && (
         <td className={cn(
           "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
-          entry.confluence >= 15 ? "text-emerald-400" : entry.confluence <= -15 ? "text-red-400" : "text-slate-600"
+          entry.confluence >= 15 ? "text-[#39FF14]" : entry.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
         )}>
           {entry.confluenceLabel}
         </td>
@@ -295,8 +293,8 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {entry.rsiDivergence === 'bullish' ? <span className="text-emerald-400">Bull Div</span> : 
-            entry.rsiDivergence === 'bearish' ? <span className="text-red-400">Bear Div</span> : '—'}
+          {entry.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
+            entry.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
         </td>
       )}
 
@@ -321,7 +319,7 @@ const ScreenerRow = memo(function ScreenerRow({
                 {formatTimeAgo(entry.signalStartedAt)}
               </span>
               <div className="w-12 h-1 bg-white/5 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${Math.min(100, Math.abs(entry.strategyScore))}%` }}
                   className={cn("h-full rounded-full transition-colors duration-1000", getScoreBarColor(entry.strategyScore))}
@@ -362,25 +360,25 @@ function SortHeader({
       className={cn(
         "px-3 py-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none transition-all duration-200 hover:text-white whitespace-nowrap",
         align === 'right' ? 'text-right' : 'text-left',
-        active ? 'text-blue-400 bg-blue-500/5' : 'text-slate-500'
+        active ? 'text-[#39FF14] bg-[#39FF14]/5' : 'text-slate-500'
       )}
     >
       <span className={cn("flex items-center gap-1.5", align === 'right' ? "justify-end" : "justify-start")}>
         {align === 'right' && active && (
-          <motion.span 
+          <motion.span
             initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-blue-400"
+            className="text-[#39FF14]"
           >
             {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </motion.span>
         )}
         {label}
         {align !== 'right' && active && (
-          <motion.span 
+          <motion.span
             initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            className="text-blue-400"
+            className="text-[#39FF14]"
           >
             {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </motion.span>
@@ -474,6 +472,12 @@ function loadWatchlist(): string[] {
 }
 
 export default function ScreenerDashboard() {
+  const router = useRouter();
+  const { data: session } = useSession();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // ── Theme State ──
+  const [useAnimations] = useState(true);
   const smartModeDefault = process.env.NEXT_PUBLIC_SMART_MODE_DEFAULT !== '0';
   // ── State ──
   const [data, setData] = useState<ScreenerEntry[]>([]);
@@ -547,7 +551,7 @@ export default function ScreenerDashboard() {
       let rsiCustom = entry.rsiCustom;
       let signal = entry.signal;
       let isLiveRsi = false;
-      
+
       if (live.price > 0) {
         // Standard timeframes
         if (entry.rsiState1m) rsi1m = approximateRsi(entry.rsiState1m, live.price, 14);
@@ -570,14 +574,14 @@ export default function ScreenerDashboard() {
         }
       }
 
-      return { 
-        ...entry, 
-        price: live.price, 
-        change24h: live.change24h, 
-        volume24h: live.volume24h, 
-        rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom, 
-        signal, 
-        isLiveRsi 
+      return {
+        ...entry,
+        price: live.price,
+        change24h: live.change24h,
+        volume24h: live.volume24h,
+        rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom,
+        signal,
+        isLiveRsi
       };
     });
   }, [data, livePrices, rsiPeriod]);
@@ -703,7 +707,7 @@ export default function ScreenerDashboard() {
   const fetchData = useCallback(async (background = false) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    
+
     // Show spinner for all fetches except initial load
     const isInitial = !background && dataLenRef.current === 0;
     if (!isInitial) setRefreshing(true);
@@ -891,90 +895,116 @@ export default function ScreenerDashboard() {
     <div className="max-w-[1800px] mx-auto px-4 py-8">
       {/* ── Header ── */}
       {showHeader && (
-      <header className="mb-6 rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-900/20 p-6 sm:p-8 shadow-2xl relative overflow-hidden group">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-blue-500/15 transition-colors duration-1000" />
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 relative z-10">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-[10px] font-bold tracking-widest text-blue-300 uppercase backdrop-blur-sm">
-              Mindscape Analytics LLC
-            </div>
-            <h1 className="mt-4 text-3xl sm:text-5xl font-black text-white flex items-center gap-4 tracking-tighter">
-              <Zap size={40} className="text-blue-400 fill-blue-400/20" />
-              <span>RSIQ <span className="text-blue-500 uppercase">Pro</span></span>
-            </h1>
-            <div className="flex flex-wrap items-center gap-6 mt-6">
-              <div className="flex flex-col">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Market Bias</div>
-                <div className="flex items-center gap-3">
-                   <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
-                      <div 
-                        className="h-full bg-emerald-500 transition-all duration-1000" 
-                        style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }} 
-                      />
-                      <div 
-                        className="h-full bg-red-500 transition-all duration-1000" 
-                        style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }} 
-                      />
-                   </div>
-                   <span className={cn("text-xs font-black tabular-nums", stats.bias > 0 ? "text-emerald-400" : stats.bias < 0 ? "text-red-400" : "text-slate-500")}>
-                     {stats.bias > 0 ? '+' : ''}{stats.bias}%
-                   </span>
+        <header className="mb-6 rounded-3xl border border-white/5 bg-[#080F1B] p-6 sm:p-8 shadow-lg relative overflow-hidden group">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-[#39FF14]/[0.02] rounded-full -mr-20 -mt-20 group-hover:bg-[#39FF14]/[0.04] transition-colors duration-1000" />
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 relative z-10">
+            <div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-[10px] font-bold tracking-widest text-slate-400 uppercase backdrop-blur-sm group/logo transition-all hover:bg-white/10">
+                  Mindscape Analytics LLC
                 </div>
+                {session && (
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/5 bg-white/5 px-2 py-1 group/auth transition-all hover:bg-white/10">
+                    <div className="w-5 h-5 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
+                      <UserIcon size={12} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-300 pr-1">{session.user.name || session.user.email}</span>
+                    <button
+                      onClick={async () => {
+                        setIsLoggingOut(true);
+                        await signOut({
+                          fetchOptions: {
+                            onSuccess: () => {
+                              router.push('/login');
+                            },
+                          },
+                        });
+                      }}
+                      disabled={isLoggingOut}
+                      className="p-1 rounded-full hover:bg-[#FF4B5C]/20 text-slate-400 hover:text-[#FF4B5C] disabled:opacity-50 transition-colors cursor-pointer"
+                      title="Sign Out"
+                    >
+                      <LogOut size={12} />
+                    </button>
+                  </div>
+                )}
               </div>
-
-              <div className="h-8 w-px bg-white/5" />
-
-              <div className="flex flex-wrap gap-5">
-                {[
-                  { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
-                  { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
-                  { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
-                ].map((s) => (
-                  <button key={s.label} onClick={s.onClick} className="flex flex-col items-start group/stat">
-                    <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 mb-0.5 group-hover/stat:text-slate-400 transition-colors">{s.label}</span>
-                    <span className={cn("text-lg font-black tabular-nums transition-transform group-hover/stat:scale-110", s.color)}>
-                      <Counter value={s.value} />
+              <h1 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tighter">
+                RSIQ <span className="text-[#39FF14]">Pro</span>
+              </h1>
+              <div className="flex flex-wrap items-center gap-6 mt-6">
+                <div className="flex flex-col">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Market Bias</div>
+                  <div className="flex items-center gap-3">
+                    <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
+                      <div
+                        className="h-full bg-[#39FF14] transition-all duration-1000"
+                        style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }}
+                      />
+                      <div
+                        className="h-full bg-red-500 transition-all duration-1000"
+                        style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }}
+                      />
+                    </div>
+                    <span className={cn("text-xs font-black tabular-nums", stats.bias > 0 ? "text-emerald-400" : stats.bias < 0 ? "text-red-400" : "text-slate-500")}>
+                      {stats.bias > 0 ? '+' : ''}{stats.bias}%
                     </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-4 min-w-[320px]">
-            <div className="flex flex-wrap items-center justify-start lg:justify-end gap-3 text-xs">
-              {meta && (
-                <div className="group relative inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-2.5 text-slate-300 transition-all hover:bg-white/[0.06]">
-                  <Activity size={14} className="text-slate-500" />
-                  <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Compute</span>
-                  <span className="font-black text-slate-200 tabular-nums">{meta.computeTimeMs}ms</span>
+                  </div>
                 </div>
-              )}
-              <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-2.5 text-slate-300">
-                <BrainCircuit size={14} className="text-blue-400" />
-                <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Coverage</span>
-                <span className="font-black text-slate-200 tabular-nums">{indicatorReadyCount}/{data.length}</span>
+
+                <div className="h-8 w-px bg-white/5" />
+
+                <div className="flex flex-wrap gap-5">
+                  {[
+                    { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
+                    { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
+                    { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
+                  ].map((s) => (
+                    <button key={s.label} onClick={s.onClick} className="flex flex-col items-start group/stat">
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 mb-0.5 group-hover/stat:text-slate-400 transition-colors">{s.label}</span>
+                      <span className={cn("text-lg font-black tabular-nums transition-transform group-hover/stat:scale-110", s.color)}>
+                        <Counter value={s.value} />
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-all backdrop-blur-md",
-                isConnected
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_12px_rgba(52,211,153,0.1)]'
-                  : 'border-white/10 bg-white/[0.03] text-slate-600'
-              )}>
-                <div className={cn("h-1.5 w-1.5 rounded-full", isConnected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse' : 'bg-slate-600')} />
-                <span className="font-black tracking-tight uppercase text-[10px]">{isConnected ? 'LIVE SYNC' : 'OFFLINE'}</span>
-              </div>
-              <button
-                onClick={() => { fetchData(); }}
-                className="group inline-flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-6 py-2.5 text-[10px] font-black tracking-widest text-blue-300 hover:bg-blue-500/20 transition-all active:scale-95 shadow-lg shadow-blue-500/10"
-                title="Refresh now"
-              >
-                <RefreshCcw size={14} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
-                <span>{refreshing ? 'UPDATING' : `SYNC ${countdown}S`}</span>
-              </button>
             </div>
 
-            <div className="flex items-center justify-start lg:justify-end gap-6 bg-white/[0.03] border border-white/5 rounded-2xl px-5 py-3 backdrop-blur-xl">
+            <div className="flex flex-col gap-4 min-w-[320px]">
+              <div className="flex flex-wrap items-center justify-start lg:justify-end gap-3 text-xs">
+                {meta && (
+                  <div className="group relative inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-2.5 text-slate-300 transition-all hover:bg-white/[0.06]">
+                    <Activity size={14} className="text-slate-500" />
+                    <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Compute</span>
+                    <span className="font-black text-slate-200 tabular-nums">{meta.computeTimeMs}ms</span>
+                  </div>
+                )}
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] px-4 py-2.5 text-slate-300">
+                  <BrainCircuit size={14} className="text-[#39FF14]" />
+                  <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Coverage</span>
+                  <span className="font-black text-slate-200 tabular-nums">{indicatorReadyCount}/{data.length}</span>
+                </div>
+                <div className={cn(
+                  "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-all text-xs",
+                  isConnected
+                    ? 'border-[#39FF14]/20 bg-[#39FF14]/5 text-[#39FF14]'
+                    : 'border-white/5 bg-white/[0.02] text-slate-600'
+                )}>
+                  <div className={cn("h-1.5 w-1.5 rounded-full", isConnected ? 'bg-[#39FF14]' : 'bg-slate-600')} />
+                  <span className="font-black tracking-tight uppercase text-[10px]">{isConnected ? 'LIVE SYNC' : 'OFFLINE'}</span>
+                </div>
+                <button
+                  onClick={() => { fetchData(); }}
+                  className="group inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/20 bg-[#39FF14]/5 px-6 py-2.5 text-[10px] font-black tracking-widest text-[#39FF14] hover:bg-[#39FF14]/10 transition-all active:scale-95"
+                  title="Refresh now"
+                >
+                  <RefreshCcw size={14} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
+                  <span>{refreshing ? 'UPDATING' : `SYNC ${countdown}S`}</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-start lg:justify-end gap-6 bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-3">
                 {[
                   { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
                   { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
@@ -989,48 +1019,47 @@ export default function ScreenerDashboard() {
                     </div>
                   </button>
                 ))}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
       )}
 
 
-      {/* ── Controls ── */}
       <div className="flex flex-col lg:flex-row items-center gap-4 mb-8">
-        <div className="relative flex-1 w-full lg:w-auto overflow-hidden rounded-2xl border border-white/5 bg-slate-900/40 backdrop-blur-md">
+        <div className="relative flex-1 w-full lg:w-auto overflow-hidden rounded-2xl border border-white/5 bg-slate-900/40">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search crypto pair..."
-            className="w-full pl-12 pr-4 py-4 text-sm bg-transparent text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/20 font-medium"
+            className="w-full pl-12 pr-4 py-4 text-sm bg-transparent text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-[#39FF14]/20 font-medium"
           />
           <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-            <div className="flex bg-slate-900/40 rounded-2xl border border-white/5 p-1 backdrop-blur-md">
-                {['all', 'strong-buy', 'buy', 'neutral', 'sell', 'strong-sell'].map((v) => (
-                    <button
-                        key={v}
-                        onClick={() => setSignalFilter(v as SignalFilter)}
-                        className={cn(
-                            "px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all rounded-xl",
-                            signalFilter === v ? "bg-white/10 text-white shadow-xl" : "text-slate-500 hover:text-slate-300"
-                        )}
-                    >
-                        {v === 'all' ? 'All' : v.replace('strong-', 'S-')}
-                    </button>
-                ))}
-            </div>
+          <div className="flex bg-slate-900/40 rounded-2xl border border-white/5 p-1">
+            {['all', 'strong-buy', 'buy', 'neutral', 'sell', 'strong-sell'].map((v) => (
+              <button
+                key={v}
+                onClick={() => setSignalFilter(v as SignalFilter)}
+                className={cn(
+                  "px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all rounded-xl",
+                  signalFilter === v ? "bg-white/5 text-white" : "text-slate-500 hover:text-slate-300"
+                )}
+              >
+                {v === 'all' ? 'All' : v.replace('strong-', 'S-')}
+              </button>
+            ))}
+          </div>
 
           <button
             onClick={() => setShowWatchlistOnly((v) => !v)}
             className={cn(
-              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all backdrop-blur-md",
-              showWatchlistOnly 
-                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" 
+              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all",
+              showWatchlistOnly
+                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30"
                 : "bg-slate-900/40 text-slate-500 border-white/5 hover:bg-slate-800/60"
             )}
             title="Toggle Watchlist"
@@ -1042,9 +1071,9 @@ export default function ScreenerDashboard() {
           <button
             onClick={() => setShowHeader((v) => !v)}
             className={cn(
-              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all backdrop-blur-md",
-              showHeader 
-                ? "bg-blue-500/10 text-blue-400 border-blue-500/30" 
+              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all",
+              showHeader
+                ? "bg-[#39FF14]/5 text-[#39FF14] border-[#39FF14]/20"
                 : "bg-slate-900/40 text-slate-500 border-white/5 hover:bg-slate-800/60"
             )}
             title="Toggle Premium Header"
@@ -1055,63 +1084,63 @@ export default function ScreenerDashboard() {
 
           <div className="relative group" ref={colPickerRef}>
             <button
-               onClick={() => setShowColPicker(!showColPicker)}
-               className="px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border border-white/5 bg-slate-900/40 text-slate-500 hover:bg-slate-800/60 transition-all backdrop-blur-md"
+              onClick={() => setShowColPicker(!showColPicker)}
+              className="px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border border-white/5 bg-slate-900/40 text-slate-500 hover:bg-slate-800/60 transition-all"
             >
               <LayoutGrid size={14} className="inline mr-2" />
               Columns
             </button>
             <AnimatePresence>
-                {showColPicker && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        className="absolute right-0 top-full mt-3 z-50 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-4 min-w-[240px] backdrop-blur-xl"
-                    >
-                        <div className="grid grid-cols-1 gap-1">
-                            {OPTIONAL_COLUMNS.map((col) => (
-                                <button
-                                    key={col.id}
-                                    onClick={() => toggleCol(col.id)}
-                                    className={cn(
-                                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
-                                        visibleCols.has(col.id) ? "bg-blue-500/10 text-blue-400" : "text-slate-500 hover:bg-white/5"
-                                    )}
-                                >
-                                    <div className={cn("w-4 h-4 rounded-md border flex items-center justify-center transition-all", visibleCols.has(col.id) ? "bg-blue-500 border-blue-500" : "border-slate-700")}>
-                                        {visibleCols.has(col.id) && <ShieldCheck size={12} className="text-white" />}
-                                    </div>
-                                    <span className="text-xs font-bold uppercase tracking-tight">{col.label}</span>
-                                    <span className="text-[9px] font-medium text-slate-600 ml-auto">{col.group}</span>
-                                </button>
-                            ))}
+              {showColPicker && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  className="absolute right-0 top-full mt-3 z-50 bg-[#0A0F1B] border border-white/10 rounded-2xl shadow-xl p-4 min-w-[240px]"
+                >
+                  <div className="grid grid-cols-1 gap-1">
+                    {OPTIONAL_COLUMNS.map((col) => (
+                      <button
+                        key={col.id}
+                        onClick={() => toggleCol(col.id)}
+                        className={cn(
+                          "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
+                          visibleCols.has(col.id) ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-500 hover:bg-white/5"
+                        )}
+                      >
+                        <div className={cn("w-4 h-4 rounded-md border flex items-center justify-center transition-all", visibleCols.has(col.id) ? "bg-[#39FF14] border-[#39FF14]" : "border-slate-700")}>
+                          {visibleCols.has(col.id) && <ShieldCheck size={12} className="text-white" />}
                         </div>
-                    </motion.div>
-                )}
+                        <span className="text-xs font-bold uppercase tracking-tight">{col.label}</span>
+                        <span className="text-[9px] font-medium text-slate-600 ml-auto">{col.group}</span>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
 
-          <div className="flex items-center gap-3 bg-slate-900/40 border border-white/5 rounded-2xl px-5 py-3 backdrop-blur-md">
+          <div className="flex items-center gap-3 bg-slate-900/40 border border-white/5 rounded-2xl px-5 py-3">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">RSI Period</span>
-            <input 
-              type="range" 
-              min="7" 
-              max="35" 
-              value={rsiPeriod} 
+            <input
+              type="range"
+              min="7"
+              max="35"
+              value={rsiPeriod}
               onChange={(e) => setRsiPeriod(Number(e.target.value))}
-              className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#39FF14]"
             />
-            <span className="text-xs font-black tabular-nums text-blue-400 w-4">{rsiPeriod}</span>
+            <span className="text-xs font-black tabular-nums text-[#39FF14] w-4">{rsiPeriod}</span>
           </div>
         </div>
       </div>
 
       {/* ── Table ── */}
-      <div className="rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-md overflow-hidden shadow-2xl">
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 overflow-hidden shadow-lg">
         <div className="overflow-x-auto overflow-y-auto max-h-[800px] custom-scrollbar">
           <table className="w-full border-collapse">
-            <thead className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur-xl border-b border-white/5">
+            <thead className="sticky top-0 z-20 bg-[#0A0F1B]/95 border-b border-white/5">
               <tr>
                 <th className="px-4 py-4 text-[10px] font-black uppercase text-slate-600 text-left w-12 tracking-widest">#</th>
                 <th className="px-2 py-4 text-[10px] font-black text-slate-600 text-center w-8 uppercase tracking-widest">★</th>
@@ -1119,22 +1148,22 @@ export default function ScreenerDashboard() {
                 <SortHeader label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
                 <SortHeader label="24h Change" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
                 <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                
+
                 {visibleCols.has('rsi1m') && <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsi5m') && <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsi15m') && <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsi1h') && <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsiCustom') && (
-                  <SortHeader 
-                    label={`RSI (${rsiPeriod})`} 
-                    sortKey="rsiCustom" 
-                    currentKey={sortKey} 
-                    currentDir={sortDir} 
-                    onSort={handleSort} 
-                    align="right" 
+                  <SortHeader
+                    label={`RSI (${rsiPeriod})`}
+                    sortKey="rsiCustom"
+                    currentKey={sortKey}
+                    currentDir={sortDir}
+                    onSort={handleSort}
+                    align="right"
                   />
                 )}
-                
+
                 {visibleCols.has('emaCross') && <SortHeader label="Trend" sortKey="emaCross" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('macdHistogram') && <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('bbPosition') && <SortHeader label="BB Pos" sortKey="bbPosition" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
@@ -1142,7 +1171,7 @@ export default function ScreenerDashboard() {
                 {visibleCols.has('confluence') && <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('divergence') && <SortHeader label="Diverg" sortKey="rsiDivergence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('momentum') && <SortHeader label="Momentum" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                
+
                 <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
                 {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
               </tr>
@@ -1152,27 +1181,27 @@ export default function ScreenerDashboard() {
                 <SkeletonRows cols={colCount} />
               ) : filtered.length === 0 ? (
                 <tr>
-                   <td colSpan={colCount} className="px-6 py-24 text-center">
+                  <td colSpan={colCount} className="px-6 py-24 text-center">
                     <div className="flex flex-col items-center gap-4 opacity-50">
-                        <Search size={48} className="text-slate-700" />
-                        <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+                      <Search size={48} className="text-slate-700" />
+                      <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
                     </div>
                   </td>
                 </tr>
               ) : (
                 <AnimatePresence mode="popLayout" initial={false}>
-                    {filtered.map((entry, idx) => (
-                        <ScreenerRow 
-                          key={entry.symbol}
-                          entry={entry}
-                          idx={idx}
-                          watchlist={watchlist}
-                          toggleWatchlist={toggleWatchlist}
-                          visibleCols={visibleCols}
-                          useAnimations={filtered.length < 150}
-                          rsiPeriod={rsiPeriod}
-                        />
-                    ))}
+                  {filtered.map((entry, idx) => (
+                    <ScreenerRow
+                      key={entry.symbol}
+                      entry={entry}
+                      idx={idx}
+                      watchlist={watchlist}
+                      toggleWatchlist={toggleWatchlist}
+                      visibleCols={visibleCols}
+                      useAnimations={filtered.length < 150}
+                      rsiPeriod={rsiPeriod}
+                    />
+                  ))}
                 </AnimatePresence>
               )}
             </tbody>
@@ -1182,14 +1211,14 @@ export default function ScreenerDashboard() {
 
       <footer className="mt-4 py-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 px-4">
         <div className="flex items-center gap-3">
-          <Link 
-            href="http://mindscapeanalytics.com/" 
-            target="_blank" 
+          <Link
+            href="http://mindscapeanalytics.com/"
+            target="_blank"
             className="group flex flex-col items-start"
           >
             <div className="flex items-baseline gap-1.5">
-              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-blue-400 transition-colors">By</span>
-              <span className="text-sm font-black text-white tracking-tighter">Mindscape Analytics <span className="text-blue-500 uppercase">LLC</span></span>
+              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-[#39FF14] transition-colors">By</span>
+              <span className="text-sm font-black text-white tracking-tighter">Mindscape Analytics <span className="text-[#39FF14] uppercase">LLC</span></span>
             </div>
           </Link>
           <div className="h-4 w-px bg-white/10 hidden sm:block" />
@@ -1206,12 +1235,12 @@ export default function ScreenerDashboard() {
           <div className="h-4 w-px bg-white/10" />
           <div className="flex items-center gap-1.5">
             <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Status</span>
-            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isConnected ? "bg-emerald-400" : "bg-slate-700")} />
+            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isConnected ? "bg-[#39FF14]" : "bg-slate-700")} />
             <span className="text-[10px] font-bold text-slate-300">{isConnected ? "Live Engine" : "Polling"}</span>
           </div>
           <div className="h-4 w-px bg-white/10" />
-          <Link 
-            href="/guide" 
+          <Link
+            href="/guide"
             className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
           >
             Documentation
@@ -1226,7 +1255,7 @@ export default function ScreenerDashboard() {
 
 function Counter({ value }: { value: number }) {
   const [displayValue, setDisplayValue] = useState(value);
-  
+
   useEffect(() => {
     setDisplayValue(value);
   }, [value]);
@@ -1250,7 +1279,7 @@ function StatCard({ label, value, color, onClick, helper }: { label: string; val
       onClick={onClick}
       className={cn(
         "p-6 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-md transition-all shadow-xl group relative overflow-hidden",
-        onClick && "cursor-pointer hover:border-blue-500/30 hover:bg-slate-800/60"
+        onClick && "cursor-pointer hover:border-[#39FF14]/30 hover:bg-slate-800/60"
       )}
     >
       <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">

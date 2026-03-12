@@ -6,12 +6,12 @@
   --color-dark-700: #1a2332;
   --color-dark-600: #243044;
   --color-dark-500: #374357;
-  --color-accent: #3b82f6;
-  --color-accent-dim: #2563eb;
-  --color-bull: #10b981;
-  --color-bull-dim: #059669;
-  --color-bear: #ef4444;
-  --color-bear-dim: #dc2626;
+  --color-accent: #39FF14;
+  --color-accent-dim: #32e012;
+  --color-bull: #39FF14;
+  --color-bull-dim: #32e012;
+  --color-bear: #FF4B5C;
+  --color-bear-dim: #722f37;
 }
 
 html {

@@ -2,11 +2,11 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'RSIQ PRO — Mindscape Analytics LLC',
+  title: 'RSIQ Pro — Mindscape Analytics LLC',
   description: 'Enterprise-grade multi-indicator crypto market scanner by Mindscape Analytics LLC. Monitor 500+ pairs with real-time RSI, MACD, and strategy scoring.',
   robots: 'index, follow',
   openGraph: {
-    title: 'RSIQ PRO | Mindscape Analytics',
+    title: 'RSIQ Pro | Mindscape Analytics',
     description: 'Real-time enterprise crypto scanner with 500+ pairs and advanced analytics.',
     type: 'website',
   },

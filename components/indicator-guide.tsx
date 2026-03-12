@@ -19,8 +19,8 @@ interface Indicator {
 }
 
 const CATEGORIES: { key: Indicator['category']; label: string; color: string }[] = [
-  { key: 'momentum', label: 'Momentum', color: 'text-blue-400 border-blue-500/40 bg-blue-500/10' },
-  { key: 'trend', label: 'Trend', color: 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10' },
+  { key: 'momentum', label: 'Momentum', color: 'text-[#39FF14] border-[#39FF14]/40 bg-[#39FF14]/10' },
+  { key: 'trend', label: 'Trend', color: 'text-[#39FF14] border-[#39FF14]/40 bg-[#39FF14]/10' },
   { key: 'volatility', label: 'Volatility', color: 'text-purple-400 border-purple-500/40 bg-purple-500/10' },
   { key: 'volume', label: 'Volume', color: 'text-amber-400 border-amber-500/40 bg-amber-500/10' },
   { key: 'strategy', label: 'Strategy', color: 'text-rose-400 border-rose-500/40 bg-rose-500/10' },
@@ -32,7 +32,7 @@ const INDICATORS: Indicator[] = [
     name: 'Relative Strength Index (RSI)',
     icon: '📊',
     category: 'momentum',
-    tagColor: 'text-blue-400',
+    tagColor: 'text-[#39FF14]',
     summary: 'Measures the speed and magnitude of recent price changes to evaluate overbought or oversold conditions. Uses Wilder\'s smoothing method for stability across volatile crypto markets.',
     formula: [
       'RSI = 100 − 100 / (1 + RS)',
@@ -47,11 +47,11 @@ const INDICATORS: Indicator[] = [
       { name: 'Data source', value: 'REST API', description: '1000 × 1m candles aggregated into higher timeframes' },
     ],
     interpretation: [
-      { condition: 'RSI ≤ 20', meaning: 'Deeply oversold — strong buy signal', color: 'text-emerald-400' },
-      { condition: 'RSI ≤ 30', meaning: 'Oversold — potential reversal zone', color: 'text-emerald-300' },
+      { condition: 'RSI ≤ 20', meaning: 'Deeply oversold — strong buy signal', color: 'text-[#39FF14]' },
+      { condition: 'RSI ≤ 30', meaning: 'Oversold — potential reversal zone', color: 'text-[#39FF14]/80' },
       { condition: 'RSI 30–70', meaning: 'Neutral — no extreme condition', color: 'text-gray-400' },
-      { condition: 'RSI ≥ 70', meaning: 'Overbought — potential reversal zone', color: 'text-red-300' },
-      { condition: 'RSI ≥ 80', meaning: 'Deeply overbought — strong sell signal', color: 'text-red-400' },
+      { condition: 'RSI ≥ 70', meaning: 'Overbought — potential reversal zone', color: 'text-[#FF4B5C]/80' },
+      { condition: 'RSI ≥ 80', meaning: 'Deeply overbought — strong sell signal', color: 'text-[#FF4B5C]' },
     ],
     usage: 'The screener computes RSI across 4 timeframes (1m, 5m, 15m, 1h) simultaneously. 1m RSI captures scalping opportunities, while 1h RSI reveals macro trends. The RSI-based signal (Oversold/Overbought) is derived from the longest available timeframe using a fallback chain: 15m → 5m → 1m.',
   },
@@ -60,7 +60,7 @@ const INDICATORS: Indicator[] = [
     name: 'EMA Cross (9/21)',
     icon: '📈',
     category: 'trend',
-    tagColor: 'text-emerald-400',
+    tagColor: 'text-[#39FF14]',
     summary: 'Detects trend direction using the relationship between fast (9) and slow (21) Exponential Moving Averages on 15-minute candles. Reports both crossover events and current trend state.',
     formula: [
       'EMA = Price × k + EMA_prev × (1 − k)',
@@ -76,8 +76,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Timeframe', value: '15m candles', description: 'Aggregated from 1-minute klines' },
     ],
     interpretation: [
-      { condition: '▲ Bullish', meaning: 'Fast EMA above slow EMA — uptrend', color: 'text-emerald-400' },
-      { condition: '▼ Bearish', meaning: 'Fast EMA below slow EMA — downtrend', color: 'text-red-400' },
+      { condition: '▲ Bullish', meaning: 'Fast EMA above slow EMA — uptrend', color: 'text-[#39FF14]' },
+      { condition: '▼ Bearish', meaning: 'Fast EMA below slow EMA — downtrend', color: 'text-[#FF4B5C]' },
       { condition: '— None', meaning: 'Insufficient data or EMAs converged', color: 'text-gray-500' },
     ],
     usage: 'EMA Cross provides trend context for other indicators. A bullish RSI oversold reading in a bullish EMA trend is a stronger buy signal than one in a bearish trend. The screener shows the current trend state, not just the single crossover candle.',
@@ -103,8 +103,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Timeframe', value: '15m candles', description: 'Requires ~35 candles for stable output' },
     ],
     interpretation: [
-      { condition: 'Histogram > 0', meaning: 'Bullish momentum — MACD above signal', color: 'text-emerald-400' },
-      { condition: 'Histogram < 0', meaning: 'Bearish momentum — MACD below signal', color: 'text-red-400' },
+      { condition: 'Histogram > 0', meaning: 'Bullish momentum — MACD above signal', color: 'text-[#39FF14]' },
+      { condition: 'Histogram < 0', meaning: 'Bearish momentum — MACD below signal', color: 'text-[#FF4B5C]' },
       { condition: 'Histogram → 0', meaning: 'Momentum fading — potential reversal', color: 'text-gray-400' },
     ],
     usage: 'The strategy scoring normalizes the MACD histogram as a percentage of the current price, ensuring fair comparison across assets from BTC ($60K+) to micro-cap coins ($0.001). This prevents high-priced assets from always dominating the signal.',
@@ -142,7 +142,7 @@ const INDICATORS: Indicator[] = [
     name: 'Stochastic RSI',
     icon: '🌀',
     category: 'momentum',
-    tagColor: 'text-blue-400',
+    tagColor: 'text-[#39FF14]',
     summary: 'Applies the Stochastic oscillator formula to RSI values instead of price. More sensitive than standard RSI, generating earlier signals at the cost of more noise.',
     formula: [
       'Step 1: Compute full RSI series (Wilder\'s smoothing, period 14)',
@@ -187,9 +187,9 @@ const INDICATORS: Indicator[] = [
       { name: 'Display', value: 'Deviation %', description: 'How far price is from VWAP as a percentage' },
     ],
     interpretation: [
-      { condition: 'VWAP Diff < −2%', meaning: 'Significantly below VWAP — buying opportunity', color: 'text-emerald-400' },
+      { condition: 'VWAP Diff < −2%', meaning: 'Significantly below VWAP — buying opportunity', color: 'text-[#39FF14]' },
       { condition: 'VWAP Diff ≈ 0%', meaning: 'Trading near fair value', color: 'text-gray-400' },
-      { condition: 'VWAP Diff > +2%', meaning: 'Significantly above VWAP — selling pressure zone', color: 'text-red-400' },
+      { condition: 'VWAP Diff > +2%', meaning: 'Significantly above VWAP — selling pressure zone', color: 'text-[#FF4B5C]' },
     ],
     usage: 'VWAP is the primary benchmark for institutional crypto traders. Price below VWAP suggests the asset is being accumulated at a discount (bullish), while price above VWAP suggests distribution (bearish). The ±2% threshold filters out noise.',
   },
@@ -241,11 +241,11 @@ const INDICATORS: Indicator[] = [
       { name: 'VWAP', value: 'Weight 0.5', description: 'Institutional fair value deviation' },
     ],
     interpretation: [
-      { condition: 'Score ≥ +50', meaning: 'Strong Buy — multiple indicators aligned bullish', color: 'text-emerald-400' },
-      { condition: 'Score +20 to +49', meaning: 'Buy — moderate bullish bias', color: 'text-emerald-300' },
+      { condition: 'Score ≥ +50', meaning: 'Strong Buy — multiple indicators aligned bullish', color: 'text-[#39FF14]' },
+      { condition: 'Score +20 to +49', meaning: 'Buy — moderate bullish bias', color: 'text-[#39FF14]/80' },
       { condition: 'Score −19 to +19', meaning: 'Neutral — mixed or insufficient signals', color: 'text-gray-400' },
-      { condition: 'Score −49 to −20', meaning: 'Sell — moderate bearish bias', color: 'text-red-300' },
-      { condition: 'Score ≤ −50', meaning: 'Strong Sell — multiple indicators aligned bearish', color: 'text-red-400' },
+      { condition: 'Score −49 to −20', meaning: 'Sell — moderate bearish bias', color: 'text-[#FF4B5C]/80' },
+      { condition: 'Score ≤ −50', meaning: 'Strong Sell — multiple indicators aligned bearish', color: 'text-[#FF4B5C]' },
     ],
     usage: 'The strategy score is the screener\'s crown jewel. It only considers indicators with data available (null values are excluded from the denominator), preventing partial data from skewing results. The normalization ensures fair scoring from micro-cap to large-cap. Sort by Strategy Score to find the strongest setups.',
   },
@@ -291,7 +291,7 @@ function ParameterTable({ params }: { params: Indicator['parameters'] }) {
           {params.map((p, i) => (
             <tr key={i} className="border-b border-dark-700/50">
               <td className="py-2.5 pr-4 font-medium text-white whitespace-nowrap">{p.name}</td>
-              <td className="py-2.5 pr-4 text-blue-400 font-mono whitespace-nowrap">{p.value}</td>
+              <td className="py-2.5 pr-4 text-[#39FF14] font-mono whitespace-nowrap">{p.value}</td>
               <td className="py-2.5 text-gray-400">{p.description}</td>
             </tr>
           ))}
@@ -360,10 +360,10 @@ function IndicatorCard({ indicator, isOpen, onToggle }: { indicator: Indicator; 
           </div>
 
           {/* Usage note */}
-          <div className="p-3.5 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <div className="p-3.5 rounded-lg border-[#39FF14]/20 bg-[#39FF14]/5">
             <div className="flex items-start gap-2">
-              <span className="text-blue-400 text-sm mt-0.5">💡</span>
-              <p className="text-sm text-blue-300/80 leading-relaxed">{indicator.usage}</p>
+              <span className="text-[#39FF14] text-sm mt-0.5">💡</span>
+              <p className="text-sm text-[#39FF14]/80 leading-relaxed">{indicator.usage}</p>
             </div>
           </div>
         </div>
@@ -398,36 +398,36 @@ export default function IndicatorGuide() {
       <header className="mb-8">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-400 transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#39FF14] transition-colors mb-4"
         >
           ← Back to Screener
         </Link>
 
-        <div className="rounded-2xl border border-dark-700 bg-gradient-to-r from-dark-900 via-dark-800 to-dark-900 p-5 sm:p-6 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
+        <div className="rounded-2xl border border-dark-700 bg-gradient-to-r from-dark-900 via-dark-800 to-dark-900 p-5 sm:p-6 shadow-lg">
           <div className="inline-flex items-center gap-2 rounded-full border border-dark-600 bg-dark-800/80 px-2.5 py-1 text-[11px] tracking-wide text-gray-400 uppercase mb-3">
             Reference Guide
           </div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-white flex items-center gap-2.5 tracking-tight">
-            <span className="text-blue-400">📖</span>
+            <span className="text-[#39FF14]">📖</span>
             <span>Indicator & Strategy Guide</span>
           </h1>
           <p className="text-sm text-gray-400 mt-2 max-w-2xl leading-relaxed">
             Complete reference for every technical indicator, signal logic, and the composite strategy scoring
-            system used in the RSIQ PRO. Understand exactly how buy/sell decisions are calculated.
+            system used in the RSIQ Pro. Understand exactly how buy/sell decisions are calculated.
           </p>
         </div>
       </header>
 
       {/* Data pipeline overview */}
-      <section className="mb-8 rounded-xl border border-dark-700 bg-dark-800/70 p-5">
+      <section className="mb-8 rounded-xl border border-dark-700 bg-dark-800/40 p-5">
         <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <span className="text-blue-400">⚡</span> Data Pipeline
+          <span className="text-[#39FF14]">⚡</span> Data Pipeline
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Source</div>
             <div className="text-white font-medium">Paid WebSocket</div>
-            <div className="text-gray-400 text-xs mt-1">Live prices via <code className="text-blue-400">!miniTicker@arr</code> stream — sub-second price updates for all tracked pairs</div>
+            <div className="text-gray-400 text-xs mt-1">Live prices via <code className="text-[#39FF14]">!miniTicker@arr</code> stream — sub-second price updates for all tracked pairs</div>
           </div>
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Indicators</div>
@@ -449,7 +449,7 @@ export default function IndicatorGuide() {
             onClick={() => setFilterCat('all')}
             className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
               filterCat === 'all'
-                ? 'bg-blue-500/20 text-blue-400 border-blue-500/40'
+                ? 'bg-[#39FF14]/20 text-[#39FF14] border-[#39FF14]/40'
                 : 'bg-dark-800 text-gray-400 border-dark-600 hover:bg-dark-700'
             }`}
           >
@@ -494,49 +494,49 @@ export default function IndicatorGuide() {
       {/* Signal mapping section */}
       <section className="mt-10 mb-8">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-blue-400">🏷️</span> Signal Labels Reference
+          <span className="text-[#39FF14]">🏷️</span> Signal Labels Reference
         </h2>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-dark-700 bg-dark-800/70 p-4">
+          <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-4">
             <h3 className="text-sm font-medium text-gray-300 mb-3">RSI Signal (original)</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-400">▼ Oversold</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#39FF14]/10 border border-[#39FF14]/20">
+                <span className="text-[#39FF14]">▼ Oversold</span>
                 <span className="text-gray-400 text-xs">RSI &lt; 30</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-500/10 border border-gray-500/20">
                 <span className="text-gray-400">Neutral</span>
                 <span className="text-gray-400 text-xs">RSI 30–70</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                <span className="text-red-400">▲ Overbought</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#FF4B5C]/10 border border-[#FF4B5C]/20">
+                <span className="text-[#FF4B5C]">▲ Overbought</span>
                 <span className="text-gray-400 text-xs">RSI &gt; 70</span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-xl border border-dark-700 bg-dark-800/70 p-4">
+          <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-4">
             <h3 className="text-sm font-medium text-gray-300 mb-3">Strategy Signal (composite)</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span className="text-emerald-400">Strong Buy</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#39FF14]/10 border border-[#39FF14]/20">
+                <span className="text-[#39FF14]">Strong Buy</span>
                 <span className="text-gray-400 text-xs">Score ≥ +50</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
-                <span className="text-emerald-300">Buy</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#39FF14]/5 border border-[#39FF14]/15">
+                <span className="text-[#39FF14]/80">Buy</span>
                 <span className="text-gray-400 text-xs">Score +20 to +49</span>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-500/10 border border-gray-500/20">
                 <span className="text-gray-400">Neutral</span>
                 <span className="text-gray-400 text-xs">Score −19 to +19</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-red-500/5 border border-red-500/15">
-                <span className="text-red-300">Sell</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#FF4B5C]/5 border border-[#FF4B5C]/15">
+                <span className="text-[#FF4B5C]/80">Sell</span>
                 <span className="text-gray-400 text-xs">Score −49 to −20</span>
               </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-red-500/10 border border-red-500/20">
-                <span className="text-red-400">Strong Sell</span>
+              <div className="flex items-center justify-between p-2 rounded-lg bg-[#FF4B5C]/10 border border-[#FF4B5C]/20">
+                <span className="text-[#FF4B5C]">Strong Sell</span>
                 <span className="text-gray-400 text-xs">Score ≤ −50</span>
               </div>
             </div>
@@ -547,19 +547,19 @@ export default function IndicatorGuide() {
       {/* Weight diagram */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-          <span className="text-blue-400">⚖️</span> Strategy Weight Distribution
+          <span className="text-[#39FF14]">⚖️</span> Strategy Weight Distribution
         </h2>
-        <div className="rounded-xl border border-dark-700 bg-dark-800/70 p-5">
+        <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-5">
           <div className="space-y-3">
             {[
-              { label: 'RSI 1h', weight: 2.0, color: 'bg-blue-500' },
-              { label: 'RSI 15m', weight: 1.5, color: 'bg-blue-400' },
-              { label: 'MACD', weight: 1.5, color: 'bg-blue-400' },
-              { label: 'EMA Cross', weight: 1.5, color: 'bg-emerald-400' },
-              { label: 'RSI 5m', weight: 1.0, color: 'bg-blue-300' },
+              { label: 'RSI 1h', weight: 2.0, color: 'bg-[#39FF14]' },
+              { label: 'RSI 15m', weight: 1.5, color: 'bg-[#39FF14]/80' },
+              { label: 'MACD', weight: 1.5, color: 'bg-[#39FF14]/60' },
+              { label: 'EMA Cross', weight: 1.5, color: 'bg-[#39FF14]/70' },
+              { label: 'RSI 5m', weight: 1.0, color: 'bg-[#39FF14]/40' },
               { label: 'Bollinger', weight: 1.0, color: 'bg-purple-400' },
-              { label: 'Stoch RSI', weight: 1.0, color: 'bg-blue-300' },
-              { label: 'RSI 1m', weight: 0.5, color: 'bg-blue-200' },
+              { label: 'Stoch RSI', weight: 1.0, color: 'bg-[#39FF14]/30' },
+              { label: 'RSI 1m', weight: 0.5, color: 'bg-[#39FF14]/20' },
               { label: 'VWAP', weight: 0.5, color: 'bg-amber-400' },
             ].map((item) => (
               <div key={item.label} className="flex items-center gap-3">
