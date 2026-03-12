@@ -459,9 +459,9 @@ async function fetchAllKlinesBatched(
   symbols: string[]
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
-  const concurrency = symbols.length >= 500 ? 64 // Increased for faster Vercel execution
-    : symbols.length >= 400 ? 48
-    : symbols.length >= 250 ? 32
+  const concurrency = symbols.length >= 500 ? 40 // Lowered for stability on Render
+    : symbols.length >= 400 ? 32
+    : symbols.length >= 250 ? 24
     : symbols.length >= 120 ? 16
     : BATCH_SIZE;
 

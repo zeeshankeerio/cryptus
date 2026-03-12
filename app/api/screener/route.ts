@@ -8,7 +8,7 @@ export const maxDuration = 60; // Allow up to 60s for 500-coin fetches on Vercel
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const rawCount = parseInt(searchParams.get('count') ?? '600', 10);
+    const rawCount = parseInt(searchParams.get('count') ?? '500', 10);
     const rawRsiPeriod = parseInt(searchParams.get('rsiPeriod') ?? '14', 10);
     const smart = searchParams.get('smart');
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';

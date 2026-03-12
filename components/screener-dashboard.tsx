@@ -469,7 +469,7 @@ const REFRESH_OPTIONS = [
   { label: 'Off', value: 0, maxPairs: 1200 },
 ];
 
-const PAIR_COUNTS = [50, 100, 200, 300, 600, 900, 1200];
+const PAIR_COUNTS = [50, 100, 200, 300, 500, 600];
 
 const SIGNAL_FILTERS: { label: string; value: SignalFilter }[] = [
   { label: 'All', value: 'all' },
@@ -513,9 +513,9 @@ export default function ScreenerDashboard() {
     return saved ? Number(saved) : 30;
   });
   const [pairCount, setPairCount] = useState(() => {
-    if (typeof window === 'undefined') return 600;
+    if (typeof window === 'undefined') return 500;
     const saved = localStorage.getItem('crypto-rsi-pairs');
-    return saved ? Math.min(Math.max(Number(saved), 10), 1200) : 600;
+    return saved ? Math.min(Math.max(Number(saved), 10), 600) : 500;
   });
   const [smartMode, setSmartMode] = useState(() => {
     if (typeof window === 'undefined') return smartModeDefault;
