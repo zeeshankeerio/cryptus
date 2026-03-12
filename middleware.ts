@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { betterFetch } from "@better-fetch/fetch";
-import type { Session } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 
 export async function middleware(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
@@ -20,29 +19,13 @@ export async function middleware(request: NextRequest) {
   let session = null;
   if (hasSessionCookie) {
     try {
-      const requestedProto = request.headers.get("x-forwarded-proto") || "http";
-      const requestedHost = request.headers.get("host") || "localhost:3000";
-      const port = process.env.PORT || "3000";
-      
-      // On Render, we want to talk to localhost over HTTP to bypass internal SSL noise.
-      // But we must preserve the 'host' header for Better Auth to recognize the domain.
-      const internalBaseURL = `http://localhost:${port}`;
-
-      const { data } = await betterFetch<Session>(
-        "/api/auth/get-session",
-        {
-          baseURL: internalBaseURL,
-          headers: {
-            cookie: request.headers.get("cookie") || "",
-            // Essential: Pass the correct host so Better Auth can validate the cookie/domain
-            host: requestedHost,
-            "x-forwarded-proto": requestedProto,
-          },
-        },
-      );
-      session = data;
+      // Direct session call is much more stable in Node middleware than a fetch
+      const sessionData = await auth.api.getSession({
+        headers: request.headers,
+      });
+      session = sessionData;
     } catch (e) {
-      console.error("[middleware] Session fetch failed:", e);
+      console.error("[middleware] Session check failed:", e);
     }
   }
 

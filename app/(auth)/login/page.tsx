@@ -45,7 +45,7 @@ export default function LoginPage() {
             setIsLoading(false);
           },
           onSuccess: () => {
-            setIsLoading(false);
+            // No need to set loading false here as redirect will happen
           }
         }
       );
