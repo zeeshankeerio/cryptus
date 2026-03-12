@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
     
     // Sanitize parameters
-    const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 500);
+    const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 1200);
     const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
 
     const result = await getScreenerData(count, { smartMode, rsiPeriod });
@@ -30,8 +30,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const sMaxAge = count >= 300 ? 15 : 8;
-    const swr = count >= 300 ? 120 : 60;
+    const sMaxAge = count >= 600 ? 20 : count >= 300 ? 15 : 8;
+    const swr = count >= 600 ? 180 : count >= 300 ? 120 : 60;
 
     return NextResponse.json(result, {
       headers: {

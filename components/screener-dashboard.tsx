@@ -142,15 +142,30 @@ const ScreenerRow = memo(function ScreenerRow({
   // Intelligence: Signal Pulse state
   const [isFlash, setIsFlash] = useState(false);
   const prevSignal = useRef(entry.strategySignal);
+  const [isVisible, setIsVisible] = useState(false);
+  const rowRef = useRef<HTMLTableRowElement>(null);
 
   useEffect(() => {
-    if (prevSignal.current !== entry.strategySignal) {
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    if (rowRef.current) observer.observe(rowRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (isVisible && prevSignal.current !== entry.strategySignal) {
       setIsFlash(true);
-      const timer = setTimeout(() => setIsFlash(false), 3000); // 3s visibility
+      const timer = setTimeout(() => setIsFlash(false), 3000);
       prevSignal.current = entry.strategySignal;
       return () => clearTimeout(timer);
     }
-  }, [entry.strategySignal, entry.symbol]);
+    // Still update the ref even if not visible to prevent delayed flashes
+    if (prevSignal.current !== entry.strategySignal) {
+        prevSignal.current = entry.strategySignal;
+    }
+  }, [entry.strategySignal, isVisible]);
 
   return (
     <motion.tr
@@ -164,10 +179,15 @@ const ScreenerRow = memo(function ScreenerRow({
       }}
       exit={useAnimations ? { opacity: 0, scale: 0.98 } : undefined}
       transition={{ duration: 0.3 }}
+      ref={rowRef}
       className={cn(
         "group transition-colors duration-500 hover:bg-white/[0.02]",
         !isFlash && getRsiBg(entry.rsiCustom ?? entry.rsi15m)
       )}
+      style={{
+        contentVisibility: 'auto',
+        containIntrinsicSize: '0 64px'
+      } as any}
     >
       <td className="px-4 py-4 text-[10px] text-slate-700 font-black tabular-nums">{idx + 1}</td>
       <td className="px-2 py-4 text-center">
@@ -442,14 +462,14 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
 // ─── Main Dashboard ───────────────────────────────────────────
 
 const REFRESH_OPTIONS = [
-  { label: '15s', value: 15, maxPairs: 200 },
-  { label: '30s', value: 30, maxPairs: 500 },
-  { label: '60s', value: 60, maxPairs: 500 },
-  { label: '2m', value: 120, maxPairs: 500 },
-  { label: 'Off', value: 0, maxPairs: 500 },
+  { label: '15s', value: 15, maxPairs: 300 },
+  { label: '30s', value: 30, maxPairs: 600 },
+  { label: '60s', value: 60, maxPairs: 1000 },
+  { label: '2m', value: 120, maxPairs: 1200 },
+  { label: 'Off', value: 0, maxPairs: 1200 },
 ];
 
-const PAIR_COUNTS = [50, 100, 200, 300, 500];
+const PAIR_COUNTS = [50, 100, 200, 300, 600, 1000];
 
 const SIGNAL_FILTERS: { label: string; value: SignalFilter }[] = [
   { label: 'All', value: 'all' },
@@ -477,7 +497,6 @@ export default function ScreenerDashboard() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // ── Theme State ──
-  const [useAnimations] = useState(true);
   const smartModeDefault = process.env.NEXT_PUBLIC_SMART_MODE_DEFAULT !== '0';
   // ── State ──
   const [data, setData] = useState<ScreenerEntry[]>([]);
@@ -494,7 +513,9 @@ export default function ScreenerDashboard() {
     return saved ? Number(saved) : 30;
   });
   const [pairCount, setPairCount] = useState(() => {
-    return 500;
+    if (typeof window === 'undefined') return 100;
+    const saved = localStorage.getItem('crypto-rsi-pairs');
+    return saved ? Math.min(Math.max(Number(saved), 10), 1000) : 100;
   });
   const [smartMode, setSmartMode] = useState(() => {
     if (typeof window === 'undefined') return smartModeDefault;
@@ -506,6 +527,7 @@ export default function ScreenerDashboard() {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('crypto-rsi-show-header') !== '0';
   });
+  const useAnimations = pairCount <= 600; // Disable heavy layout animations for large lists
   const [rsiPeriod, setRsiPeriod] = useState(() => {
     if (typeof window === 'undefined') return 14;
     const saved = localStorage.getItem('crypto-rsi-period');
@@ -548,7 +570,6 @@ export default function ScreenerDashboard() {
       let rsi5m = entry.rsi5m;
       let rsi15m = entry.rsi15m;
       let rsi1h = entry.rsi1h;
-      let rsiCustom = entry.rsiCustom;
       let signal = entry.signal;
       let isLiveRsi = false;
 
@@ -558,12 +579,6 @@ export default function ScreenerDashboard() {
         if (entry.rsiState5m) rsi5m = approximateRsi(entry.rsiState5m, live.price, 14);
         if (entry.rsiState15m) rsi15m = approximateRsi(entry.rsiState15m, live.price, 14);
         if (entry.rsiState1h) rsi1h = approximateRsi(entry.rsiState1h, live.price, 14);
-
-        // Custom period accuracy guard
-        if (entry.rsiStateCustom && entry.rsiPeriodAtCreation === rsiPeriod) {
-          rsiCustom = approximateRsi(entry.rsiStateCustom, live.price, rsiPeriod);
-          isLiveRsi = true;
-        }
 
         // Instant Signal Hijack: Update signal instantly based on 15m (primary) or 1m (fallback)
         const leadRsi = rsi15m ?? rsi1m;
@@ -579,16 +594,30 @@ export default function ScreenerDashboard() {
         price: live.price,
         change24h: live.change24h,
         volume24h: live.volume24h,
-        rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom,
+        rsi1m, rsi5m, rsi15m, rsi1h,
         signal,
         isLiveRsi
       };
     });
-  }, [data, livePrices, rsiPeriod]);
+  }, [data, livePrices]);
+
+  // Calculate custom RSI and merge it with the rest of the data
+  const dataWithCustomRsi = useMemo(() => {
+    return mergedData.map(entry => {
+      let rsiCustom = entry.rsiCustom;
+      let isLiveRsi = entry.isLiveRsi;
+
+      if (entry.price > 0 && entry.rsiStateCustom && entry.rsiPeriodAtCreation === rsiPeriod) {
+        rsiCustom = approximateRsi(entry.rsiStateCustom, entry.price, rsiPeriod);
+        isLiveRsi = true;
+      }
+      return { ...entry, rsiCustom, isLiveRsi };
+    });
+  }, [mergedData, rsiPeriod]);
 
   // ─── Real-time Stats Engine ──────────────────────────────────
   const stats = useMemo(() => {
-    const total = mergedData.length;
+    const total = dataWithCustomRsi.length;
     let oversold = 0;
     let overbought = 0;
     let strongBuy = 0;
@@ -597,7 +626,7 @@ export default function ScreenerDashboard() {
     let sell = 0;
     let strongSell = 0;
 
-    for (const entry of mergedData) {
+    for (const entry of dataWithCustomRsi) {
       if (entry.signal === 'oversold') oversold++;
       else if (entry.signal === 'overbought') overbought++;
 
@@ -616,11 +645,11 @@ export default function ScreenerDashboard() {
     const bias = Math.round(((bullish - bearish) / totalSignals) * 100);
 
     return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias };
-  }, [mergedData]);
+  }, [dataWithCustomRsi]);
 
   const indicatorReadyCount = useMemo(() => (
-    mergedData.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
-  ), [mergedData]);
+    dataWithCustomRsi.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
+  ), [dataWithCustomRsi]);
 
   // Close column picker on click outside
   useEffect(() => {
@@ -714,7 +743,7 @@ export default function ScreenerDashboard() {
 
     try {
       if (!background) setError(null);
-      const timeoutMs = pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
+      const timeoutMs = pairCount >= 800 ? 60_000 : pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
       const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -820,7 +849,7 @@ export default function ScreenerDashboard() {
 
   // ── Filtered & sorted data ──
   const filtered = useMemo(() => {
-    let items = mergedData;
+    let items = dataWithCustomRsi;
 
     // Watchlist filter
     if (showWatchlistOnly) {
@@ -863,7 +892,7 @@ export default function ScreenerDashboard() {
     });
 
     return items;
-  }, [mergedData, signalFilter, search, sortKey, sortDir, showWatchlistOnly, watchlist]);
+  }, [dataWithCustomRsi, signalFilter, search, sortKey, sortDir, showWatchlistOnly, watchlist]);
 
   // ── Presets ──
   const showMostOversold = () => {
@@ -1198,7 +1227,7 @@ export default function ScreenerDashboard() {
                       watchlist={watchlist}
                       toggleWatchlist={toggleWatchlist}
                       visibleCols={visibleCols}
-                      useAnimations={filtered.length < 150}
+                      useAnimations={useAnimations}
                       rsiPeriod={rsiPeriod}
                     />
                   ))}

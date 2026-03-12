@@ -98,8 +98,7 @@ const smartTuningByCount = new Map<number, SmartTuningState>();
 const trafficWarmLastRun = new Map<string, number>();
 
 function getResultCacheTtl(symbolCount: number): number {
-  // Shorter TTL is fine — stale-first always returns cached data instantly
-  // and rolling refresh keeps cycle time low.
+  if (symbolCount >= 800) return 30_000;
   if (symbolCount >= 500) return 20_000;
   if (symbolCount >= 300) return 15_000;
   if (symbolCount >= 200) return 12_000;
@@ -145,8 +144,8 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean): void {
 
 // ── Per-symbol indicator cache to avoid refetch/recompute on every refresh ──
 const indicatorCache = new Map<string, { entry: ScreenerEntry; ts: number }>();
-const INDICATOR_CACHE_TTL = 180_000; // 3 min — indicators barely drift, WebSocket keeps prices live
-const INDICATOR_CACHE_MAX = 3000;
+const INDICATOR_CACHE_TTL = 300_000; // 5 min — indicators drift slowly, WebSocket keeps prices live
+const INDICATOR_CACHE_MAX = 5000;
 
 function pruneIndicatorCache() {
   const now = Date.now();
@@ -371,7 +370,7 @@ async function getTopSymbols(count: number): Promise<string[]> {
         return Number.isFinite(vol) && vol > 0;
       })
       .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-      .slice(0, Math.max(count, 500))
+      .slice(0, Math.max(count, 1200))
       .map((t) => t.symbol);
 
     symbolCache = { data: usdtPairs, ts: Date.now() };
@@ -460,11 +459,12 @@ async function fetchAllKlinesBatched(
   symbols: string[]
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
-  const concurrency = symbols.length >= 500 ? 50
-    : symbols.length >= 400 ? 50
-      : symbols.length >= 250 ? 48
-        : symbols.length >= 120 ? 32
-          : BATCH_SIZE;
+  const concurrency = symbols.length >= 800 ? 64
+    : symbols.length >= 500 ? 64
+      : symbols.length >= 400 ? 56
+        : symbols.length >= 250 ? 48
+          : symbols.length >= 120 ? 32
+            : BATCH_SIZE;
 
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, async () => {
@@ -731,13 +731,13 @@ function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number =
     // Bootstrap mode: prioritise full coverage so all selected pairs get indicators quickly.
     // Rolling mode: once coverage is warm, keep each cycle bounded.
     const tuning = smartTuningByCount.get(symbolCount) ?? {
-      dynamicCap: symbolCount >= 500 ? 500 : symbolCount >= 400 ? 400 : 160,
+      dynamicCap: symbolCount >= 800 ? 800 : symbolCount >= 500 ? 500 : symbolCount >= 400 ? 400 : 160,
       lastFailureRate: 0,
       lastComputeMs: 0,
     };
 
     const baseBootstrapCap = symbolCount;
-    const baseRollingCap = symbolCount >= 500 ? 500 : symbolCount >= 400 ? 300 : 150;
+    const baseRollingCap = symbolCount >= 800 ? 600 : symbolCount >= 500 ? 400 : symbolCount >= 400 ? 300 : 150;
     let refreshCap = smartMode
       ? (uncachedSymbols.length > 0
         ? Math.min(symbolCount, Math.max(baseBootstrapCap, tuning.dynamicCap))

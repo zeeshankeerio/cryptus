@@ -23,7 +23,7 @@ interface CombinedStreamMessage {
 }
 
 const WS_BASE = 'wss://stream.binance.com:9443/stream?streams=';
-const FLUSH_INTERVAL_MS = 2000;
+let FLUSH_INTERVAL_MS = 1500; // Increased base for smoothness
 const RECONNECT_DELAYS = [1000, 2000, 5000, 10000, 30000];
 const MAX_WS_CONNECTIONS = Math.max(1, Number(process.env.NEXT_PUBLIC_MAX_WS_CONNECTIONS ?? '3'));
 const STREAMS_PER_CONNECTION = Math.max(50, Number(process.env.NEXT_PUBLIC_STREAMS_PER_WS ?? '180'));
@@ -59,6 +59,14 @@ export function useLivePrices(symbols: Set<string>) {
   const openSocketsRef = useRef(0);
 
   symbolsRef.current = symbols;
+
+  // Dynamically adjust flush interval for smoothness at scale
+  useEffect(() => {
+    if (symbols.size > 800) FLUSH_INTERVAL_MS = 2500;
+    else if (symbols.size > 500) FLUSH_INTERVAL_MS = 2000;
+    else if (symbols.size > 200) FLUSH_INTERVAL_MS = 1500;
+    else FLUSH_INTERVAL_MS = 1000;
+  }, [symbols.size]);
 
   // Flush buffered ticks to React state at a throttled interval using RAF for smoothness
   useEffect(() => {
@@ -110,8 +118,12 @@ export function useLivePrices(symbols: Set<string>) {
   }, []);
 
   const handleTicker = useCallback((t: BinanceMiniTicker) => {
-    const tracked = symbolsRef.current;
-    if (!tracked.has(t.s)) return;
+    // Fast path: existence check before any parsing
+    if (!symbolsRef.current.has(t.s)) return;
+
+    // Fast path: avoid duplicate processing if price hasn't changed (optional but good for efficiency)
+    const existing = bufferRef.current.get(t.s);
+    if (existing && existing.price === Number(t.c)) return;
 
     const close = parseFloat(t.c);
     const open = parseFloat(t.o);
@@ -120,16 +132,16 @@ export function useLivePrices(symbols: Set<string>) {
     const change24h = Number.isFinite(open) && open > 0
       ? Math.round(((close - open) / open) * 10000) / 100
       : 0;
-    const volume = parseFloat(t.q);
 
     bufferRef.current.set(t.s, {
       price: close,
       change24h,
-      volume24h: Number.isFinite(volume) ? volume : 0,
+      volume24h: parseFloat(t.q) || 0,
       updatedAt: Date.now(),
     });
 
     if (bufferRef.current.size > MAX_BUFFER_SIZE) {
+      // Very fast pruning: find the oldest or just clear the first
       const firstKey = bufferRef.current.keys().next().value as string | undefined;
       if (firstKey) bufferRef.current.delete(firstKey);
     }
