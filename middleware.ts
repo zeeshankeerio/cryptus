@@ -5,28 +5,30 @@ import type { auth } from "@/lib/auth";
 type Session = typeof auth.$Infer.Session;
 
 export async function middleware(request: NextRequest) {
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
-  
-  // Optimization: If no session cookie exists, we can skip the fetch for non-auth routes
-  // Better Auth default cookie name is better-auth.session_token
-  const hasSessionCookie = request.cookies.has("better-auth.session_token") || 
-                           request.cookies.has("__secure-better-auth.session_token");
+  const { pathname } = request.nextUrl;
+  const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/register");
 
+  // Check for session cookies — Better Auth uses these names depending on secure context
+  const hasSessionCookie =
+    request.cookies.has("better-auth.session_token") ||
+    request.cookies.has("__Secure-better-auth.session_token");
+
+  // Fast path: no cookie + not an auth route → redirect to login
   if (!hasSessionCookie && !isAuthRoute) {
     const url = new URL("/login", request.url);
-    url.searchParams.set("from", request.nextUrl.pathname);
+    url.searchParams.set("from", pathname);
     return NextResponse.redirect(url);
   }
 
-  // If we have a cookie or it's an auth route, we might need a full check or just continue
-  let session = null;
+  // Validate the session if a cookie exists
+  let session: Session | null = null;
   if (hasSessionCookie) {
     try {
-      // Use the public URL for production to ensure reliability, 
-      // but fallback to localhost for development.
-      const baseURL = process.env.NODE_ENV === "production" 
-        ? "https://rsiq.onrender.com" 
-        : `http://localhost:${process.env.PORT || 3000}`;
+      // CRITICAL: Use the request's own origin so the fetch stays internal.
+      // Using a hardcoded external URL (e.g. https://rsiq.onrender.com) causes
+      // the request to exit the process, go through the load balancer, and
+      // potentially lose cookies — breaking session validation silently.
+      const baseURL = request.nextUrl.origin;
 
       const { data } = await betterFetch<Session>(
         "/api/auth/get-session",
@@ -39,21 +41,24 @@ export async function middleware(request: NextRequest) {
       );
       session = data;
     } catch (e) {
-      console.error("[middleware] Session check failed:", e);
+      // Log but don't crash — treat as unauthenticated
+      console.error(
+        "[middleware] Session validation failed:",
+        e instanceof Error ? e.message : String(e),
+      );
     }
   }
 
-  if (!session) {
-    if (!isAuthRoute) {
-      const url = new URL("/login", request.url);
-      url.searchParams.set("from", request.nextUrl.pathname);
-      return NextResponse.redirect(url);
-    }
-  } else {
-    // Redirect authenticated users away from auth pages to dashboard
-    if (isAuthRoute) {
-      return NextResponse.redirect(new URL("/", request.url));
-    }
+  // Unauthenticated user on a protected page → redirect to login
+  if (!session && !isAuthRoute) {
+    const url = new URL("/login", request.url);
+    url.searchParams.set("from", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  // Authenticated user on an auth page → redirect to dashboard
+  if (session && isAuthRoute) {
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();
@@ -62,10 +67,10 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
+     * Match all request paths except:
+     * - api (API routes — must be excluded so auth endpoints work)
      * - _next/static (static files)
-     * - _next/image (image optimization files)
+     * - _next/image (image optimization)
      * - favicon.ico, sitemap.xml, robots.txt (metadata files)
      * - assets (images, fonts, etc.)
      */

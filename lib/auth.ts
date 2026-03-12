@@ -2,13 +2,15 @@ import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { admin as adminPlugin } from "better-auth/plugins";
 import { prisma } from "./prisma";
-import { NextRequest, NextResponse } from "next/server";
 
+// ── Resolve the canonical application URL ──
+// Priority: explicit env vars > platform-injected vars > localhost fallback
 const resolvedAppUrl =
-  process.env.NEXT_PUBLIC_APP_URL ||
   process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
-   process.env.NODE_ENV === "production" ? "https://rsiq.onrender.com" : "http://localhost:3000");
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ||
+  process.env.RENDER_EXTERNAL_URL || // Render injects this automatically
+  "http://localhost:3000";
 
 function normalizeOrigin(value: string | undefined): string | null {
   if (!value) return null;
@@ -20,14 +22,7 @@ function normalizeOrigin(value: string | undefined): string | null {
   }
 }
 
-function toHost(origin: string): string | null {
-  try {
-    return new URL(origin).host;
-  } catch {
-    return null;
-  }
-}
-
+// Build the trusted origins list from all possible env vars
 const trustedOrigins = Array.from(
   new Set(
     [
@@ -35,33 +30,24 @@ const trustedOrigins = Array.from(
       normalizeOrigin(process.env.BETTER_AUTH_URL),
       normalizeOrigin(process.env.NEXT_PUBLIC_APP_URL),
       normalizeOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined),
+      normalizeOrigin(process.env.RENDER_EXTERNAL_URL),
       "http://localhost:3000",
       "http://127.0.0.1:3000",
       ...(process.env.AUTH_TRUSTED_ORIGINS
         ? process.env.AUTH_TRUSTED_ORIGINS.split(",").map((origin) => normalizeOrigin(origin.trim()))
         : []),
-    ].filter((origin): origin is string => Boolean(origin))
-  )
-);
-
-const allowedHosts = Array.from(
-  new Set(
-    [
-      "localhost",
-      "localhost:3000",
-      "127.0.0.1",
-      "*.ngrok-free.app",
-      "*.ngrok.io",
-      "*.vercel.app",
-      "rsiq.onrender.com",
-      ...trustedOrigins.map((origin) => toHost(origin)).filter((host): host is string => Boolean(host)),
-    ].filter(Boolean)
-  )
+    ].filter((origin): origin is string => Boolean(origin)),
+  ),
 );
 
 export const auth = betterAuth({
   baseURL: resolvedAppUrl,
   secret: process.env.BETTER_AUTH_SECRET,
+
+  // Required when running behind a reverse proxy (Render, Vercel, Cloudflare, etc.)
+  // Without this, Better Auth rejects requests because the Host header doesn't match.
+  trustHost: true,
+
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
@@ -75,11 +61,20 @@ export const auth = betterAuth({
 
   session: {
     expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // refresh daily
+    updateAge: 60 * 60 * 24,      // refresh daily
     cookieCache: {
       enabled: true,
-      maxAge: 5 * 60, // 5 minutes caching for session to prevent client-side loops
+      maxAge: 5 * 60, // 5 minutes
     },
+  },
+
+  advanced: {
+    // Use a predictable cookie prefix so middleware can check for it.
+    // The default "__Secure-" prefix requires HTTPS and can cause issues
+    // during local dev or behind certain proxies.
+    cookiePrefix: "better-auth",
+    // Automatically use Secure cookies in production
+    useSecureCookies: process.env.NODE_ENV === "production",
   },
 
   user: {

@@ -2,9 +2,16 @@
 
 import { createAuthClient } from "better-auth/react";
 
-function getAuthBaseURL() {
+function getAuthBaseURL(): string {
+  // Client-side: always use the current browser origin — this is always correct
   if (typeof window !== "undefined") return window.location.origin;
-  return process.env.NEXT_PUBLIC_APP_URL || process.env.BETTER_AUTH_URL || (process.env.NODE_ENV === "production" ? "https://rsiq.onrender.com" : "http://localhost:3000");
+  // Server-side (SSR): use env vars only, no hardcoded domains
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.BETTER_AUTH_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    "http://localhost:3000"
+  );
 }
 
 export const authClient = createAuthClient({
