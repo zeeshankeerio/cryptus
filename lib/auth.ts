@@ -7,7 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 const resolvedAppUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 
+   process.env.NODE_ENV === "production" ? "https://rsiq.onrender.com" : "http://localhost:3000");
 
 function normalizeOrigin(value: string | undefined): string | null {
   if (!value) return null;

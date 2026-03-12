@@ -494,7 +494,10 @@ async function fetchAllKlinesBatched(
 function aggregateKlines(
   klines: BinanceKline[],
   minutes: number,
+  cache?: Map<number, any[]>
 ): { open: number; high: number; low: number; close: number; volume: number }[] {
+  if (cache && cache.has(minutes)) return cache.get(minutes)!;
+
   const intervalMs = minutes * 60_000;
   const buckets = new Map<number, { open: number; high: number; low: number; close: number; volume: number }>();
 
@@ -517,9 +520,12 @@ function aggregateKlines(
     }
   }
 
-  return [...buckets.entries()]
+  const result = [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, v]) => v);
+  
+  if (cache) cache.set(minutes, result);
+  return result;
 }
 
 function deriveSignal(rsi: number | null): ScreenerEntry['signal'] {
@@ -551,11 +557,12 @@ function buildEntry(
     const stdPeriod = 14;
     const rsi1m = calculateRsi(closes1m, stdPeriod);
 
-    const agg5m = aggregateKlines(validKlines, 5);
+    const aggCache = new Map<number, any[]>();
+    const agg5m = aggregateKlines(validKlines, 5, aggCache);
     const closes5m = agg5m.map((c) => c.close);
     const rsi5m = closes5m.length >= stdPeriod + 1 ? calculateRsi(closes5m, stdPeriod) : null;
 
-    const agg15m = aggregateKlines(validKlines, 15);
+    const agg15m = aggregateKlines(validKlines, 15, aggCache);
     const closes15m = agg15m.map((c) => c.close);
     const rsi15m = closes15m.length >= stdPeriod + 1 ? calculateRsi(closes15m, stdPeriod) : null;
 
@@ -565,7 +572,7 @@ function buildEntry(
       closes1h = klines1h.map((k) => parseFloat(k[4]));
       rsi1h = calculateRsi(closes1h, stdPeriod);
     } else {
-      const agg1h = aggregateKlines(validKlines, 60);
+      const agg1h = aggregateKlines(validKlines, 60, aggCache);
       closes1h = agg1h.map((c) => c.close);
       if (closes1h.length >= stdPeriod + 1) {
         rsi1h = calculateRsi(closes1h, stdPeriod);

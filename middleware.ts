@@ -20,9 +20,12 @@ export async function middleware(request: NextRequest) {
   let session = null;
   if (hasSessionCookie) {
     try {
-      const port = process.env.PORT || "10000";
-      // Use 127.0.0.1 to be more specific than localhost if needed, 
-      // but localhost is usually safer in Edge
+      const requestedProto = request.headers.get("x-forwarded-proto") || "http";
+      const requestedHost = request.headers.get("host") || "localhost:3000";
+      const port = process.env.PORT || "3000";
+      
+      // On Render, we want to talk to localhost over HTTP to bypass internal SSL noise.
+      // But we must preserve the 'host' header for Better Auth to recognize the domain.
       const internalBaseURL = `http://localhost:${port}`;
 
       const { data } = await betterFetch<Session>(
@@ -31,6 +34,9 @@ export async function middleware(request: NextRequest) {
           baseURL: internalBaseURL,
           headers: {
             cookie: request.headers.get("cookie") || "",
+            // Essential: Pass the correct host so Better Auth can validate the cookie/domain
+            host: requestedHost,
+            "x-forwarded-proto": requestedProto,
           },
         },
       );
