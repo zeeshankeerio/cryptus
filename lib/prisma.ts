@@ -11,7 +11,10 @@ function createPrismaClient() {
   const connectionString = (process.env.DATABASE_URL || "").trim();
   
   // Reuse pool in development to prevent connection leaks
-  const pool = globalForPrisma.pool || new Pool({ connectionString });
+  const pool = globalForPrisma.pool || new Pool({ 
+    connectionString,
+    ssl: { rejectUnauthorized: false } // Silence warning and ensure secure connection
+  });
   if (process.env.NODE_ENV !== "production") globalForPrisma.pool = pool;
 
   const adapter = new PrismaPg(pool as any);

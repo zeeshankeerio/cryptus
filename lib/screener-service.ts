@@ -45,9 +45,9 @@ const RSI_PERIOD = 14;
 const KLINE_LIMIT = 499; // 499 candles ensures weight 1 (500+ is weight 5). Great for 15m MACD/RSI stability.
 const KLINE_LIMIT_1H = 40; // 40 1h candles: Perfect for 1h RSI (needs > 28 for Wilder stability)
 const BATCH_SIZE = 16;
-const FETCH_RETRY_COUNT = 3; // retries across rotating endpoints
+const FETCH_RETRY_COUNT = 4; // increased for 600-coin robustness
 const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
-const KLINE_TIMEOUT_MS = 18_000; // 18s per kline fetch to smooth over congestion
+const KLINE_TIMEOUT_MS = 22_000; // 22s per kline fetch to reduce timeouts at scale
 
 // ── Binance API Weight Tracking (Rate Limit Protection) ──
 let globalWeight = 0;
@@ -460,11 +460,11 @@ async function fetchAllKlinesBatched(
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
   const concurrency = symbols.length >= 800 ? 64
-    : symbols.length >= 500 ? 64
-      : symbols.length >= 400 ? 56
-        : symbols.length >= 250 ? 48
-          : symbols.length >= 120 ? 32
-            : BATCH_SIZE;
+    : symbols.length >= 500 ? 48 // Tuned for 600 coins (Binance-safe)
+    : symbols.length >= 400 ? 40
+    : symbols.length >= 250 ? 32
+    : symbols.length >= 120 ? 16
+    : BATCH_SIZE;
 
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, async () => {
