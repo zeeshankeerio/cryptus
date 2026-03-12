@@ -1,10 +1,24 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Search, Bell, Settings, Filter, Star, Info, 
+  RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
+  LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
+  Flame, ShieldCheck, Activity, BrainCircuit, Gauge
+} from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
 import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } from '@/lib/types';
 import { useLivePrices } from '@/hooks/use-live-prices';
 import { approximateRsi } from '@/lib/rsi';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 // ─── Formatting helpers ────────────────────────────────────────
 
@@ -37,22 +51,22 @@ function formatPct(n: number | null): string {
 }
 
 function getRsiColor(rsi: number | null): string {
-  if (rsi === null) return 'text-gray-600';
-  if (rsi <= 20) return 'text-emerald-400 font-semibold';
+  if (rsi === null) return 'text-slate-600';
+  if (rsi <= 20) return 'text-emerald-400 font-bold';
   if (rsi <= 30) return 'text-emerald-400';
   if (rsi <= 40) return 'text-emerald-300/70';
-  if (rsi >= 80) return 'text-red-400 font-semibold';
+  if (rsi >= 80) return 'text-red-400 font-bold';
   if (rsi >= 70) return 'text-red-400';
   if (rsi >= 60) return 'text-orange-300/70';
-  return 'text-gray-300';
+  return 'text-slate-300';
 }
 
 function getRsiBg(rsi: number | null): string {
   if (rsi === null) return '';
-  if (rsi <= 25) return 'bg-emerald-500/10';
-  if (rsi <= 30) return 'bg-emerald-500/5';
-  if (rsi >= 75) return 'bg-red-500/10';
-  if (rsi >= 70) return 'bg-red-500/5';
+  if (rsi <= 25) return 'bg-emerald-500/[0.08]';
+  if (rsi <= 30) return 'bg-emerald-500/[0.04]';
+  if (rsi >= 75) return 'bg-red-500/[0.08]';
+  if (rsi >= 70) return 'bg-red-500/[0.04]';
   return '';
 }
 
@@ -61,15 +75,7 @@ function getScoreBarColor(score: number): string {
   if (score >= 15) return 'bg-emerald-300/70';
   if (score <= -40) return 'bg-red-400';
   if (score <= -15) return 'bg-red-300/70';
-  return 'bg-gray-500';
-}
-
-function timeAgo(ts: number): string {
-  const s = Math.floor((Date.now() - ts) / 1000);
-  if (s < 5) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-  return `${Math.floor(s / 3600)}h ago`;
+  return 'bg-slate-500';
 }
 
 // ─── Signal Badge ──────────────────────────────────────────────
@@ -78,13 +84,13 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   const styles: Record<string, string> = {
     oversold: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
     overbought: 'bg-red-500/15 text-red-400 border-red-500/30',
-    neutral: 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+    neutral: 'bg-slate-500/15 text-slate-400 border-slate-500/30',
   };
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 text-xs font-medium rounded-full border ${styles[signal]}`}>
-      {signal === 'oversold' && '▼ '}
-      {signal === 'overbought' && '▲ '}
-      {signal.charAt(0).toUpperCase() + signal.slice(1)}
+    <span className={cn("inline-flex items-center px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tight rounded-full border", styles[signal])}>
+      {signal === 'oversold' && <ChevronDown size={10} className="mr-1" />}
+      {signal === 'overbought' && <ChevronUp size={10} className="mr-1" />}
+      {signal}
     </span>
   );
 }
@@ -93,17 +99,174 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
   const styles: Record<string, string> = {
     'strong-buy': 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
     'buy': 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25',
-    'neutral': 'bg-gray-500/15 text-gray-400 border-gray-500/30',
+    'neutral': 'bg-slate-500/15 text-slate-400 border-slate-500/30',
     'sell': 'bg-red-500/10 text-red-300 border-red-500/25',
     'strong-sell': 'bg-red-500/20 text-red-400 border-red-500/40',
   };
   const title = reasons?.length ? reasons.join(' \u00B7 ') : undefined;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full border ${styles[signal]}`} title={title}>
+    <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded border", styles[signal])} title={title}>
       {label}
     </span>
   );
 }
+
+// ─── Screener Row (Memoized) ───────────────────────────────────
+
+const ScreenerRow = memo(function ScreenerRow({ 
+  entry, 
+  idx, 
+  watchlist, 
+  toggleWatchlist, 
+  visibleCols,
+  useAnimations 
+}: { 
+  entry: ScreenerEntry; 
+  idx: number; 
+  watchlist: Set<string>; 
+  toggleWatchlist: (s: string) => void;
+  visibleCols: Set<ColumnId>;
+  useAnimations: boolean;
+}) {
+  const isStarred = watchlist.has(entry.symbol);
+
+  return (
+    <motion.tr
+      layout={useAnimations}
+      initial={useAnimations ? { opacity: 0 } : undefined}
+      animate={{ opacity: 1 }}
+      exit={useAnimations ? { opacity: 0, scale: 0.98 } : undefined}
+      transition={{ duration: 0.2 }}
+      className={cn(
+        "group transition-all duration-150 hover:bg-white/[0.02]",
+        getRsiBg(entry.rsi15m)
+      )}
+    >
+      <td className="px-4 py-4 text-[10px] text-slate-700 font-black tabular-nums">{idx + 1}</td>
+      <td className="px-2 py-4 text-center">
+        <button
+          onClick={() => toggleWatchlist(entry.symbol)}
+          className={cn(
+            "transition-all duration-200 transform group-hover:scale-110",
+            isStarred ? "text-yellow-400" : "text-slate-800 hover:text-slate-600"
+          )}
+        >
+          <Star size={14} fill={isStarred ? "currentColor" : "none"} />
+        </button>
+      </td>
+      <td className="px-3 py-4">
+        <span className="font-black text-white text-sm tracking-tight">{entry.symbol.replace('USDT', '')}</span>
+        <span className="text-slate-700 text-[10px] font-black uppercase ml-1 opacity-50">USDT</span>
+      </td>
+      <td className="px-3 py-4 text-right text-sm text-slate-200 tabular-nums font-bold font-mono">
+        ${formatPrice(entry.price)}
+      </td>
+      <td className={cn(
+        "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
+        entry.change24h > 0 ? "text-emerald-400" : entry.change24h < 0 ? "text-red-400" : "text-slate-600"
+      )}>
+        <div className="flex items-center justify-end gap-1.5">
+          {entry.change24h > 0 ? <TrendingUp size={12} /> : entry.change24h < 0 ? <TrendingDown size={12} /> : null}
+          {entry.change24h > 0 ? '+' : ''}{entry.change24h.toFixed(2)}%
+        </div>
+      </td>
+      <td className="px-3 py-4 text-right text-[10px] text-slate-600 tabular-nums font-bold">
+        {formatVolume(entry.volume24h)}
+      </td>
+
+      {visibleCols.has('rsi1m') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi1m))}>{formatRsi(entry.rsi1m)}</td>}
+      {visibleCols.has('rsi5m') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi5m))}>{formatRsi(entry.rsi5m)}</td>}
+      {visibleCols.has('rsi15m') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi15m))}>{formatRsi(entry.rsi15m)}</td>}
+      {visibleCols.has('rsi1h') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi1h))}>{formatRsi(entry.rsi1h)}</td>}
+
+      {visibleCols.has('emaCross') && (
+        <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
+          <span className={cn(
+            "px-2 py-1 rounded border",
+            entry.emaCross === 'bullish' ? "text-emerald-400 border-emerald-500/20 bg-emerald-500/5" :
+            entry.emaCross === 'bearish' ? "text-red-400 border-red-500/20 bg-red-500/5" :
+            "text-slate-700 border-transparent"
+          )}>
+            {entry.emaCross || '—'}
+          </span>
+        </td>
+      )}
+
+      {visibleCols.has('macdHistogram') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
+          entry.macdHistogram === null ? "text-slate-700" : entry.macdHistogram > 0 ? "text-emerald-400" : "text-red-400"
+        )}>
+          {formatNum(entry.macdHistogram, 4)}
+        </td>
+      )}
+
+      {visibleCols.has('bbPosition') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
+          entry.bbPosition === null ? "text-slate-700" : entry.bbPosition < 0.2 ? "text-emerald-400" : entry.bbPosition > 0.8 ? "text-red-400" : "text-slate-400"
+        )}>
+          {formatNum(entry.bbPosition)}
+        </td>
+      )}
+
+      {visibleCols.has('stochK') && (
+        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono">
+          <span className={getRsiColor(entry.stochK)}>{formatRsi(entry.stochK)}</span>
+          {entry.stochD !== null && <span className="text-slate-600 ml-1">/{entry.stochD.toFixed(0)}</span>}
+        </td>
+      )}
+
+      {visibleCols.has('confluence') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
+          entry.confluence >= 15 ? "text-emerald-400" : entry.confluence <= -15 ? "text-red-400" : "text-slate-600"
+        )}>
+          {entry.confluenceLabel}
+        </td>
+      )}
+
+      {visibleCols.has('divergence') && (
+        <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
+          {entry.rsiDivergence === 'bullish' ? <span className="text-emerald-400">Bull Div</span> : 
+            entry.rsiDivergence === 'bearish' ? <span className="text-red-400">Bear Div</span> : '—'}
+        </td>
+      )}
+
+      {visibleCols.has('momentum') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
+          entry.momentum === null ? "text-slate-700" : entry.momentum > 0 ? "text-emerald-300" : entry.momentum < 0 ? "text-red-300" : "text-slate-500"
+        )}>
+          {formatPct(entry.momentum)}
+        </td>
+      )}
+
+      <td className="px-3 py-4 text-right">
+        <SignalBadge signal={entry.signal} />
+      </td>
+
+      {visibleCols.has('strategy') && (
+        <td className="px-3 py-4 text-right">
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-12 h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.min(100, Math.abs(entry.strategyScore))}%` }}
+                  className={cn("h-full rounded-full transition-colors duration-1000", getScoreBarColor(entry.strategyScore))}
+                  style={{ marginLeft: entry.strategyScore < 0 ? 'auto' : 0 }}
+                />
+              </div>
+              <span className="text-[10px] font-black tabular-nums text-slate-500">{entry.strategyScore}</span>
+            </div>
+            <StrategyBadge signal={entry.strategySignal} label={entry.strategyLabel} reasons={entry.strategyReasons} />
+          </div>
+        </td>
+      )}
+    </motion.tr>
+  );
+});
 
 // ─── Sortable Column Header ───────────────────────────────────
 
@@ -126,33 +289,47 @@ function SortHeader({
   return (
     <th
       onClick={() => onSort(key)}
-      className={`px-3 py-3 text-xs font-medium uppercase tracking-wider cursor-pointer select-none transition-colors hover:text-white whitespace-nowrap ${
-        align === 'right' ? 'text-right' : 'text-left'
-      } ${active ? 'text-blue-400' : 'text-gray-500'}`}
+      className={cn(
+        "px-3 py-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none transition-all duration-200 hover:text-white whitespace-nowrap",
+        align === 'right' ? 'text-right' : 'text-left',
+        active ? 'text-blue-400 bg-blue-500/5' : 'text-slate-500'
+      )}
     >
-      <span className="inline-flex items-center gap-1">
+      <span className={cn("flex items-center gap-1.5", align === 'right' ? "justify-end" : "justify-start")}>
         {align === 'right' && active && (
-          <span className="text-blue-400">{currentDir === 'asc' ? '↑' : '↓'}</span>
+          <motion.span 
+            initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="text-blue-400"
+          >
+            {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </motion.span>
         )}
         {label}
         {align !== 'right' && active && (
-          <span className="text-blue-400">{currentDir === 'asc' ? '↑' : '↓'}</span>
+          <motion.span 
+            initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="text-blue-400"
+          >
+            {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </motion.span>
         )}
       </span>
     </th>
   );
 }
 
-// ─── Loading skeleton ─────────────────────────────────────────
+// ─── Skeleton ──────────────────────────────────────────────────
 
 function SkeletonRows({ cols }: { cols: number }) {
   return (
     <>
       {Array.from({ length: 15 }).map((_, i) => (
-        <tr key={i} className="border-b border-dark-700/50">
+        <tr key={i} className="border-b border-white/5">
           {Array.from({ length: cols }).map((_, j) => (
-            <td key={j} className="px-3 py-3">
-              <div className={`skeleton h-4 ${j === 0 ? 'w-6' : j === 1 ? 'w-20' : 'w-14 ml-auto'}`} />
+            <td key={j} className="px-3 py-4">
+              <div className={cn("skeleton h-4 bg-white/5 animate-pulse rounded", j === 0 ? 'w-6' : j === 1 ? 'w-20' : 'w-14 ml-auto')} />
             </td>
           ))}
         </tr>
@@ -181,8 +358,8 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'rsi5m', label: 'RSI 5m', group: 'RSI', defaultVisible: true },
   { id: 'rsi15m', label: 'RSI 15m', group: 'RSI', defaultVisible: true },
   { id: 'rsi1h', label: 'RSI 1h', group: 'RSI', defaultVisible: true },
-  { id: 'emaCross', label: 'EMA Cross', group: 'Trend', defaultVisible: true },
-  { id: 'macdHistogram', label: 'MACD', group: 'Trend', defaultVisible: true },
+  { id: 'emaCross', label: 'Trend', group: 'Indicators', defaultVisible: true },
+  { id: 'macdHistogram', label: 'MACD', group: 'Indicators', defaultVisible: true },
   { id: 'bbPosition', label: 'BB Pos', group: 'Volatility', defaultVisible: false },
   { id: 'stochK', label: 'Stoch RSI', group: 'Momentum', defaultVisible: false },
   { id: 'vwapDiff', label: 'VWAP %', group: 'Volume', defaultVisible: false },
@@ -258,7 +435,6 @@ export default function ScreenerDashboard() {
     return localStorage.getItem('crypto-rsi-show-header') !== '0';
   });
   const [countdown, setCountdown] = useState(30);
-  const [lastFetchTime, setLastFetchTime] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const fetchingRef = useRef(false);
   const dataLenRef = useRef(0);
@@ -276,7 +452,11 @@ export default function ScreenerDashboard() {
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
 
   // Live WebSocket prices
-  const symbolSet = useMemo(() => new Set(data.map((e) => e.symbol)), [data]);
+  const symbolSet = useMemo(() => {
+    if (data.length > 0) return new Set(data.map((e) => e.symbol));
+    // Pre-flight sharding: warm up sockets with majors while waiting for API
+    return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
+  }, [data]);
   const { livePrices, isConnected } = useLivePrices(symbolSet);
 
   // Merge live prices with server data
@@ -288,17 +468,54 @@ export default function ScreenerDashboard() {
 
       // Live RSI approximation: use server RSI state + live price
       let rsi1m = entry.rsi1m;
+      let signal = entry.signal;
       if (entry.rsiState1m && live.price > 0) {
         rsi1m = approximateRsi(entry.rsiState1m, live.price);
+        // Real-time signal update for the 1m badge
+        if (rsi1m <= 30) signal = 'oversold';
+        else if (rsi1m >= 70) signal = 'overbought';
+        else signal = 'neutral';
       }
 
-      return { ...entry, price: live.price, change24h: live.change24h, volume24h: live.volume24h, rsi1m };
+      return { ...entry, price: live.price, change24h: live.change24h, volume24h: live.volume24h, rsi1m, signal };
     });
   }, [data, livePrices]);
 
+  // ─── Real-time Stats Engine ──────────────────────────────────
+  const stats = useMemo(() => {
+    const total = mergedData.length;
+    let oversold = 0;
+    let overbought = 0;
+    let strongBuy = 0;
+    let buy = 0;
+    let neutral = 0;
+    let sell = 0;
+    let strongSell = 0;
+
+    for (const entry of mergedData) {
+      if (entry.signal === 'oversold') oversold++;
+      else if (entry.signal === 'overbought') overbought++;
+
+      switch (entry.strategySignal) {
+        case 'strong-buy': strongBuy++; break;
+        case 'buy': buy++; break;
+        case 'neutral': neutral++; break;
+        case 'sell': sell++; break;
+        case 'strong-sell': strongSell++; break;
+      }
+    }
+
+    const bullish = strongBuy + buy;
+    const bearish = strongSell + sell;
+    const totalSignals = bullish + bearish + neutral || 1;
+    const bias = Math.round(((bullish - bearish) / totalSignals) * 100);
+
+    return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias };
+  }, [mergedData]);
+
   const indicatorReadyCount = useMemo(() => (
-    data.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
-  ), [data]);
+    mergedData.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
+  ), [mergedData]);
 
   // Close column picker on click outside
   useEffect(() => {
@@ -386,7 +603,6 @@ export default function ScreenerDashboard() {
       setData(json.data);
       dataLenRef.current = json.data.length;
       setMeta(json.meta);
-      setLastFetchTime(Date.now());
       setError(null);
       setLoading(false);
     } catch (err) {
@@ -408,7 +624,6 @@ export default function ScreenerDashboard() {
     retryCountRef.current = 0;
     const doFetch = async () => {
       await fetchData();
-      // If initial load failed and no data, retry with backoff (max 3 retries)
       if (dataLenRef.current === 0 && retryCountRef.current < 3) {
         retryCountRef.current++;
         const delay = retryCountRef.current * 3000;
@@ -440,18 +655,6 @@ export default function ScreenerDashboard() {
     };
   }, [refreshInterval, fetchData]);
 
-  // ── Resume refresh on tab focus ──
-  useEffect(() => {
-    const handler = () => {
-      if (!document.hidden && refreshInterval > 0 && dataLenRef.current > 0) {
-        fetchData(true);
-        setCountdown(refreshInterval);
-      }
-    };
-    document.addEventListener('visibilitychange', handler);
-    return () => document.removeEventListener('visibilitychange', handler);
-  }, [refreshInterval, fetchData]);
-
   // ── Sorting ──
   const handleSort = useCallback(
     (key: SortKey) => {
@@ -474,13 +677,11 @@ export default function ScreenerDashboard() {
       items = items.filter((e) => watchlist.has(e.symbol));
     }
 
-    // Signal filter — supports both RSI-based and strategy-based
+    // Signal filter
     if (signalFilter === 'oversold' || signalFilter === 'overbought') {
       items = items.filter((e) => e.signal === signalFilter);
-    } else if (signalFilter !== 'all' && signalFilter !== 'neutral') {
-      items = items.filter((e) => e.strategyLabel !== 'N/A' && e.strategySignal === signalFilter);
-    } else if (signalFilter === 'neutral') {
-      items = items.filter((e) => e.strategyLabel !== 'N/A' && e.strategySignal === 'neutral');
+    } else if (signalFilter !== 'all') {
+      items = items.filter((e) => e.strategySignal === signalFilter);
     }
 
     // Search filter
@@ -501,16 +702,12 @@ export default function ScreenerDashboard() {
       const av = a[sortKey as keyof ScreenerEntry];
       const bv = b[sortKey as keyof ScreenerEntry];
 
-      // Null values always sort to bottom regardless of direction
       if (av === null && bv === null) return 0;
       if (av === null) return 1;
       if (bv === null) return -1;
 
       if (typeof av === 'string' && typeof bv === 'string') {
         return av.localeCompare(bv) * dir;
-      }
-      if (typeof av === 'boolean' && typeof bv === 'boolean') {
-        return ((av ? 1 : 0) - (bv ? 1 : 0)) * dir;
       }
       return ((av as number) - (bv as number)) * dir;
     });
@@ -542,522 +739,289 @@ export default function ScreenerDashboard() {
     setShowWatchlistOnly(false);
   };
 
-  // Count visible columns for colSpan
-  // Fixed cols: #, ★, symbol, price, 24h%, volume, signal = 7
   const colCount = 7 + OPTIONAL_COLUMNS.filter((c) => visibleCols.has(c.id)).length;
 
-  // ── Render ──
   return (
-    <div className="max-w-[1800px] mx-auto px-4 py-6">
+    <div className="max-w-[1800px] mx-auto px-4 py-8">
       {/* ── Header ── */}
       {showHeader && (
-      <header className="mb-5 rounded-2xl border border-dark-700 bg-gradient-to-r from-dark-900 via-dark-800 to-dark-900 p-4 sm:p-5 shadow-[0_8px_24px_rgba(0,0,0,0.25)]">
-        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+      <header className="mb-6 rounded-3xl border border-white/5 bg-gradient-to-br from-slate-900 via-slate-900 to-blue-900/20 p-6 sm:p-8 shadow-2xl relative overflow-hidden group">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -mr-20 -mt-20 group-hover:bg-blue-500/15 transition-colors duration-1000" />
+        <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 relative z-10">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-dark-600 bg-dark-800/80 px-2.5 py-1 text-[11px] tracking-wide text-gray-400 uppercase">
-              Quant Dashboard
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold tracking-widest text-slate-400 uppercase backdrop-blur-sm">
+              Quant Intelligence Engine
             </div>
-            <h1 className="mt-2 text-2xl sm:text-3xl font-semibold text-white flex items-center gap-2.5 tracking-tight">
-              <span className="text-blue-400">⚡</span>
-              <span>CryptoRSI Screener</span>
+            <h1 className="mt-4 text-3xl sm:text-5xl font-black text-white flex items-center gap-4 tracking-tighter">
+              <Zap size={40} className="text-blue-400 fill-blue-400/20" />
+              <span>CryptoRSI <span className="text-blue-500">Pro</span></span>
             </h1>
-            <p className="text-sm text-gray-400 mt-1.5">
-              Multi-indicator market scanner · RSI · MACD · Bollinger · Stochastic · VWAP
-            </p>
+            <div className="flex flex-wrap items-center gap-4 mt-6">
+              <div className="flex flex-col">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Market Bias</div>
+                <div className="flex items-center gap-3">
+                   <div className="w-24 h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-1000" 
+                        style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }} 
+                      />
+                      <div 
+                        className="h-full bg-red-500 transition-all duration-1000" 
+                        style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }} 
+                      />
+                   </div>
+                   <span className={cn("text-xs font-black tabular-nums", stats.bias > 0 ? "text-emerald-400" : stats.bias < 0 ? "text-red-400" : "text-slate-500")}>
+                     {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                   </span>
+                </div>
+              </div>
+              <div className="h-8 w-px bg-white/5" />
+              <p className="text-xs font-medium text-slate-400 max-w-xs leading-relaxed">
+                Real-time dashboard monitoring <span className="text-blue-400 font-bold">{data.length}</span> pairs across <span className="text-blue-400 font-bold">12</span> quantitative layers.
+              </p>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-start lg:justify-end gap-2 text-xs">
+          <div className="flex flex-wrap items-center justify-start lg:justify-end gap-3 text-xs">
             {meta && (
-              <div className="inline-flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-800/80 px-3 py-1.5 text-gray-300">
-                <span className="text-gray-500">Compute</span>
-                <span className="font-medium text-gray-200 tabular-nums">{meta.computeTimeMs}ms</span>
+              <div className="group relative inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-2.5 text-slate-300 transition-all hover:bg-white/[0.06]">
+                <Activity size={14} className="text-slate-500" />
+                <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Compute</span>
+                <span className="font-black text-slate-200 tabular-nums">{meta.computeTimeMs}ms</span>
               </div>
             )}
             {data.length > 0 && (
-              <div className="inline-flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-800/80 px-3 py-1.5 text-gray-300">
-                <span className="text-gray-500">Indicators</span>
-                <span className="font-medium text-gray-200 tabular-nums">{indicatorReadyCount}/{data.length}</span>
+              <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-2.5 text-slate-300">
+                <BrainCircuit size={14} className="text-blue-400" />
+                <span className="text-slate-500 font-bold uppercase tracking-widest text-[9px]">Layers</span>
+                <span className="font-black text-slate-200 tabular-nums">{indicatorReadyCount}/{data.length}</span>
               </div>
             )}
-            <div className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 ${smartMode
-              ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300'
-              : 'border-dark-600 bg-dark-800/80 text-gray-400'
-            }`}>
-              <span className={`h-2 w-2 rounded-full ${smartMode ? 'bg-cyan-300 animate-pulse' : 'bg-gray-600'}`} />
-              <span className="font-medium">Smart {smartMode ? 'ON' : 'OFF'}</span>
+            <div className={cn(
+              "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-all backdrop-blur-md",
+              smartMode
+                ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300 shadow-[inset_0_0_12px_rgba(34,211,238,0.1)]'
+                : 'border-white/5 bg-white/[0.03] text-slate-500'
+            )}>
+              <div className={cn("h-1.5 w-1.5 rounded-full", smartMode ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.6)] animate-pulse' : 'bg-slate-600')} />
+              <span className="font-black tracking-tight uppercase text-[10px]">Smart {smartMode ? 'Active' : 'Static'}</span>
             </div>
-            <div className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 ${
+            <div className={cn(
+              "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 transition-all backdrop-blur-md",
               isConnected
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400'
-                : 'border-dark-600 bg-dark-800/80 text-gray-500'
-            }`}>
-              <span className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-gray-600'}`} />
-              <span className="font-medium text-xs tracking-wide">{isConnected ? 'LIVE' : 'OFFLINE'}</span>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-lg border border-dark-600 bg-dark-800/80 px-3 py-1.5 text-gray-300">
-              <span className={`h-2 w-2 rounded-full ${refreshInterval > 0 ? 'bg-blue-400 animate-pulse' : 'bg-gray-600'}`} />
-              <span className="font-medium text-gray-200">{refreshInterval > 0 ? `${countdown}s` : 'Paused'}</span>
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 shadow-[inset_0_0_12px_rgba(52,211,153,0.1)]'
+                : 'border-white/10 bg-white/[0.03] text-slate-600'
+            )}>
+              <div className={cn("h-1.5 w-1.5 rounded-full", isConnected ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)] animate-pulse' : 'bg-slate-600')} />
+              <span className="font-black tracking-tight uppercase text-[10px]">{isConnected ? 'Live Sync' : 'Polling'}</span>
             </div>
             <button
-              onClick={() => { fetchData(); setCountdown(refreshInterval); }}
-              className="inline-flex items-center rounded-lg border border-dark-500 bg-dark-700 px-3 py-1.5 text-xs font-medium text-gray-100 hover:bg-dark-600 transition-colors"
+              onClick={() => { fetchData(); }}
+              className="group inline-flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-6 py-2.5 text-[10px] font-black tracking-widest text-blue-300 hover:bg-blue-500/20 transition-all active:scale-95 shadow-lg shadow-blue-500/10"
               title="Refresh now"
             >
-              {refreshing ? '⟳ …' : '↻ Refresh'}
+              <RefreshCcw size={14} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
+              <span>{refreshing ? 'UPDATING' : `SYNC IN ${countdown}S`}</span>
             </button>
           </div>
         </div>
       </header>
       )}
 
-      {/* ── Stats bar (2 rows) ── */}
-      {showHeader && meta && (
-        <div className="space-y-3 mb-5">
-          {/* Row 1: core market metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            <StatCard label="Total Pairs" value={meta.total} color="text-blue-400" helper="Universe" />
-            <StatCard
-              label="Oversold (RSI)"
-              value={meta.oversold}
-              color="text-emerald-400"
-              onClick={showMostOversold}
-              helper="Tap to filter"
-            />
-            <StatCard
-              label="Overbought (RSI)"
-              value={meta.overbought}
-              color="text-red-400"
-              onClick={showMostOverbought}
-              helper="Tap to filter"
-            />
-            <StatCard
-              label="Strong Buy"
-              value={meta.strongBuy}
-              color="text-emerald-400"
-              onClick={showStrongBuys}
-              helper="Top setups"
-            />
+      {/* ── Stats bar ── */}
+      {showHeader && (
+        <div className="space-y-4 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard label="Total Pairs" value={stats.total} color="text-blue-400" helper="Universe" />
+            <StatCard label="Oversold" value={stats.oversold} color="text-emerald-400" onClick={showMostOversold} helper="RSI < 30 (Live)" />
+            <StatCard label="Overbought" value={stats.overbought} color="text-red-400" onClick={showMostOverbought} helper="RSI > 70 (Live)" />
+            <StatCard label="Strong Buy" value={stats.strongBuy} color="text-emerald-400" onClick={showStrongBuys} helper="Composite Setup" />
           </div>
 
-          {/* Row 2: strategy distribution */}
-          <div className="rounded-xl border border-dark-700 bg-dark-800/70 p-2.5 sm:p-3">
-            <div className="mb-2 text-[11px] text-gray-500">
-              Strategy distribution based on computed indicators: {meta.indicatorReady}/{meta.total}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5">
-              <MiniStatCard label="Strong Buy" value={meta.strongBuy} color="text-emerald-400" />
-              <MiniStatCard label="Buy" value={meta.buy} color="text-emerald-300" />
-              <MiniStatCard label="Neutral" value={meta.neutral} color="text-gray-300" />
-              <MiniStatCard label="Sell" value={meta.sell} color="text-red-300" />
-              <MiniStatCard label="Strong Sell" value={meta.strongSell} color="text-red-400" />
+          <div className="rounded-3xl border border-white/5 bg-slate-900/40 p-4 relative overflow-hidden backdrop-blur-sm">
+             <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/[0.02] to-red-500/[0.02]" />
+            <div className="relative z-10 grid grid-cols-2 md:grid-cols-5 gap-4">
+              <MiniStatCard label="Strong Buy" value={stats.strongBuy} color="text-emerald-400" />
+              <MiniStatCard label="Buy" value={stats.buy} color="text-emerald-300/70" />
+              <MiniStatCard label="Neutral" value={stats.neutral} color="text-slate-500" />
+              <MiniStatCard label="Sell" value={stats.sell} color="text-red-300/70" />
+              <MiniStatCard label="Strong Sell" value={stats.strongSell} color="text-red-400" />
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Filters bar ── */}
-      <div className="flex flex-wrap items-center gap-2 mb-4 p-3 bg-dark-800 rounded-xl border border-dark-700">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[180px]">
+      {/* ── Controls ── */}
+      <div className="flex flex-col lg:flex-row items-center gap-4 mb-8">
+        <div className="relative flex-1 w-full lg:w-auto overflow-hidden rounded-2xl border border-white/5 bg-slate-900/40 backdrop-blur-md">
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search symbol…"
-            className="w-full pl-8 pr-3 py-2 text-sm bg-dark-700 border border-dark-600 rounded-lg text-white placeholder:text-gray-600 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20"
+            placeholder="Search crypto pair..."
+            className="w-full pl-12 pr-4 py-4 text-sm bg-transparent text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-500/20 font-medium"
           />
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-600 text-sm">🔍</span>
+          <Search size={20} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" />
         </div>
 
-        {/* Signal filter */}
-        <div className="flex rounded-lg border border-dark-600 overflow-hidden text-xs">
-          {SIGNAL_FILTERS.map((f) => (
-            <button
-              key={f.value}
-              onClick={() => setSignalFilter(f.value)}
-              className={`px-2.5 py-2 transition-colors ${
-                signalFilter === f.value
-                  ? 'bg-blue-500/20 text-blue-400 font-medium'
-                  : 'bg-dark-700 text-gray-400 hover:bg-dark-600'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Watchlist toggle */}
-        <button
-          onClick={() => setShowWatchlistOnly((v) => !v)}
-          className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
-            showWatchlistOnly
-              ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
-              : 'bg-dark-700 text-gray-400 border-dark-600 hover:bg-dark-600'
-          }`}
-        >
-          ★ Watchlist{watchlistReady && watchlist.size > 0 ? ` (${watchlist.size})` : ''}
-        </button>
-
-        <button
-          onClick={() => setSmartMode((v) => !v)}
-          className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
-            smartMode
-              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
-              : 'bg-dark-700 text-gray-400 border-dark-600 hover:bg-dark-600'
-          }`}
-          title="Adaptive performance mode"
-        >
-          ⚡ Smart {smartMode ? 'On' : 'Off'}
-        </button>
-
-        <button
-          onClick={() => setShowHeader((v) => !v)}
-          className={`px-3 py-2 text-xs rounded-lg border transition-colors ${
-            showHeader
-              ? 'bg-dark-700 text-gray-300 border-dark-600 hover:bg-dark-600'
-              : 'bg-blue-500/20 text-blue-300 border-blue-500/40'
-          }`}
-          title="Toggle dashboard header and stat cards"
-        >
-          {showHeader ? '▴ Hide Header' : '▾ Show Header'}
-        </button>
-
-        {/* Column picker */}
-        <div className="relative" ref={colPickerRef}>
-          <button
-            onClick={() => setShowColPicker((v) => !v)}
-            className="px-3 py-2 text-xs bg-dark-700 border border-dark-600 rounded-lg text-gray-400 hover:bg-dark-600 transition-colors"
-          >
-            ⊞ Columns
-          </button>
-          {showColPicker && (
-            <div className="absolute right-0 top-full mt-1 z-50 bg-dark-800 border border-dark-600 rounded-xl shadow-xl p-3 min-w-[200px]">
-              {OPTIONAL_COLUMNS.map((col) => (
-                <label key={col.id} className="flex items-center gap-2 py-1 text-xs cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={visibleCols.has(col.id)}
-                    onChange={() => toggleCol(col.id)}
-                    className="rounded border-dark-500"
-                  />
-                  <span className="text-gray-300">{col.label}</span>
-                  <span className="text-gray-600 ml-auto">{col.group}</span>
-                </label>
-              ))}
-              <div className="mt-2 pt-2 border-t border-dark-600 flex gap-2">
-                <button
-                  onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.map((c) => c.id)))}
-                  className="text-xs text-blue-400 hover:text-blue-300"
-                >Show all</button>
-                <button
-                  onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id)))}
-                  className="text-xs text-gray-400 hover:text-gray-300"
-                >Reset</button>
-              </div>
+        <div className="flex flex-wrap items-center gap-2">
+            <div className="flex bg-slate-900/40 rounded-2xl border border-white/5 p-1 backdrop-blur-md">
+                {['all', 'strong-buy', 'buy', 'neutral', 'sell', 'strong-sell'].map((v) => (
+                    <button
+                        key={v}
+                        onClick={() => setSignalFilter(v as SignalFilter)}
+                        className={cn(
+                            "px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all rounded-xl",
+                            signalFilter === v ? "bg-white/10 text-white shadow-xl" : "text-slate-500 hover:text-slate-300"
+                        )}
+                    >
+                        {v === 'all' ? 'All' : v.replace('strong-', 'S-')}
+                    </button>
+                ))}
             </div>
-          )}
-        </div>
 
-        {/* Pair count */}
-        <select
-          value={pairCount}
-          onChange={(e) => setPairCount(Number(e.target.value))}
-          className="px-3 py-2 text-xs bg-dark-700 border border-dark-600 rounded-lg text-gray-300 focus:outline-none"
-        >
-          {PAIR_COUNTS.map((c) => (
-            <option key={c} value={c}>{c} pairs</option>
-          ))}
-        </select>
-
-        {/* Refresh interval */}
-        <select
-          value={refreshInterval}
-          onChange={(e) => setRefreshInterval(Number(e.target.value))}
-          className="px-3 py-2 text-xs bg-dark-700 border border-dark-600 rounded-lg text-gray-300 focus:outline-none"
-        >
-          {REFRESH_OPTIONS.filter((o) => o.maxPairs >= pairCount).map((o) => (
-            <option key={o.value} value={o.value}>⟳ {o.label}</option>
-          ))}
-        </select>
-
-        {/* Reset */}
-        {(search || signalFilter !== 'all' || showWatchlistOnly) && (
           <button
-            onClick={resetFilters}
-            className="px-3 py-2 text-xs text-gray-400 hover:text-white transition-colors"
+            onClick={() => setShowWatchlistOnly((v) => !v)}
+            className={cn(
+              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all backdrop-blur-md",
+              showWatchlistOnly 
+                ? "bg-yellow-500/10 text-yellow-400 border-yellow-500/30" 
+                : "bg-slate-900/40 text-slate-500 border-white/5 hover:bg-slate-800/60"
+            )}
+            title="Toggle Watchlist"
           >
-            ✕ Clear
+            <Star size={14} className={cn("inline mr-2", showWatchlistOnly && "fill-current")} />
+            Watchlist {watchlist.size > 0 && `(${watchlist.size})`}
           </button>
-        )}
+
+          <button
+            onClick={() => setShowHeader((v) => !v)}
+            className={cn(
+              "px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border transition-all backdrop-blur-md",
+              showHeader 
+                ? "bg-blue-500/10 text-blue-400 border-blue-500/30" 
+                : "bg-slate-900/40 text-slate-500 border-white/5 hover:bg-slate-800/60"
+            )}
+            title="Toggle Premium Header"
+          >
+            <LayoutList size={14} className="inline mr-2" />
+            Header
+          </button>
+
+          <div className="relative group" ref={colPickerRef}>
+            <button
+               onClick={() => setShowColPicker(!showColPicker)}
+               className="px-5 py-3 text-[10px] font-bold uppercase tracking-widest rounded-2xl border border-white/5 bg-slate-900/40 text-slate-500 hover:bg-slate-800/60 transition-all backdrop-blur-md"
+            >
+              <LayoutGrid size={14} className="inline mr-2" />
+              Columns
+            </button>
+            <AnimatePresence>
+                {showColPicker && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 top-full mt-3 z-50 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-4 min-w-[240px] backdrop-blur-xl"
+                    >
+                        <div className="grid grid-cols-1 gap-1">
+                            {OPTIONAL_COLUMNS.map((col) => (
+                                <button
+                                    key={col.id}
+                                    onClick={() => toggleCol(col.id)}
+                                    className={cn(
+                                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
+                                        visibleCols.has(col.id) ? "bg-blue-500/10 text-blue-400" : "text-slate-500 hover:bg-white/5"
+                                    )}
+                                >
+                                    <div className={cn("w-4 h-4 rounded-md border flex items-center justify-center transition-all", visibleCols.has(col.id) ? "bg-blue-500 border-blue-500" : "border-slate-700")}>
+                                        {visibleCols.has(col.id) && <ShieldCheck size={12} className="text-white" />}
+                                    </div>
+                                    <span className="text-xs font-bold uppercase tracking-tight">{col.label}</span>
+                                    <span className="text-[9px] font-medium text-slate-600 ml-auto">{col.group}</span>
+                                </button>
+                            ))}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
-      {/* ── Error ── */}
-      {error && (
-        <div className="mb-4 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center justify-between">
-          <span>⚠ {error}</span>
-          <button onClick={() => fetchData()} className="px-3 py-1 bg-red-500/20 rounded-lg hover:bg-red-500/30 transition-colors">
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* ── Indicators computing notice ── */}
-      {!loading && data.length > 0 && indicatorReadyCount < data.length && (
-        <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-sm flex items-center gap-3">
-          <span className="animate-spin text-base">⟳</span>
-          <span>Computing indicators... {indicatorReadyCount}/{data.length} ready. Prices are live and remaining pairs will fill in automatically.</span>
-        </div>
-      )}
-
       {/* ── Table ── */}
-      <div className="bg-dark-800 rounded-xl border border-dark-700 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-dark-900/50 sticky top-0 z-10">
+      <div className="rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-md overflow-hidden shadow-2xl">
+        <div className="overflow-x-auto overflow-y-auto max-h-[800px] custom-scrollbar">
+          <table className="w-full border-collapse">
+            <thead className="sticky top-0 z-20 bg-slate-900/90 backdrop-blur-xl border-b border-white/5">
               <tr>
-                <th className="px-3 py-3 text-xs font-medium text-gray-600 text-left w-10">#</th>
-                <th className="px-2 py-3 text-xs font-medium text-gray-600 text-center w-8" title="Watchlist">★</th>
+                <th className="px-4 py-4 text-[10px] font-black uppercase text-slate-600 text-left w-12 tracking-widest">#</th>
+                <th className="px-2 py-4 text-[10px] font-black text-slate-600 text-center w-8 uppercase tracking-widest">★</th>
                 <SortHeader label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
                 <SortHeader label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                <SortHeader label="24h %" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
+                <SortHeader label="24h Change" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
                 <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                {visibleCols.has('rsi1m') && (
-                  <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('rsi5m') && (
-                  <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('rsi15m') && (
-                  <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('rsi1h') && (
-                  <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('emaCross') && (
-                  <th className="px-3 py-3 text-xs font-medium text-gray-500 text-right uppercase tracking-wider whitespace-nowrap">EMA</th>
-                )}
-                {visibleCols.has('macdHistogram') && (
-                  <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('bbPosition') && (
-                  <SortHeader label="BB Pos" sortKey="bbPosition" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('stochK') && (
-                  <SortHeader label="Stoch" sortKey="stochK" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('vwapDiff') && (
-                  <SortHeader label="VWAP %" sortKey="vwapDiff" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('volumeSpike') && (
-                  <th className="px-3 py-3 text-xs font-medium text-gray-500 text-center uppercase tracking-wider whitespace-nowrap">Spike</th>
-                )}
-                {visibleCols.has('confluence') && (
-                  <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
-                {visibleCols.has('divergence') && (
-                  <th className="px-3 py-3 text-xs font-medium text-gray-500 text-right uppercase tracking-wider whitespace-nowrap">Diverg</th>
-                )}
-                {visibleCols.has('momentum') && (
-                  <SortHeader label="Mom" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
+                
+                {visibleCols.has('rsi1m') && <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('rsi5m') && <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('rsi15m') && <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('rsi1h') && <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                
+                {visibleCols.has('emaCross') && <SortHeader label="Trend" sortKey="emaCross" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('macdHistogram') && <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('bbPosition') && <SortHeader label="BB Pos" sortKey="bbPosition" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('stochK') && <SortHeader label="Stoch" sortKey="stochK" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('confluence') && <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('divergence') && <SortHeader label="Diverg" sortKey="rsiDivergence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('momentum') && <SortHeader label="Momentum" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                
                 <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                {visibleCols.has('strategy') && (
-                  <SortHeader label="Score" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                )}
+                {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-white/5">
               {loading ? (
                 <SkeletonRows cols={colCount} />
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={colCount} className="px-3 py-12 text-center text-gray-600">
-                    No pairs match your filters
+                   <td colSpan={colCount} className="px-6 py-24 text-center">
+                    <div className="flex flex-col items-center gap-4 opacity-50">
+                        <Search size={48} className="text-slate-700" />
+                        <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filtered.map((entry, idx) => (
-                  <tr
-                    key={entry.symbol}
-                    className={`border-b border-dark-700/40 transition-colors hover:bg-dark-700/40 ${getRsiBg(entry.rsi15m)}`}
-                  >
-                    <td className="px-3 py-2.5 text-xs text-gray-600 tabular-nums">{idx + 1}</td>
-                    <td className="px-2 py-2.5 text-center">
-                      <button
-                        onClick={() => toggleWatchlist(entry.symbol)}
-                        className={`text-sm transition-colors ${watchlist.has(entry.symbol) ? 'text-yellow-400' : 'text-gray-700 hover:text-gray-500'}`}
-                        title={watchlist.has(entry.symbol) ? 'Remove from watchlist' : 'Add to watchlist'}
-                      >
-                        {watchlist.has(entry.symbol) ? '★' : '☆'}
-                      </button>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="font-medium text-white text-sm">{entry.symbol.replace('USDT', '')}</span>
-                      <span className="text-gray-600 text-xs ml-0.5">/USDT</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-sm text-gray-200 tabular-nums font-mono">
-                      ${formatPrice(entry.price)}
-                    </td>
-                    <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${
-                      entry.change24h > 0 ? 'text-emerald-400' : entry.change24h < 0 ? 'text-red-400' : 'text-gray-400'
-                    }`}>
-                      {entry.change24h > 0 ? '+' : ''}{entry.change24h.toFixed(2)}%
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-xs text-gray-400 tabular-nums">
-                      {formatVolume(entry.volume24h)}
-                    </td>
-                    {visibleCols.has('rsi1m') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${getRsiColor(entry.rsi1m)}`}>
-                        {formatRsi(entry.rsi1m)}
-                      </td>
-                    )}
-                    {visibleCols.has('rsi5m') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${getRsiColor(entry.rsi5m)}`}>
-                        {formatRsi(entry.rsi5m)}
-                      </td>
-                    )}
-                    {visibleCols.has('rsi15m') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${getRsiColor(entry.rsi15m)}`}>
-                        {formatRsi(entry.rsi15m)}
-                      </td>
-                    )}
-                    {visibleCols.has('rsi1h') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${getRsiColor(entry.rsi1h)}`}>
-                        {formatRsi(entry.rsi1h)}
-                      </td>
-                    )}
-                    {visibleCols.has('emaCross') && (
-                      <td className="px-3 py-2.5 text-right text-xs">
-                        <span className={
-                          entry.emaCross === 'bullish'
-                            ? 'text-emerald-400'
-                            : entry.emaCross === 'bearish'
-                              ? 'text-red-400'
-                              : 'text-gray-600'
-                        }>
-                          {entry.emaCross === 'bullish' ? '▲ Bull' : entry.emaCross === 'bearish' ? '▼ Bear' : '— None'}
-                        </span>
-                      </td>
-                    )}
-                    {visibleCols.has('macdHistogram') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${
-                        entry.macdHistogram === null
-                          ? 'text-gray-600'
-                          : entry.macdHistogram > 0
-                            ? 'text-emerald-400'
-                            : 'text-red-400'
-                      }`}>
-                        {formatNum(entry.macdHistogram, 4)}
-                      </td>
-                    )}
-                    {visibleCols.has('bbPosition') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${
-                        entry.bbPosition === null
-                          ? 'text-gray-600'
-                          : entry.bbPosition < 0.2
-                            ? 'text-emerald-400'
-                            : entry.bbPosition > 0.8
-                              ? 'text-red-400'
-                              : 'text-gray-300'
-                      }`}>
-                        {formatNum(entry.bbPosition)}
-                      </td>
-                    )}
-                    {visibleCols.has('stochK') && (
-                      <td className="px-3 py-2.5 text-right text-xs tabular-nums font-mono">
-                        <span className={getRsiColor(entry.stochK)}>{formatRsi(entry.stochK)}</span>
-                        {entry.stochD !== null && (
-                          <span className="text-gray-600 ml-1">/ {entry.stochD.toFixed(0)}</span>
-                        )}
-                      </td>
-                    )}
-                    {visibleCols.has('vwapDiff') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${
-                        entry.vwapDiff === null
-                          ? 'text-gray-600'
-                          : entry.vwapDiff > 0
-                            ? 'text-emerald-300/70'
-                            : 'text-red-300/70'
-                      }`}>
-                        {formatPct(entry.vwapDiff)}
-                      </td>
-                    )}
-                    {visibleCols.has('volumeSpike') && (
-                      <td className="px-3 py-2.5 text-center">
-                        {entry.volumeSpike
-                          ? <span className="text-yellow-400 text-sm" title="Volume Spike">🔥</span>
-                          : <span className="text-gray-700 text-xs">—</span>
-                        }
-                      </td>
-                    )}
-                    {visibleCols.has('confluence') && (
-                      <td className={`px-3 py-2.5 text-right text-xs font-medium ${
-                        entry.confluence >= 40 ? 'text-emerald-400' :
-                        entry.confluence >= 15 ? 'text-emerald-300/70' :
-                        entry.confluence <= -40 ? 'text-red-400' :
-                        entry.confluence <= -15 ? 'text-red-300/70' :
-                        'text-gray-500'
-                      }`} title={`Confluence: ${entry.confluence}`}>
-                        {entry.confluenceLabel}
-                      </td>
-                    )}
-                    {visibleCols.has('divergence') && (
-                      <td className="px-3 py-2.5 text-right text-xs">
-                        {entry.rsiDivergence === 'bullish' ? (
-                          <span className="text-emerald-400 font-medium" title="Bullish RSI divergence: price lower low + RSI higher low">▲ Bull</span>
-                        ) : entry.rsiDivergence === 'bearish' ? (
-                          <span className="text-red-400 font-medium" title="Bearish RSI divergence: price higher high + RSI lower high">▼ Bear</span>
-                        ) : (
-                          <span className="text-gray-700">—</span>
-                        )}
-                      </td>
-                    )}
-                    {visibleCols.has('momentum') && (
-                      <td className={`px-3 py-2.5 text-right text-sm tabular-nums font-mono ${
-                        entry.momentum === null ? 'text-gray-600' :
-                        entry.momentum > 1 ? 'text-emerald-400' :
-                        entry.momentum > 0 ? 'text-emerald-300/70' :
-                        entry.momentum < -1 ? 'text-red-400' :
-                        entry.momentum < 0 ? 'text-red-300/70' : 'text-gray-400'
-                      }`}>
-                        {formatPct(entry.momentum)}
-                      </td>
-                    )}
-                    <td className="px-3 py-2.5 text-right">
-                      <SignalBadge signal={entry.signal} />
-                    </td>
-                    {visibleCols.has('strategy') && (
-                      <td className="px-3 py-2.5 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <div className="w-12 h-1.5 bg-dark-600 rounded-full overflow-hidden" title={`Score: ${entry.strategyScore}`}>
-                            <div
-                              className={`h-full rounded-full transition-all ${getScoreBarColor(entry.strategyScore)}`}
-                              style={{ width: `${Math.min(100, Math.abs(entry.strategyScore))}%`, marginLeft: entry.strategyScore < 0 ? 'auto' : 0 }}
-                            />
-                          </div>
-                          <StrategyBadge signal={entry.strategySignal} label={entry.strategyLabel} reasons={entry.strategyReasons} />
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
+                <AnimatePresence mode="popLayout" initial={false}>
+                    {filtered.map((entry, idx) => (
+                        <ScreenerRow 
+                          key={entry.symbol}
+                          entry={entry}
+                          idx={idx}
+                          watchlist={watchlist}
+                          toggleWatchlist={toggleWatchlist}
+                          visibleCols={visibleCols}
+                          useAnimations={filtered.length < 150}
+                        />
+                    ))}
+                </AnimatePresence>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* ── Footer ── */}
-      <footer className="mt-4 flex flex-wrap items-center justify-between text-xs text-gray-600 px-1">
+      <footer className="mt-8 flex flex-col sm:flex-row items-center justify-between text-[11px] font-bold uppercase tracking-widest text-slate-600 px-4 gap-4">
         <span>
-          Showing {filtered.length} of {data.length} pairs
-          {signalFilter !== 'all' && ` · filtered by ${signalFilter}`}
-          {showWatchlistOnly && ` · watchlist only`}
+          Universe: {data.length} pairs · {signalFilter !== 'all' && `Mode: ${signalFilter} · `} {showWatchlistOnly && 'Star filter active'}
         </span>
-        <span className="flex items-center gap-2">
-          <span>Data from{isConnected ? ' · Live WebSocket + RSI' : ' · REST API'} · RSI 14 · EMA 9/21 · MACD 12/26/9 · BB 20 · Confluence · Divergence</span>
-          <Link href="/guide" className="text-blue-500 hover:text-blue-400 transition-colors">📖 Guide</Link>
-        </span>
+        <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+                <div className={cn("w-2 h-2 rounded-full", isConnected ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]" : "bg-slate-700")} />
+                <span>{isConnected ? "Real-time Stream active" : "REST polling mode"}</span>
+            </div>
+            <Link href="/guide" className="text-blue-500 hover:text-blue-400 transition-colors">Documentation</Link>
+        </div>
       </footer>
     </div>
   );
@@ -1065,36 +1029,57 @@ export default function ScreenerDashboard() {
 
 // ─── Stat Card ─────────────────────────────────────────────────
 
-function StatCard({
-  label,
-  value,
-  color,
-  onClick,
-  helper,
-}: {
-  label: string;
-  value: number;
-  color: string;
-  onClick?: () => void;
-  helper?: string;
-}) {
+function Counter({ value }: { value: number }) {
+  const [displayValue, setDisplayValue] = useState(value);
+  
+  useEffect(() => {
+    setDisplayValue(value);
+  }, [value]);
+
   return (
-    <div
-      onClick={onClick}
-      className={`p-3.5 bg-dark-800/85 rounded-xl border border-dark-700 ${onClick ? 'cursor-pointer hover:border-dark-500 hover:bg-dark-700/70 transition-colors' : ''}`}
+    <motion.span
+      key={value}
+      initial={{ opacity: 0.5, y: 5 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="inline-block"
     >
-      <div className="text-xs text-gray-500 mb-1.5 tracking-wide uppercase">{label}</div>
-      <div className={`text-3xl leading-none font-semibold tabular-nums ${color}`}>{value}</div>
-      {helper && <div className="mt-2 text-[11px] text-gray-500">{helper}</div>}
-    </div>
+      {displayValue}
+    </motion.span>
+  );
+}
+
+function StatCard({ label, value, color, onClick, helper }: { label: string; value: number; color: string; onClick?: () => void; helper?: string }) {
+  return (
+    <motion.div
+      whileHover={{ y: -4 }}
+      onClick={onClick}
+      className={cn(
+        "p-6 rounded-3xl border border-white/5 bg-slate-900/40 backdrop-blur-md transition-all shadow-xl group relative overflow-hidden",
+        onClick && "cursor-pointer hover:border-blue-500/30 hover:bg-slate-800/60"
+      )}
+    >
+      <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+        <Gauge size={48} className={color} />
+      </div>
+      <div className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4 flex items-center gap-2">
+        <div className={cn("w-1 h-1 rounded-full", color.replace('text-', 'bg-'))} />
+        {label}
+      </div>
+      <div className={cn("text-4xl font-black tabular-nums tracking-tighter", color)}>
+        <Counter value={value} />
+      </div>
+      <div className="mt-2 text-[10px] font-bold text-slate-600 group-hover:text-slate-400 transition-colors">{helper}</div>
+    </motion.div>
   );
 }
 
 function MiniStatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="p-2.5 bg-dark-800 rounded-lg border border-dark-700 text-center">
-      <div className="text-[11px] text-gray-500 mb-1 uppercase tracking-wide">{label}</div>
-      <div className={`text-2xl leading-none font-semibold tabular-nums ${color}`}>{value}</div>
+    <div className="p-3 text-center group">
+      <div className="text-[9px] font-black uppercase tracking-widest text-slate-600 mb-1 group-hover:text-slate-500 transition-colors uppercase">{label}</div>
+      <div className={cn("text-xl font-black tabular-nums tracking-tight", color)}>
+        <Counter value={value} />
+      </div>
     </div>
   );
 }

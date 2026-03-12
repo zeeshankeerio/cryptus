@@ -406,8 +406,8 @@ async function fetchKlinesBatched(
   fetcher: (symbol: string) => Promise<BinanceKline[]>,
 ): Promise<PromiseSettledResult<BinanceKline[]>[]> {
   const results = new Array<PromiseSettledResult<BinanceKline[]>>(symbols.length);
-  const concurrency = symbols.length >= 400 ? 20
-    : symbols.length >= 250 ? 18
+  const concurrency = symbols.length >= 400 ? 32
+    : symbols.length >= 250 ? 24
       : symbols.length >= 120 ? 16
         : BATCH_SIZE;
 
@@ -653,8 +653,8 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       lastComputeMs: 0,
     };
 
-    const baseBootstrapCap = symbolCount <= 150 ? symbolCount : Math.min(symbolCount, symbolCount >= 400 ? 220 : 160);
-    const baseRollingCap = MAX_KLINE_FETCH;
+    const baseBootstrapCap = symbolCount <= 150 ? symbolCount : symbolCount >= 400 ? 400 : 250;
+    const baseRollingCap = symbolCount >= 400 ? 250 : 150;
     const refreshCap = smartMode
       ? (uncachedSymbols.length > 0
         ? Math.min(symbolCount, Math.max(baseBootstrapCap, tuning.dynamicCap))
@@ -663,9 +663,14 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
 
     if (symbolsToRefresh.length > refreshCap) {
       symbolsToRefresh.sort((a, b) => {
+        // Strict priority for uncached symbols to fill the "N/A" gaps first
+        const aCached = indicatorCache.has(a);
+        const bCached = indicatorCache.has(b);
+        if (aCached !== bCached) return aCached ? 1 : -1;
+        
         const ta = indicatorCache.get(a)?.ts ?? 0;
         const tb = indicatorCache.get(b)?.ts ?? 0;
-        return ta - tb; // oldest first (uncached = 0, so they come first)
+        return ta - tb; // oldest first
       });
       symbolsToRefresh = symbolsToRefresh.slice(0, refreshCap);
     }

@@ -86,7 +86,7 @@ export type SortKey =
   | 'symbol' | 'price' | 'change24h' | 'volume24h'
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
   | 'macdHistogram' | 'bbPosition' | 'stochK' | 'vwapDiff'
-  | 'strategyScore' | 'signal'
+  | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
   | 'confluence' | 'momentum';
 
 export type SortDir = 'asc' | 'desc';
