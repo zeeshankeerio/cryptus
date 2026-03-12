@@ -9,6 +9,7 @@ import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } fro
 
 interface ScreenerOptions {
   smartMode?: boolean;
+  rsiPeriod?: number;
 }
 
 interface SmartTuningState {
@@ -89,8 +90,8 @@ function getSmartModeDefault(): boolean {
   return process.env.SMART_MODE_DEFAULT !== '0';
 }
 
-function makeCacheKey(symbolCount: number, smartMode: boolean): string {
-  return `${symbolCount}:${smartMode ? 'smart' : 'classic'}`;
+function makeCacheKey(symbolCount: number, smartMode: boolean, rsiPeriod: number): string {
+  return `${symbolCount}:${smartMode ? 'smart' : 'classic'}:rsi${rsiPeriod}`;
 }
 
 function getTrafficWarmCandidates(symbolCount: number): number[] {
@@ -110,14 +111,14 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean): void {
   const candidates = getTrafficWarmCandidates(symbolCount);
   for (const candidate of candidates) {
     if (candidate === symbolCount) continue;
-    const cache = resultCache.get(makeCacheKey(candidate, smartMode));
+    const cache = resultCache.get(makeCacheKey(candidate, smartMode, 14)); // Warm defaults to 14
     const ttl = getResultCacheTtl(candidate);
     const fresh = cache && now - cache.ts < ttl;
     if (fresh) continue;
 
     trafficWarmLastRun.set(key, now);
     debugLog(`[screener] traffic-warm trigger: request=${symbolCount}, warming=${candidate}, smart=${smartMode}`);
-    void runRefresh(candidate, smartMode);
+    void runRefresh(candidate, smartMode, 14);
     break;
   }
 }
@@ -169,7 +170,9 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     strategyScore: 0, strategySignal: 'neutral', strategyLabel: 'N/A',
     strategyReasons: [],
     confluence: 0, confluenceLabel: 'No Data', rsiDivergence: 'none',
+    rsiDivergenceCustom: 'none',
     momentum: null, rsiState1m: null,
+    rsiCustom: null, rsiStateCustom: null,
     updatedAt: nowTs,
   };
 }
@@ -206,8 +209,8 @@ function buildMeta(
   };
 }
 
-function fromCachedResult(symbolCount: number, smartMode: boolean): ScreenerResponse | null {
-  const cache = resultCache.get(makeCacheKey(symbolCount, smartMode));
+function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: number): ScreenerResponse | null {
+  const cache = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod));
   if (!cache) return null;
   // Don't serve data older than 10 minutes
   if (Date.now() - cache.ts > 600_000) return null;
@@ -486,38 +489,44 @@ function buildEntry(
   klines1h: BinanceKline[] | null,
   ticker: BinanceTicker | undefined,
   nowTs: number,
+  rsiPeriod: number = 14,
 ): ScreenerEntry | null {
   try {
     const validKlines = klines1m.filter((k) => k !== null && k.length >= 6);
-    if (validKlines.length < RSI_PERIOD + 1) return null;
+    if (validKlines.length < rsiPeriod + 1) return null;
 
     const closes1m = validKlines.map((k) => parseFloat(k[4]));
     const highs1m = validKlines.map((k) => parseFloat(k[2]));
     const lows1m = validKlines.map((k) => parseFloat(k[3]));
     const volumes1m = validKlines.map((k) => parseFloat(k[5]));
 
-    const rsi1m = calculateRsi(closes1m, RSI_PERIOD);
+    // Industry Standard RSIs (Period 14)
+    const stdPeriod = 14;
+    const rsi1m = calculateRsi(closes1m, stdPeriod);
 
     const agg5m = aggregateKlines(validKlines, 5);
     const closes5m = agg5m.map((c) => c.close);
-    const rsi5m = closes5m.length >= RSI_PERIOD + 1 ? calculateRsi(closes5m, RSI_PERIOD) : null;
+    const rsi5m = closes5m.length >= stdPeriod + 1 ? calculateRsi(closes5m, stdPeriod) : null;
 
     const agg15m = aggregateKlines(validKlines, 15);
     const closes15m = agg15m.map((c) => c.close);
-    const rsi15m = closes15m.length >= RSI_PERIOD + 1 ? calculateRsi(closes15m, RSI_PERIOD) : null;
+    const rsi15m = closes15m.length >= stdPeriod + 1 ? calculateRsi(closes15m, stdPeriod) : null;
 
     let rsi1h: number | null = null;
-    if (klines1h && klines1h.length >= RSI_PERIOD + 1) {
+    if (klines1h && klines1h.length >= stdPeriod + 1) {
       const closes1h = klines1h.map((k) => parseFloat(k[4]));
-      rsi1h = calculateRsi(closes1h, RSI_PERIOD);
+      rsi1h = calculateRsi(closes1h, stdPeriod);
     } else {
-      // Fallback to aggregation if 1h fetch failed or was skipped
       const agg1h = aggregateKlines(validKlines, 60);
       const closes1h = agg1h.map((c) => c.close);
-      if (closes1h.length >= RSI_PERIOD + 1) {
-        rsi1h = calculateRsi(closes1h, RSI_PERIOD);
+      if (closes1h.length >= stdPeriod + 1) {
+        rsi1h = calculateRsi(closes1h, stdPeriod);
       }
     }
+
+    // Dynamic/Custom RSI (User Defined Period)
+    const rsiCustom = calculateRsi(closes15m, rsiPeriod);
+    const rsiStateCustom = calculateRsiWithState(closes15m, rsiPeriod);
 
     const ema9 = latestEma(closes15m, 9);
     const ema21 = latestEma(closes15m, 21);
@@ -549,11 +558,13 @@ function buildEntry(
       : null;
 
     const volumeSpike = detectVolumeSpike(volumes1m);
-    const signal = deriveSignal(rsi15m ?? rsi5m ?? rsi1m);
+    
+    // Main signals and strategy ALWAYS use industry standard 14 for consistency
+    const signal = deriveSignal(rsi15m ?? rsi1m);
+    const stdRsiDivergence = detectRsiDivergence(closes15m, stdPeriod, 40);
 
-    // Intelligence indicators
-    const rsiState1m = calculateRsiWithState(closes1m, RSI_PERIOD);
-    const rsiDivergence = detectRsiDivergence(closes15m, RSI_PERIOD, 40);
+    // Intelligence indicators (Standard baseline)
+    const rsiState1m = calculateRsiWithState(closes1m, stdPeriod);
     const momentum = calculateROC(closes15m, 10);
     const confluenceResult = calculateConfluence({
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -577,9 +588,12 @@ function buildEntry(
       volumeSpike,
       price,
       confluence: confluenceResult.score,
-      rsiDivergence,
+      rsiDivergence: stdRsiDivergence,
       momentum,
     });
+
+    // Custom analysis (Isolated from strategy)
+    const customDivergence = detectRsiDivergence(closes15m, rsiPeriod, 40);
 
     return {
       symbol: sym,
@@ -612,9 +626,12 @@ function buildEntry(
       strategyReasons: strategy.reasons,
       confluence: confluenceResult.score,
       confluenceLabel: confluenceResult.label,
-      rsiDivergence,
+      rsiDivergence: stdRsiDivergence, // Global column stays at 14 standard
+      rsiDivergenceCustom: customDivergence,
       momentum,
       rsiState1m,
+      rsiCustom,
+      rsiStateCustom,
       updatedAt: nowTs,
     };
   } catch (err) {
@@ -625,8 +642,8 @@ function buildEntry(
 
 const refreshInFlight = new Map<string, Promise<ScreenerResponse>>();
 
-function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerResponse> {
-  const inflightKey = makeCacheKey(symbolCount, smartMode);
+function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number = 14): Promise<ScreenerResponse> {
+  const inflightKey = makeCacheKey(symbolCount, smartMode, rsiPeriod);
   const existing = refreshInFlight.get(inflightKey);
   if (existing) return existing;
 
@@ -740,16 +757,16 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
         if (!klines1m || klines1m.length === 0) {
           debugWarn(`[screener] ${sym}: kline fetch returned empty`);
         } else {
-          const freshEntry = buildEntry(sym, klines1m, klines1h, ticker, nowTs);
+          const freshEntry = buildEntry(sym, klines1m, klines1h, ticker, nowTs, rsiPeriod);
           if (freshEntry) {
             entries.push(freshEntry);
-            indicatorCache.set(sym, { entry: freshEntry, ts: nowTs });
+            indicatorCache.set(`${sym}:${rsiPeriod}`, { entry: freshEntry, ts: nowTs });
             continue;
           }
         }
       }
 
-      const cached = indicatorCache.get(sym);
+      const cached = indicatorCache.get(`${sym}:${rsiPeriod}`);
       if (cached) {
         entries.push(withTickerOverlay(cached.entry, ticker, nowTs));
         continue;
@@ -790,7 +807,7 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
 
     // Cache the result if there is useful data; keep stale cache on total outage.
     if (response.data.length > 0) {
-      resultCache.set(makeCacheKey(symbolCount, smartMode), {
+      resultCache.set(makeCacheKey(symbolCount, smartMode, rsiPeriod), {
         data: response,
         count: symbolCount,
         smartMode,
@@ -799,13 +816,13 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
       return response;
     }
 
-    const stale = fromCachedResult(symbolCount, smartMode);
+    const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
     if (stale) return stale;
 
     return response;
   })()
     .catch(() => {
-      const stale = fromCachedResult(symbolCount, smartMode);
+      const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
       if (stale) return stale;
       return {
         data: [],
@@ -826,25 +843,26 @@ function runRefresh(symbolCount: number, smartMode: boolean): Promise<ScreenerRe
  */
 export async function getScreenerData(symbolCount = 100, options: ScreenerOptions = {}): Promise<ScreenerResponse> {
   const smartMode = options.smartMode ?? getSmartModeDefault();
+  const rsiPeriod = options.rsiPeriod ?? 14;
   maybeTrafficWarm(symbolCount, smartMode);
 
   // Return cached result if fresh enough and same count.
   const resultCacheTtl = getResultCacheTtl(symbolCount);
-  const cachedEntry = resultCache.get(makeCacheKey(symbolCount, smartMode));
+  const cachedEntry = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod));
   if (cachedEntry && cachedEntry.count >= symbolCount && Date.now() - cachedEntry.ts < resultCacheTtl) {
     if (cachedEntry.count === symbolCount) return cachedEntry.data;
-    const cached = fromCachedResult(symbolCount, smartMode);
+    const cached = fromCachedResult(symbolCount, smartMode, rsiPeriod);
     if (cached) return cached;
   }
 
   // Stale-first: always return cached snapshot instantly.
   // WebSocket keeps prices live between indicator refreshes.
-  const stale = fromCachedResult(symbolCount, smartMode);
+  const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
   if (stale) {
-    void runRefresh(symbolCount, smartMode);
+    void runRefresh(symbolCount, smartMode, rsiPeriod);
     return stale;
   }
 
   // No usable stale snapshot available; compute (deduplicated by symbolCount).
-  return runRefresh(symbolCount, smartMode);
+  return runRefresh(symbolCount, smartMode, rsiPeriod);
 }

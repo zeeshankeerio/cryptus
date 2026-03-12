@@ -139,7 +139,7 @@ const ScreenerRow = memo(function ScreenerRow({
       transition={{ duration: 0.2 }}
       className={cn(
         "group transition-all duration-150 hover:bg-white/[0.02]",
-        getRsiBg(entry.rsi15m)
+        getRsiBg(entry.rsiCustom ?? entry.rsi15m)
       )}
     >
       <td className="px-4 py-4 text-[10px] text-slate-700 font-black tabular-nums">{idx + 1}</td>
@@ -178,6 +178,36 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('rsi5m') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi5m))}>{formatRsi(entry.rsi5m)}</td>}
       {visibleCols.has('rsi15m') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi15m))}>{formatRsi(entry.rsi15m)}</td>}
       {visibleCols.has('rsi1h') && <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono", getRsiColor(entry.rsi1h))}>{formatRsi(entry.rsi1h)}</td>}
+
+      {visibleCols.has('rsiCustom') && (
+        <td className={cn("px-3 py-4 text-right text-sm tabular-nums font-bold font-mono relative bg-blue-500/5", getRsiColor(entry.rsiCustom))}>
+          <div className="flex items-center justify-end gap-1.5 flex-wrap max-w-[120px] ml-auto">
+            {entry.isLiveRsi && <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse border border-blue-200/50" title="Real-Time Analysis" />}
+            
+            {/* Intelligence: Early Signal Badge */}
+            {entry.rsiCustom !== null && entry.rsi15m !== null && (
+              <>
+                {entry.rsiCustom <= 30 && entry.rsi15m > 30 && (
+                  <span className="text-[7px] px-1 bg-emerald-500/30 text-emerald-200 rounded-full animate-pulse border border-emerald-400/30" title="Early Oversold (Custom Period)">EARLY BUY</span>
+                )}
+                {entry.rsiCustom >= 70 && entry.rsi15m < 70 && (
+                  <span className="text-[7px] px-1 bg-rose-500/30 text-rose-200 rounded-full animate-pulse border border-rose-400/30" title="Early Overbought (Custom Period)">EARLY SELL</span>
+                )}
+              </>
+            )}
+
+            {entry.rsiDivergenceCustom && entry.rsiDivergenceCustom !== 'none' && (
+              <span className={cn(
+                "text-[8px] px-1 rounded-sm font-black tracking-tighter uppercase",
+                entry.rsiDivergenceCustom === 'bullish' ? "bg-emerald-500/20 text-emerald-400" : "bg-rose-500/20 text-rose-400"
+              )}>
+                {entry.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
+              </span>
+            )}
+            <span className="drop-shadow-sm">{formatRsi(entry.rsiCustom)}</span>
+          </div>
+        </td>
+      )}
 
       {visibleCols.has('emaCross') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
@@ -341,7 +371,7 @@ function SkeletonRows({ cols }: { cols: number }) {
 // ─── Column definitions ───────────────────────────────────────
 
 type ColumnId =
-  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
+  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'emaCross' | 'macdHistogram' | 'bbPosition' | 'stochK'
   | 'vwapDiff' | 'volumeSpike' | 'strategy'
   | 'confluence' | 'divergence' | 'momentum';
@@ -354,10 +384,11 @@ interface ColumnDef {
 }
 
 const OPTIONAL_COLUMNS: ColumnDef[] = [
-  { id: 'rsi1m', label: 'RSI 1m', group: 'RSI', defaultVisible: true },
-  { id: 'rsi5m', label: 'RSI 5m', group: 'RSI', defaultVisible: true },
-  { id: 'rsi15m', label: 'RSI 15m', group: 'RSI', defaultVisible: true },
-  { id: 'rsi1h', label: 'RSI 1h', group: 'RSI', defaultVisible: true },
+  { id: 'rsi1m', label: 'RSI 1m', group: 'RSI Std', defaultVisible: false },
+  { id: 'rsi5m', label: 'RSI 5m', group: 'RSI Std', defaultVisible: false },
+  { id: 'rsi15m', label: 'RSI 15m', group: 'RSI Std', defaultVisible: true },
+  { id: 'rsi1h', label: 'RSI 1h', group: 'RSI Std', defaultVisible: true },
+  { id: 'rsiCustom', label: 'RSI Custom', group: 'RSI Active', defaultVisible: true },
   { id: 'emaCross', label: 'Trend', group: 'Indicators', defaultVisible: true },
   { id: 'macdHistogram', label: 'MACD', group: 'Indicators', defaultVisible: true },
   { id: 'bbPosition', label: 'BB Pos', group: 'Volatility', defaultVisible: false },
@@ -434,6 +465,11 @@ export default function ScreenerDashboard() {
     if (typeof window === 'undefined') return true;
     return localStorage.getItem('crypto-rsi-show-header') !== '0';
   });
+  const [rsiPeriod, setRsiPeriod] = useState(() => {
+    if (typeof window === 'undefined') return 14;
+    const saved = localStorage.getItem('crypto-rsi-period');
+    return saved ? Math.min(Math.max(Number(saved), 7), 30) : 14;
+  });
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
   const fetchingRef = useRef(false);
@@ -466,20 +502,31 @@ export default function ScreenerDashboard() {
       const live = livePrices.get(entry.symbol);
       if (!live || live.updatedAt <= entry.updatedAt) return entry;
 
-      // Live RSI approximation: use server RSI state + live price
+      // Live RSI approximation
       let rsi1m = entry.rsi1m;
+      let rsiCustom = entry.rsiCustom;
       let signal = entry.signal;
-      if (entry.rsiState1m && live.price > 0) {
-        rsi1m = approximateRsi(entry.rsiState1m, live.price);
-        // Real-time signal update for the 1m badge
-        if (rsi1m <= 30) signal = 'oversold';
-        else if (rsi1m >= 70) signal = 'overbought';
-        else signal = 'neutral';
+      let isLiveRsi = false;
+      
+      if (live.price > 0) {
+        if (entry.rsiState1m) {
+          rsi1m = approximateRsi(entry.rsiState1m, live.price, 14);
+        }
+        if (entry.rsiStateCustom) {
+          rsiCustom = approximateRsi(entry.rsiStateCustom, live.price, rsiPeriod);
+          isLiveRsi = true;
+          // Real-time signal update based on standard period (14) for consistency
+          if (rsi1m !== null) {
+            if (rsi1m <= 30) signal = 'oversold';
+            else if (rsi1m >= 70) signal = 'overbought';
+            else signal = 'neutral';
+          }
+        }
       }
 
-      return { ...entry, price: live.price, change24h: live.change24h, volume24h: live.volume24h, rsi1m, signal };
+      return { ...entry, price: live.price, change24h: live.change24h, volume24h: live.volume24h, rsi1m, rsiCustom, signal, isLiveRsi };
     });
-  }, [data, livePrices]);
+  }, [data, livePrices, rsiPeriod]);
 
   // ─── Real-time Stats Engine ──────────────────────────────────
   const stats = useMemo(() => {
@@ -572,6 +619,9 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-show-header', showHeader ? '1' : '0');
   }, [showHeader]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-period', String(rsiPeriod));
+  }, [rsiPeriod]);
 
   // Auto-adjust refresh interval when pair count changes (500 pairs needs more time)
   useEffect(() => {
@@ -584,12 +634,15 @@ export default function ScreenerDashboard() {
   const fetchData = useCallback(async (background = false) => {
     if (fetchingRef.current) return;
     fetchingRef.current = true;
-    if (background) setRefreshing(true);
+    
+    // Show spinner for all fetches except initial load
+    const isInitial = !background && dataLenRef.current === 0;
+    if (!isInitial) setRefreshing(true);
 
     try {
       if (!background) setError(null);
       const timeoutMs = pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
-      const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}`, {
+      const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -606,16 +659,15 @@ export default function ScreenerDashboard() {
       setError(null);
       setLoading(false);
     } catch (err) {
-      // Background fetch failures are silent when we already have data
       if (dataLenRef.current === 0) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       }
-      setLoading(false);
     } finally {
       fetchingRef.current = false;
       setRefreshing(false);
+      setLoading(false);
     }
-  }, [pairCount, smartMode]);
+  }, [pairCount, smartMode, rsiPeriod]);
 
   // ── Initial fetch with auto-retry ──
   const retryCountRef = useRef(0);
@@ -654,6 +706,14 @@ export default function ScreenerDashboard() {
       clearInterval(tickTimer);
     };
   }, [refreshInterval, fetchData]);
+
+  // ── Trigger refetch on RSI Period change (debounced) ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 400); // 400ms debounce to avoid spamming while dragging slider
+    return () => clearTimeout(timer);
+  }, [rsiPeriod, fetchData]);
 
   // ── Sorting ──
   const handleSort = useCallback(
@@ -945,6 +1005,19 @@ export default function ScreenerDashboard() {
                 )}
             </AnimatePresence>
           </div>
+
+          <div className="flex items-center gap-3 bg-slate-900/40 border border-white/5 rounded-2xl px-5 py-3 backdrop-blur-md">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">RSI Period</span>
+            <input 
+              type="range" 
+              min="7" 
+              max="35" 
+              value={rsiPeriod} 
+              onChange={(e) => setRsiPeriod(Number(e.target.value))}
+              className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500"
+            />
+            <span className="text-xs font-black tabular-nums text-blue-400 w-4">{rsiPeriod}</span>
+          </div>
         </div>
       </div>
 
@@ -965,6 +1038,16 @@ export default function ScreenerDashboard() {
                 {visibleCols.has('rsi5m') && <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsi15m') && <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('rsi1h') && <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                {visibleCols.has('rsiCustom') && (
+                  <SortHeader 
+                    label={`RSI (${rsiPeriod})`} 
+                    sortKey="rsiCustom" 
+                    currentKey={sortKey} 
+                    currentDir={sortDir} 
+                    onSort={handleSort} 
+                    align="right" 
+                  />
+                )}
                 
                 {visibleCols.has('emaCross') && <SortHeader label="Trend" sortKey="emaCross" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                 {visibleCols.has('macdHistogram') && <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}

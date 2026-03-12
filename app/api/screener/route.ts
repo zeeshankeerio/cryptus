@@ -9,12 +9,15 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const rawCount = parseInt(searchParams.get('count') ?? '100', 10);
+    const rawRsiPeriod = parseInt(searchParams.get('rsiPeriod') ?? '14', 10);
     const smart = searchParams.get('smart');
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
-    // Sanitize: NaN defaults to 100, clamp to [10, 500]
+    
+    // Sanitize parameters
     const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 500);
+    const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
 
-    const result = await getScreenerData(count, { smartMode });
+    const result = await getScreenerData(count, { smartMode, rsiPeriod });
 
     // Return 503 if the service returned zero data (upstream failure)
     if (result.data.length === 0) {

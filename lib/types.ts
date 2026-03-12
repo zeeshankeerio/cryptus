@@ -43,8 +43,13 @@ export interface ScreenerEntry {
   confluenceLabel: string;
   rsiDivergence: 'bullish' | 'bearish' | 'none';
   momentum: number | null;
+  // ── New: Dynamic/Custom RSI ──
+  rsiCustom: number | null;
+  rsiStateCustom: { avgGain: number; avgLoss: number; lastClose: number } | null;
+  rsiDivergenceCustom: 'bullish' | 'bearish' | 'none';
   // ── Live RSI state (for client-side approximation) ──
   rsiState1m: { avgGain: number; avgLoss: number; lastClose: number } | null;
+  isLiveRsi?: boolean;
   updatedAt: number;
 }
 
@@ -84,7 +89,7 @@ export type BinanceKline = [
 
 export type SortKey =
   | 'symbol' | 'price' | 'change24h' | 'volume24h'
-  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
+  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'macdHistogram' | 'bbPosition' | 'stochK' | 'vwapDiff'
   | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
   | 'confluence' | 'momentum';
