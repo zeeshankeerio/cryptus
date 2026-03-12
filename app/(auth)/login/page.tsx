@@ -1,5 +1,3 @@
-"use strict";
-
 "use client";
 
 import React, { useState } from "react";
@@ -34,19 +32,28 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    await signIn.email(
-      {
-        email: values.email,
-        password: values.password,
-        callbackURL: "/",
-      },
-      {
-        onError: (ctx) => {
-          setError(ctx.error.message || "Invalid credentials. Please try again.");
-          setIsLoading(false);
+    try {
+      await signIn.email(
+        {
+          email: values.email,
+          password: values.password,
+          callbackURL: "/",
         },
-      }
-    );
+        {
+          onError: (ctx) => {
+            setError(ctx.error.message || "Invalid credentials. Please try again.");
+            setIsLoading(false);
+          },
+          onSuccess: () => {
+            setIsLoading(false);
+          }
+        }
+      );
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("An unexpected error occurred. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (

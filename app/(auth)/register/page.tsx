@@ -1,5 +1,3 @@
-"use strict";
-
 "use client";
 
 import React, { useState } from "react";
@@ -35,20 +33,31 @@ export default function RegisterPage() {
     setIsLoading(true);
     setError(null);
 
-    await signUp.email(
-      {
-        email: values.email,
-        password: values.password,
-        name: values.name,
-        callbackURL: "/",
-      },
-      {
-        onError: (ctx) => {
-          setError(ctx.error.message || "Failed to create account. Please try again.");
-          setIsLoading(false);
+    try {
+      await signUp.email(
+        {
+          email: values.email,
+          password: values.password,
+          name: values.name,
+          callbackURL: "/",
         },
-      }
-    );
+        {
+          onError: (ctx) => {
+            setError(ctx.error.message || "Failed to create account. Please try again.");
+            setIsLoading(false);
+          },
+          onSuccess: () => {
+            // signUp with callbackURL usually handles redirection, 
+            // but we set loading to false just in case it takes a moment.
+            setIsLoading(false);
+          }
+        }
+      );
+    } catch (err) {
+      console.error("Signup error:", err);
+      setError("An unexpected error occurred. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   return (
