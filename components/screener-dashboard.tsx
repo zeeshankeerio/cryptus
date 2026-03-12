@@ -1180,45 +1180,42 @@ export default function ScreenerDashboard() {
         </div>
       </div>
 
-      <footer className="mt-8 py-6 border-t border-white/5">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 px-4">
-          <div className="flex flex-col items-center md:items-start gap-1">
-            <Link 
-              href="http://mindscapeanalytics.com/" 
-              target="_blank" 
-              className="group flex flex-col items-center md:items-start"
-            >
-              <div className="flex items-baseline gap-2">
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500 group-hover:text-blue-400 transition-colors">Developed By</span>
-                <span className="text-lg font-black text-white tracking-tighter">Mindscape Analytics <span className="text-blue-500 uppercase">LLC</span></span>
-              </div>
-            </Link>
-            <div className="text-[9px] font-bold text-slate-600 uppercase tracking-widest tabular-nums mt-1">
-              &copy; 2026 {new Date().getFullYear() !== 2026 && `- ${new Date().getFullYear()}`} Mindscape Analytics LLC · All Rights Reserved
+      <footer className="mt-4 py-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 px-4">
+        <div className="flex items-center gap-3">
+          <Link 
+            href="http://mindscapeanalytics.com/" 
+            target="_blank" 
+            className="group flex flex-col items-start"
+          >
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-[8px] font-black uppercase tracking-[0.2em] text-slate-500 group-hover:text-blue-400 transition-colors">By</span>
+              <span className="text-sm font-black text-white tracking-tighter">Mindscape Analytics <span className="text-blue-500 uppercase">LLC</span></span>
             </div>
+          </Link>
+          <div className="h-4 w-px bg-white/10 hidden sm:block" />
+          <div className="text-[8px] font-bold text-slate-600 uppercase tracking-widest tabular-nums hidden sm:block">
+            &copy; 2026 {new Date().getFullYear() !== 2026 && `- ${new Date().getFullYear()}`} All Rights Reserved
           </div>
+        </div>
 
-          <div className="flex flex-wrap justify-center md:justify-end items-center gap-6">
-            <div className="flex flex-col items-center md:items-end gap-1">
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Universe</span>
-              <span className="text-[11px] font-bold text-slate-300 tabular-nums">{data.length} Stable Pairs</span>
-            </div>
-            <div className="h-5 w-px bg-white/5 hidden sm:block" />
-            <div className="flex flex-col items-center md:items-end gap-1">
-              <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">System Status</span>
-              <div className="flex items-center gap-2">
-                <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isConnected ? "bg-emerald-400" : "bg-slate-700")} />
-                <span className="text-[11px] font-bold text-slate-300">{isConnected ? "Live Engine" : "Polling"}</span>
-              </div>
-            </div>
-            <div className="h-5 w-px bg-white/5 hidden sm:block" />
-            <Link 
-              href="/guide" 
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] font-black uppercase tracking-widest text-slate-300 transition-all hover:text-white"
-            >
-              Documentation
-            </Link>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Universe</span>
+            <span className="text-[10px] font-bold text-slate-300 tabular-nums">{data.length} Stable Pairs</span>
           </div>
+          <div className="h-4 w-px bg-white/10" />
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] font-black uppercase tracking-widest text-slate-600">Status</span>
+            <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", isConnected ? "bg-emerald-400" : "bg-slate-700")} />
+            <span className="text-[10px] font-bold text-slate-300">{isConnected ? "Live Engine" : "Polling"}</span>
+          </div>
+          <div className="h-4 w-px bg-white/10" />
+          <Link 
+            href="/guide" 
+            className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors"
+          >
+            Documentation
+          </Link>
         </div>
       </footer>
     </div>
