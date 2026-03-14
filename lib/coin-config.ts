@@ -13,6 +13,8 @@ export interface CoinConfig {
   alertOn15m: boolean;
   alertOn1h: boolean;
   alertOnCustom: boolean;
+  alertConfluence: boolean;
+  alertOnStrategyShift: boolean;
 }
 
 export async function getAllCoinConfigs(): Promise<Map<string, CoinConfig>> {
@@ -58,6 +60,8 @@ export async function updateCoinConfig(config: Partial<CoinConfig> & { symbol: s
         alertOn15m: config.alertOn15m ?? false,
         alertOn1h: config.alertOn1h ?? false,
         alertOnCustom: config.alertOnCustom ?? false,
+        alertConfluence: config.alertConfluence ?? false,
+        alertOnStrategyShift: config.alertOnStrategyShift ?? false,
       },
     });
   } catch (err) {

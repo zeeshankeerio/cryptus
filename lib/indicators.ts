@@ -608,6 +608,126 @@ export function computeStrategyScore(params: {
   return { score: normalized, signal, label, reasons };
 }
 
+// ── ATR (Average True Range) ────────────────────────────────────
+
+/**
+ * Average True Range: measures volatility over `period` bars.
+ * Higher ATR = more volatile market (useful for stop-loss sizing).
+ */
+export function calculateATR(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period = 14,
+): number | null {
+  if (highs.length < period + 1 || lows.length < period + 1 || closes.length < period + 1) return null;
+
+  const trueRanges: number[] = [];
+  for (let i = 1; i < closes.length; i++) {
+    const hl = highs[i] - lows[i];
+    const hc = Math.abs(highs[i] - closes[i - 1]);
+    const lc = Math.abs(lows[i] - closes[i - 1]);
+    trueRanges.push(Math.max(hl, hc, lc));
+  }
+
+  if (trueRanges.length < period) return null;
+
+  // Initial ATR = simple average of first `period` TRs
+  let atr = 0;
+  for (let i = 0; i < period; i++) atr += trueRanges[i];
+  atr /= period;
+
+  // Wilder's smoothing for rest
+  for (let i = period; i < trueRanges.length; i++) {
+    atr = (atr * (period - 1) + trueRanges[i]) / period;
+  }
+
+  return round(atr);
+}
+
+// ── ADX (Average Directional Index) ─────────────────────────────
+
+/**
+ * ADX measures trend strength (0–100).
+ * > 25 = trending market, < 20 = ranging/choppy market.
+ * Does NOT indicate direction — only strength.
+ */
+export function calculateADX(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period = 14,
+): number | null {
+  const minLen = period * 2 + 1;
+  if (highs.length < minLen || lows.length < minLen || closes.length < minLen) return null;
+
+  // 1. Calculate +DM, -DM, and TR series
+  const plusDM: number[] = [];
+  const minusDM: number[] = [];
+  const tr: number[] = [];
+
+  for (let i = 1; i < highs.length; i++) {
+    const upMove = highs[i] - highs[i - 1];
+    const downMove = lows[i - 1] - lows[i];
+    plusDM.push(upMove > downMove && upMove > 0 ? upMove : 0);
+    minusDM.push(downMove > upMove && downMove > 0 ? downMove : 0);
+
+    const hl = highs[i] - lows[i];
+    const hc = Math.abs(highs[i] - closes[i - 1]);
+    const lc = Math.abs(lows[i] - closes[i - 1]);
+    tr.push(Math.max(hl, hc, lc));
+  }
+
+  if (tr.length < period) return null;
+
+  // 2. Wilder's smoothed +DM14, -DM14, TR14
+  let smoothPlusDM = 0;
+  let smoothMinusDM = 0;
+  let smoothTR = 0;
+
+  for (let i = 0; i < period; i++) {
+    smoothPlusDM += plusDM[i];
+    smoothMinusDM += minusDM[i];
+    smoothTR += tr[i];
+  }
+
+  const dxSeries: number[] = [];
+
+  // First DX
+  if (smoothTR > 0) {
+    const plusDI = (smoothPlusDM / smoothTR) * 100;
+    const minusDI = (smoothMinusDM / smoothTR) * 100;
+    const diSum = plusDI + minusDI;
+    if (diSum > 0) dxSeries.push(Math.abs(plusDI - minusDI) / diSum * 100);
+  }
+
+  for (let i = period; i < tr.length; i++) {
+    smoothPlusDM = smoothPlusDM - (smoothPlusDM / period) + plusDM[i];
+    smoothMinusDM = smoothMinusDM - (smoothMinusDM / period) + minusDM[i];
+    smoothTR = smoothTR - (smoothTR / period) + tr[i];
+
+    if (smoothTR > 0) {
+      const plusDI = (smoothPlusDM / smoothTR) * 100;
+      const minusDI = (smoothMinusDM / smoothTR) * 100;
+      const diSum = plusDI + minusDI;
+      if (diSum > 0) dxSeries.push(Math.abs(plusDI - minusDI) / diSum * 100);
+    }
+  }
+
+  if (dxSeries.length < period) return null;
+
+  // 3. ADX = Wilder's smoothed average of DX
+  let adx = 0;
+  for (let i = 0; i < period; i++) adx += dxSeries[i];
+  adx /= period;
+
+  for (let i = period; i < dxSeries.length; i++) {
+    adx = (adx * (period - 1) + dxSeries[i]) / period;
+  }
+
+  return round(Math.max(0, Math.min(100, adx)));
+}
+
 // ── Utility ─────────────────────────────────────────────────────
 
 function round(n: number): number {

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Bell, Settings, Filter, Star, Info,
+  Search, Bell, Settings, Filter, Star, Info, Download,
   RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
@@ -18,6 +18,7 @@ import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } 
 import { useLivePrices } from '@/hooks/use-live-prices';
 import { useAlertEngine } from '@/hooks/use-alert-engine';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
+import { computeStrategyScore } from '@/lib/indicators';
 import { toast } from 'sonner';
 
 // ─── Formatting helpers ────────────────────────────────────────
@@ -171,7 +172,7 @@ const ScreenerRow = memo(function ScreenerRow({
     }
     // Still update the ref even if not visible to prevent delayed flashes
     if (prevSignal.current !== entry.strategySignal) {
-        prevSignal.current = entry.strategySignal;
+      prevSignal.current = entry.strategySignal;
     }
   }, [entry.strategySignal, isVisible]);
 
@@ -216,8 +217,8 @@ const ScreenerRow = memo(function ScreenerRow({
       <td className="px-3 py-4 text-right tabular-nums font-bold font-mono">
         <motion.span
           key={`${entry.symbol}-price-${entry.price}`}
-          initial={{ 
-            opacity: entry.lastPriceChange ? 0.4 : 1, 
+          initial={{
+            opacity: entry.lastPriceChange ? 0.4 : 1,
             scale: entry.lastPriceChange ? 0.95 : 1,
             color: entry.lastPriceChange && entry.lastPriceChange > 0 ? '#39FF14' : entry.lastPriceChange && entry.lastPriceChange < 0 ? '#FF4B5C' : '#e2e8f0'
           }}
@@ -320,7 +321,7 @@ const ScreenerRow = memo(function ScreenerRow({
                 {entry.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
               </span>
             )}
-            <motion.span 
+            <motion.span
               key={`${entry.symbol}-rsi-${entry.rsiCustom}`}
               initial={entry.isLiveRsi ? { scale: 1.1, filter: 'brightness(1.5)' } : {}}
               animate={{ scale: 1, filter: 'brightness(1)' }}
@@ -419,6 +420,20 @@ const ScreenerRow = memo(function ScreenerRow({
           entry.momentum === null ? "text-slate-700" : entry.momentum > 0 ? "text-emerald-300" : entry.momentum < 0 ? "text-red-300" : "text-slate-500"
         )}>
           {formatPct(entry.momentum)}
+        </td>
+      )}
+
+      {visibleCols.has('atr') && (
+        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-amber-300/80">
+          {entry.atr !== null ? entry.atr.toFixed(entry.atr < 1 ? 6 : 2) : '—'}
+        </td>
+      )}
+      {visibleCols.has('adx') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono",
+          entry.adx === null ? "text-slate-700" : entry.adx >= 25 ? "text-[#39FF14]" : "text-slate-500"
+        )}>
+          {entry.adx !== null ? entry.adx.toFixed(1) : '—'}
         </td>
       )}
 
@@ -606,7 +621,8 @@ type ColumnId =
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'ema9' | 'ema21' | 'emaCross' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK'
   | 'vwapDiff' | 'volumeSpike' | 'strategy'
-  | 'confluence' | 'divergence' | 'momentum';
+  | 'confluence' | 'divergence' | 'momentum'
+  | 'atr' | 'adx';
 
 interface ColumnDef {
   id: ColumnId;
@@ -634,6 +650,8 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'confluence', label: 'Confluence', group: 'Intelligence', defaultVisible: true },
   { id: 'divergence', label: 'Divergence', group: 'Intelligence', defaultVisible: true },
   { id: 'momentum', label: 'Momentum', group: 'Intelligence', defaultVisible: false },
+  { id: 'atr', label: 'ATR', group: 'Volatility', defaultVisible: false },
+  { id: 'adx', label: 'ADX', group: 'Volatility', defaultVisible: false },
   { id: 'strategy', label: 'Strategy', group: 'Strategy', defaultVisible: true },
 ];
 
@@ -693,18 +711,56 @@ const ScreenerCard = memo(function ScreenerCard({
   visibleCols: Set<ColumnId> | undefined;
 }) {
   const isStarred = watchlist.has(entry.symbol);
-  
+
+  // Intelligence: Signal Pulse state
+  const [isFlash, setIsFlash] = useState(false);
+  const prevSignal = useRef(entry.strategySignal);
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setIsVisible(entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (isVisible && prevSignal.current !== entry.strategySignal) {
+      setIsFlash(true);
+      const timer = setTimeout(() => setIsFlash(false), 3000);
+      prevSignal.current = entry.strategySignal;
+      return () => clearTimeout(timer);
+    }
+    if (prevSignal.current !== entry.strategySignal) {
+      prevSignal.current = entry.strategySignal;
+    }
+  }, [entry.strategySignal, isVisible]);
+
   // Dynamic columns to show in the small indicator area
   const activeIndicators = OPTIONAL_COLUMNS.filter(c => visibleCols?.has(c.id));
 
   return (
     <motion.div
+      ref={cardRef}
       initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
+      animate={{ 
+        opacity: 1,
+        backgroundColor: isFlash
+          ? (entry.strategySignal.includes('buy') ? 'rgba(57, 255, 20, 0.1)' : entry.strategySignal.includes('sell') ? 'rgba(114, 47, 55, 0.2)' : 'rgba(255, 255, 255, 0.05)')
+          : 'transparent'
+      }}
+      transition={{ duration: 0.3 }}
       className={cn(
-        "relative flex items-center justify-between p-3 border-b border-white/[0.03] bg-[#050A14]/40 active:bg-slate-800/40 transition-colors",
-        getRsiBg(entry.rsiCustom ?? entry.rsi15m)
+        "relative flex items-center justify-between p-3 border-b border-white/[0.03] active:bg-slate-800/40 transition-colors duration-500",
+        !isFlash && getRsiBg(entry.rsiCustom ?? entry.rsi15m)
       )}
+      style={{
+        contentVisibility: 'auto',
+        containIntrinsicSize: '0 64px'
+      } as any}
     >
       {/* 1. Asset & Meta */}
       <div className="flex items-center gap-2 w-[110px] shrink-0">
@@ -725,7 +781,7 @@ const ScreenerCard = memo(function ScreenerCard({
       </div>
 
       {/* 2. Scalable Indicators Area */}
-      <div 
+      <div
         onClick={() => onOpenSettings(entry.symbol)}
         className="flex-1 overflow-x-auto no-scrollbar flex items-center gap-4 px-3 mx-2 cursor-pointer active:scale-95 transition-transform"
       >
@@ -735,41 +791,41 @@ const ScreenerCard = memo(function ScreenerCard({
           activeIndicators.map(col => {
             const val = entry[col.id as keyof ScreenerEntry];
             const isRsi = col.id.startsWith('rsi');
-            
+
             return (
               <div key={col.id} className="flex flex-col items-center shrink-0 min-w-[32px]">
                 <span className="text-[6px] font-black text-slate-600 uppercase mb-0.5">{col.label.replace('RSI ', '')}</span>
                 {isRsi ? (
-                   <span className={cn("text-[10px] font-black tabular-nums font-mono", getRsiColor(val as number))}>{formatRsi(val as number)}</span>
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", getRsiColor(val as number))}>{formatRsi(val as number)}</span>
                 ) : col.id === 'strategy' ? (
-                   <StrategyBadge signal={entry.strategySignal} label={entry.strategyLabel} />
+                  <StrategyBadge signal={entry.strategySignal} label={entry.strategyLabel} />
                 ) : col.id === 'divergence' ? (
-                   <span className={cn("text-[8px] font-black uppercase", entry.rsiDivergence === 'bullish' ? "text-[#39FF14]" : entry.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                      {entry.rsiDivergence === 'bullish' ? 'DIV+' : entry.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
-                   </span>
+                  <span className={cn("text-[8px] font-black uppercase", entry.rsiDivergence === 'bullish' ? "text-[#39FF14]" : entry.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {entry.rsiDivergence === 'bullish' ? 'DIV+' : entry.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
+                  </span>
                 ) : col.id === 'vwapDiff' ? (
-                   <span className={cn("text-[10px] font-black tabular-nums font-mono", (val as number) > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-                      {formatPct(val as number)}
-                   </span>
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (val as number) > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                    {formatPct(val as number)}
+                  </span>
                 ) : col.id === 'volumeSpike' ? (
-                   <span className={cn("text-[10px] font-black uppercase", val === true ? "text-[#39FF14]" : "text-slate-700")}>
-                      {val === true ? 'SPIKE' : 'NORM'}
-                   </span>
+                  <span className={cn("text-[10px] font-black uppercase", val === true ? "text-[#39FF14]" : "text-slate-700")}>
+                    {val === true ? 'SPIKE' : 'NORM'}
+                  </span>
                 ) : col.id === 'ema9' || col.id === 'ema21' || col.id === 'bbUpper' || col.id === 'bbLower' ? (
-                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
-                      ${typeof val === 'number' ? formatPrice(val) : '—'}
-                   </span>
+                  <span className="text-[9px] font-bold text-slate-300 tabular-nums">
+                    ${typeof val === 'number' ? formatPrice(val) : '—'}
+                  </span>
                 ) : (
-                   <span className={cn(
-                     "text-[9px] font-bold tabular-nums transition-colors duration-300",
-                     entry.isLiveRsi ? "text-[#39FF14]" : "text-slate-300"
-                   )}>
-                      {typeof val === 'number' 
-                        ? val.toFixed(col.id === 'macdHistogram' ? 4 : 1) 
-                        : typeof val === 'string'
+                  <span className={cn(
+                    "text-[9px] font-bold tabular-nums transition-colors duration-300",
+                    entry.isLiveRsi ? "text-[#39FF14]" : "text-slate-300"
+                  )}>
+                    {typeof val === 'number'
+                      ? val.toFixed(col.id === 'macdHistogram' ? 4 : 1)
+                      : typeof val === 'string'
                         ? val
                         : '—'}
-                   </span>
+                  </span>
                 )}
               </div>
             );
@@ -780,12 +836,24 @@ const ScreenerCard = memo(function ScreenerCard({
       {/* 3. Market Info (Right) */}
       <div className="flex items-center gap-3 text-right shrink-0">
         <div className="flex flex-col items-end min-w-[65px]">
-          <span className="text-sm font-black text-white font-mono tracking-tighter">${formatPrice(entry.price)}</span>
+          <motion.span
+            key={`${entry.symbol}-price-${entry.price}`}
+            initial={{
+              opacity: entry.lastPriceChange ? 0.4 : 1,
+              scale: entry.lastPriceChange ? 0.95 : 1,
+              color: entry.lastPriceChange && entry.lastPriceChange > 0 ? '#39FF14' : entry.lastPriceChange && entry.lastPriceChange < 0 ? '#FF4B5C' : '#ffffff'
+            }}
+            animate={{ opacity: 1, scale: 1, color: '#ffffff' }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="text-sm font-black font-mono tracking-tighter inline-block"
+          >
+            ${formatPrice(entry.price)}
+          </motion.span>
           <div className={cn("text-[9px] font-black font-mono flex items-center gap-0.5", entry.change24h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-             {entry.change24h > 0 ? '+' : ''}{entry.change24h.toFixed(2)}%
+            {entry.change24h > 0 ? '+' : ''}{entry.change24h.toFixed(2)}%
           </div>
         </div>
-        
+
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -928,7 +996,7 @@ export default function ScreenerDashboard() {
   const [rsiPeriod, setRsiPeriod] = useState(() => {
     if (typeof window === 'undefined') return 14;
     const saved = localStorage.getItem('crypto-rsi-period');
-    return saved ? Math.min(Math.max(Number(saved), 7), 30) : 14;
+    return saved ? Math.min(Math.max(Number(saved), 2), 50) : 14;
   });
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
@@ -971,7 +1039,7 @@ export default function ScreenerDashboard() {
   // This prevents all 500+ rows from re-rendering on EVERY WebSocket flush if nothing changed.
   const mergedData = useMemo(() => {
     if (livePrices.size === 0) return data;
-    
+
     let changedAny = false;
     const next = data.map((entry) => {
       const live = livePrices.get(entry.symbol);
@@ -999,7 +1067,7 @@ export default function ScreenerDashboard() {
       // Real-time EMA & Trend approximation
       if (ema9 !== null) ema9 = approximateEma(ema9, live.price, 9);
       if (ema21 !== null) ema21 = approximateEma(ema21, live.price, 21);
-      
+
       if (ema9 !== null && ema21 !== null) {
         emaCross = ema9 > ema21 ? 'bullish' : 'bearish';
       }
@@ -1020,6 +1088,22 @@ export default function ScreenerDashboard() {
         else signal = 'neutral';
       }
 
+      // Real-time Strategy Score Recalculation
+      const liveStrategy = computeStrategyScore({
+        rsi1m, rsi5m, rsi15m, rsi1h,
+        macdHistogram: entry.macdHistogram,
+        bbPosition,
+        stochK: entry.stochK,
+        stochD: entry.stochD,
+        emaCross,
+        vwapDiff: entry.vwapDiff,
+        volumeSpike: entry.volumeSpike,
+        price: live.price,
+        confluence: entry.confluence,
+        rsiDivergence: entry.rsiDivergence,
+        momentum: entry.momentum,
+      });
+
       return {
         ...entry,
         price: live.price,
@@ -1029,7 +1113,11 @@ export default function ScreenerDashboard() {
         ema9, ema21, emaCross, bbPosition,
         signal,
         isLiveRsi,
-        lastPriceChange: live.price - entry.price,
+        strategyScore: liveStrategy.score,
+        strategySignal: liveStrategy.signal,
+        strategyLabel: liveStrategy.label,
+        strategyReasons: liveStrategy.reasons,
+        lastPriceChange: live.tickDelta || 0,
         updatedAt: live.updatedAt
       };
     });
@@ -1048,7 +1136,7 @@ export default function ScreenerDashboard() {
       if (rsiCustom === entry.rsiCustom) return entry;
       return { ...entry, rsiCustom };
     });
-    
+
     return next;
   }, [mergedData, rsiPeriod]);
 
@@ -1250,7 +1338,7 @@ export default function ScreenerDashboard() {
   // ── Initial fetch with auto-retry and Hydration ──
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  
+
   // Load coin configurations on mount
   useEffect(() => {
     fetch('/api/config')
@@ -1412,6 +1500,83 @@ export default function ScreenerDashboard() {
     setShowWatchlistOnly(false);
   };
 
+  // ── Keyboard shortcuts ──
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept when user is typing in an input
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        fetchData();
+      } else if (e.key === 'Escape') {
+        setSelectedCoinForConfig(null);
+        setShowAlertPanel(false);
+        setShowGlobalSettings(false);
+        setShowColPicker(false);
+      } else if (e.key === '/') {
+        e.preventDefault();
+        const searchInput = document.querySelector('input[placeholder="Search symbols..."]') as HTMLInputElement;
+        if (searchInput) searchInput.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [fetchData]);
+
+  // ── CSV export ──
+  const handleExportCsv = useCallback(() => {
+    if (filtered.length === 0) return;
+    const headers = ['Symbol', 'Price', '24h%', 'Volume', 'RSI15m', 'RSI1h', 'RSI Custom', 'Strategy', 'Score', 'Signal', 'EMA Cross', 'ATR', 'ADX'];
+    const rows = filtered.map(e => [
+      e.symbol,
+      e.price,
+      e.change24h.toFixed(2),
+      e.volume24h.toFixed(0),
+      formatRsi(e.rsi15m),
+      formatRsi(e.rsi1h),
+      formatRsi(e.rsiCustom),
+      e.strategyLabel,
+      e.strategyScore,
+      e.signal,
+      e.emaCross,
+      e.atr !== null ? e.atr.toFixed(4) : '',
+      e.adx !== null ? e.adx.toFixed(1) : '',
+    ].join(','));
+    const csv = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rsiq-export-${new Date().toISOString().slice(0, 16).replace(/[:-]/g, '')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV exported successfully');
+  }, [filtered]);
+
+  // ── Top movers ──
+  const topMovers = useMemo(() => {
+    if (dataWithCustomRsi.length < 6) return { gainers: [], losers: [] };
+    const sorted = [...dataWithCustomRsi].sort((a, b) => b.change24h - a.change24h);
+    return {
+      gainers: sorted.slice(0, 3),
+      losers: sorted.slice(-3).reverse(),
+    };
+  }, [dataWithCustomRsi]);
+
+  // ── Fear/Greed gauge ──
+  const fearGreedScore = useMemo(() => {
+    if (dataWithCustomRsi.length === 0) return 50;
+    const { strongBuy, buy, sell, strongSell, neutral: n } = stats;
+    const total = strongBuy + buy + sell + strongSell + n || 1;
+    // 0 = Extreme Fear, 100 = Extreme Greed
+    return Math.round(((strongBuy * 2 + buy) / total) * 100);
+  }, [dataWithCustomRsi.length, stats]);
+
+  const fearGreedLabel = fearGreedScore >= 75 ? 'Extreme Greed' : fearGreedScore >= 55 ? 'Greed' : fearGreedScore >= 45 ? 'Neutral' : fearGreedScore >= 25 ? 'Fear' : 'Extreme Fear';
+  const fearGreedColor = fearGreedScore >= 65 ? 'text-[#39FF14]' : fearGreedScore >= 45 ? 'text-yellow-400' : 'text-[#FF4B5C]';
+
   const colCount = 7 + OPTIONAL_COLUMNS.filter((c) => visibleCols.has(c.id)).length;
 
   return (
@@ -1420,7 +1585,7 @@ export default function ScreenerDashboard() {
       {showHeader && (
         <header className="mb-6 rounded-3xl border border-white/5 bg-[#080F1B] p-6 sm:p-8 shadow-lg relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#39FF14]/[0.02] rounded-full -mr-20 -mt-20 group-hover:bg-[#39FF14]/[0.04] transition-colors duration-1000" />
-          
+
           {/* Desktop Header Layout */}
           <div className="hidden lg:flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6 relative z-10">
             <div>
@@ -1461,8 +1626,8 @@ export default function ScreenerDashboard() {
                   <div className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1 leading-none">Market Bias</div>
                   <div className="flex items-center gap-2.5">
                     <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden flex max-w-[120px]">
-                      <div className="h-full bg-[#39FF14]" style={{ width: `${Math.max(0, 50 + stats.bias/2)}%` }} />
-                      <div className="h-full bg-red-500" style={{ width: `${Math.max(0, 50 - stats.bias/2)}%` }} />
+                      <div className="h-full bg-[#39FF14]" style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }} />
+                      <div className="h-full bg-red-500" style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }} />
                     </div>
                     <span className={cn("text-xs font-black tabular-nums tracking-tighter", stats.bias >= 0 ? "text-[#39FF14]" : "text-red-500")}>
                       {stats.bias > 0 ? '+' : ''}{stats.bias}%
@@ -1471,27 +1636,27 @@ export default function ScreenerDashboard() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <motion.button 
+                  <motion.button
                     onClick={async () => {
                       const next = !alertsEnabled;
                       setAlertsEnabled(next);
                       if (next && typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
-                        try { await Notification.requestPermission(); } catch (e) {}
+                        try { await Notification.requestPermission(); } catch (e) { }
                       }
-                    }} 
-                    whileTap={{ scale: 0.9 }} 
+                    }}
+                    whileTap={{ scale: 0.9 }}
                     className={cn("w-10 h-10 rounded-2xl border flex items-center justify-center relative shadow-sm", alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-white/[0.02] border-white/10 text-slate-600")}
                   >
                     <Bell size={16} fill={alertsEnabled ? "currentColor" : "none"} />
                     {alerts.length > 0 && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#FF4B5C] rounded-full" />}
                   </motion.button>
-                  <motion.button 
+                  <motion.button
                     onClick={() => {
                       const next = !soundEnabled;
                       setSoundEnabled(next);
                       if (next) resumeAudioContext();
-                    }} 
-                    whileTap={{ scale: 0.9 }} 
+                    }}
+                    whileTap={{ scale: 0.9 }}
                     className={cn("w-10 h-10 rounded-2xl border flex items-center justify-center relative shadow-sm", soundEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-white/[0.02] border-white/10 text-slate-600")}
                   >
                     <Zap size={16} fill={soundEnabled ? "currentColor" : "none"} />
@@ -1499,6 +1664,18 @@ export default function ScreenerDashboard() {
                   <motion.button onClick={() => setShowAlertPanel(true)} whileTap={{ scale: 0.9 }} className="w-10 h-10 rounded-2xl border border-white/10 bg-white/[0.02] text-slate-400 flex items-center justify-center shadow-sm">
                     <Clock size={16} />
                   </motion.button>
+                </div>
+
+                <div className="h-4 w-px bg-white/5 mx-1" />
+
+                {/* Fear/Greed Gauge */}
+                <div className="flex flex-col items-center min-w-[80px]">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-0.5">Sentiment</span>
+                  <div className="flex items-center gap-1.5">
+                    <Gauge size={12} className={fearGreedColor} />
+                    <span className={cn("text-[10px] font-black tabular-nums", fearGreedColor)}>{fearGreedScore}</span>
+                    <span className={cn("text-[8px] font-bold uppercase", fearGreedColor)}>{fearGreedLabel}</span>
+                  </div>
                 </div>
 
                 <div className="h-4 w-px bg-white/5 mx-1" />
@@ -1514,6 +1691,10 @@ export default function ScreenerDashboard() {
                   <RefreshCcw size={12} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
                   <span>{refreshing ? 'UPDATING' : `${countdown}S`}</span>
                 </button>
+                <button onClick={handleExportCsv} className="group inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[9px] font-black tracking-widest text-slate-400 hover:bg-white/5 hover:text-white transition-all active:scale-95" title="Export CSV (Ctrl+E)">
+                  <Download size={12} />
+                  <span>CSV</span>
+                </button>
               </div>
             </div>
 
@@ -1524,8 +1705,8 @@ export default function ScreenerDashboard() {
                 { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
               ].map((s) => (
                 <button key={s.label} onClick={s.onClick} className="flex flex-col items-end group/stat">
-                   <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 mb-1 leading-none">{s.label}</span>
-                   <span className={cn("text-sm font-black tabular-nums tracking-tight leading-none", s.color)}><Counter value={s.value} /></span>
+                  <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 mb-1 leading-none">{s.label}</span>
+                  <span className={cn("text-sm font-black tabular-nums tracking-tight leading-none", s.color)}><Counter value={s.value} /></span>
                 </button>
               ))}
             </div>
@@ -1539,55 +1720,70 @@ export default function ScreenerDashboard() {
                   <Activity size={24} className="text-[#39FF14]" />
                 </div>
                 <div>
-                   <h1 className="text-2xl font-black text-white tracking-widest leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></h1>
-                   <div className="flex items-center gap-2 mt-1.5">
-                     <div className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14] animate-pulse" : "bg-slate-700")} />
-                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "LIVE" : "OFFLINE"}</span>
-                     <div className="w-1 h-1 rounded-full bg-slate-800" />
-                     <span className="text-[8px] font-black text-[#39FF14] tabular-nums">{data.length} PAIRS</span>
-                   </div>
+                  <h1 className="text-2xl font-black text-white tracking-widest leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></h1>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14] animate-pulse" : "bg-slate-700")} />
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "LIVE" : "OFFLINE"}</span>
+                    <div className="w-1 h-1 rounded-full bg-slate-800" />
+                    <span className="text-[8px] font-black text-[#39FF14] tabular-nums">{data.length} PAIRS</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-2.5">
                 <button onClick={() => fetchData()} className={cn("w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-slate-400 active:scale-90 transition-all shadow-lg", refreshing && "animate-spin text-[#39FF14]")}>
-                   <RefreshCcw size={20} />
+                  <RefreshCcw size={20} />
                 </button>
                 {session && (
-                   <button className="w-12 h-12 rounded-2xl bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center shadow-lg">
-                     <UserIcon size={22} className="text-[#39FF14]" />
-                   </button>
+                  <button 
+                    onClick={async () => {
+                      setIsLoggingOut(true);
+                      await signOut({
+                        fetchOptions: {
+                          onSuccess: () => { router.push('/login'); }
+                        }
+                      });
+                    }}
+                    disabled={isLoggingOut}
+                    className="w-12 h-12 rounded-2xl bg-[#39FF14]/10 border border-[#39FF14]/20 flex items-center justify-center shadow-lg active:scale-90 transition-all"
+                  >
+                    {isLoggingOut ? (
+                       <LogOut size={22} className="text-slate-400 animate-pulse" />
+                    ) : (
+                       <UserIcon size={22} className="text-[#39FF14]" />
+                    )}
+                  </button>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3.5">
               <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-4 flex flex-col gap-3 shadow-inner">
-                 <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">Market Bias</span>
-                 <div className="flex items-center justify-between gap-3">
-                   <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                     <div className="h-full bg-[#39FF14]" style={{ width: `${Math.max(0, 50 + stats.bias/2)}%` }} />
-                     <div className="h-full bg-red-500" style={{ width: `${Math.max(0, 50 - stats.bias/2)}%` }} />
-                   </div>
-                   <span className={cn("text-[11px] font-black tabular-nums font-mono", stats.bias >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-                     {stats.bias > 0 ? '+' : ''}{stats.bias}%
-                   </span>
-                 </div>
+                <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">Market Bias</span>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-[#39FF14]" style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }} />
+                    <div className="h-full bg-red-500" style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }} />
+                  </div>
+                  <span className={cn("text-[11px] font-black tabular-nums font-mono", stats.bias >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                    {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                  </span>
+                </div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-3xl p-4 flex flex-col gap-2.5 shadow-inner">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[8px] font-black text-slate-600 uppercase">Oversold</span>
-                    <span className="text-xs font-black text-[#39FF14] font-mono">{stats.oversold}</span>
-                  </div>
-                  <div className="h-px bg-white/5" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[8px] font-black text-slate-600 uppercase">Overbought</span>
-                    <span className="text-xs font-black text-[#FF4B5C] font-mono">{stats.overbought}</span>
-                  </div>
-                  <div className="h-px bg-white/5" />
-                  <div className="flex items-center justify-between">
-                    <span className="text-[8px] font-black text-slate-600 uppercase">Strong Buy</span>
-                    <span className="text-xs font-black text-blue-400 font-mono">{stats.strongBuy}</span>
-                  </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-black text-slate-600 uppercase">Oversold</span>
+                  <span className="text-xs font-black text-[#39FF14] font-mono">{stats.oversold}</span>
+                </div>
+                <div className="h-px bg-white/5" />
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-black text-slate-600 uppercase">Overbought</span>
+                  <span className="text-xs font-black text-[#FF4B5C] font-mono">{stats.overbought}</span>
+                </div>
+                <div className="h-px bg-white/5" />
+                <div className="flex items-center justify-between">
+                  <span className="text-[8px] font-black text-slate-600 uppercase">Strong Buy</span>
+                  <span className="text-xs font-black text-blue-400 font-mono">{stats.strongBuy}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1668,27 +1864,27 @@ export default function ScreenerDashboard() {
                   >
                     <div className="flex flex-col gap-4">
                       <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                         <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Screener Columns</span>
-                         <div className="flex gap-2.5">
-                           <button 
-                             onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.map(c => c.id)))}
-                             className="px-2 py-1 text-[9px] font-black text-[#39FF14] hover:bg-[#39FF14]/10 rounded-md transition-all uppercase"
-                           >
-                             All
-                           </button>
-                           <button 
-                             onClick={() => setVisibleCols(new Set())}
-                             className="px-2 py-1 text-[9px] font-black text-[#FF4B5C] hover:bg-[#FF4B5C]/10 rounded-md transition-all uppercase"
-                           >
-                             None
-                           </button>
-                           <button 
-                             onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)))}
-                             className="px-2 py-1 text-[9px] font-black text-slate-400 hover:bg-white/5 rounded-md transition-all uppercase"
-                           >
-                             Reset
-                           </button>
-                         </div>
+                        <span className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em]">Screener Columns</span>
+                        <div className="flex gap-2.5">
+                          <button
+                            onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.map(c => c.id)))}
+                            className="px-2 py-1 text-[9px] font-black text-[#39FF14] hover:bg-[#39FF14]/10 rounded-md transition-all uppercase"
+                          >
+                            All
+                          </button>
+                          <button
+                            onClick={() => setVisibleCols(new Set())}
+                            className="px-2 py-1 text-[9px] font-black text-[#FF4B5C] hover:bg-[#FF4B5C]/10 rounded-md transition-all uppercase"
+                          >
+                            None
+                          </button>
+                          <button
+                            onClick={() => setVisibleCols(new Set(OPTIONAL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)))}
+                            className="px-2 py-1 text-[9px] font-black text-slate-400 hover:bg-white/5 rounded-md transition-all uppercase"
+                          >
+                            Reset
+                          </button>
+                        </div>
                       </div>
 
                       <div className="max-h-[450px] overflow-y-auto no-scrollbar pr-1 flex flex-col gap-5">
@@ -1697,7 +1893,7 @@ export default function ScreenerDashboard() {
                             <div className="flex items-center gap-2 px-1">
                               <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{group}</span>
                               <div className="h-[1px] flex-1 bg-white/5" />
-                              <button 
+                              <button
                                 onClick={() => {
                                   const groupIds = OPTIONAL_COLUMNS.filter(c => c.group === group).map(c => c.id);
                                   setVisibleCols(prev => {
@@ -1720,13 +1916,13 @@ export default function ScreenerDashboard() {
                                   onClick={() => toggleCol(col.id)}
                                   className={cn(
                                     "flex items-center gap-2.5 px-3 py-2 rounded-xl border transition-all text-left",
-                                    visibleCols.has(col.id) 
-                                      ? "bg-[#39FF14]/[0.08] text-[#39FF14] border-[#39FF14]/20 shadow-[0_0_15px_-5px_#39FF1433]" 
+                                    visibleCols.has(col.id)
+                                      ? "bg-[#39FF14]/[0.08] text-[#39FF14] border-[#39FF14]/20 shadow-[0_0_15px_-5px_#39FF1433]"
                                       : "text-slate-500 border-white/5 hover:bg-white/5 hover:border-white/10"
                                   )}
                                 >
                                   <div className={cn(
-                                    "w-3.5 h-3.5 rounded-md border flex items-center justify-center transition-all shrink-0", 
+                                    "w-3.5 h-3.5 rounded-md border flex items-center justify-center transition-all shrink-0",
                                     visibleCols.has(col.id) ? "bg-[#39FF14] border-[#39FF14]" : "border-slate-700"
                                   )}>
                                     {visibleCols.has(col.id) && <ShieldCheck size={10} className="text-[#0A0F1B]" strokeWidth={3} />}
@@ -1749,47 +1945,89 @@ export default function ScreenerDashboard() {
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">RSI Period</span>
             <input
               type="range"
-              min="7"
-              max="35"
+              min="2"
+              max="50"
               value={rsiPeriod}
               onChange={(e) => setRsiPeriod(Number(e.target.value))}
               className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#39FF14]"
             />
-            <span className="text-xs font-black tabular-nums text-[#39FF14] w-4">{rsiPeriod}</span>
+            <span className="text-xs font-black tabular-nums text-[#39FF14] w-6 text-center">{rsiPeriod}</span>
           </div>
         </div>
       </div>
 
+      {/* ── Top Movers ── */}
+      {!loading && topMovers.gainers.length > 0 && (
+        <div className="mb-6 grid grid-cols-2 lg:grid-cols-6 gap-3">
+          {topMovers.gainers.map((e) => (
+            <motion.div
+              key={`g-${e.symbol}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between p-3 rounded-2xl border border-[#39FF14]/10 bg-[#39FF14]/[0.03] cursor-pointer hover:bg-[#39FF14]/[0.06] transition-all"
+              onClick={() => setSelectedCoinForConfig(e.symbol)}
+            >
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-white">{e.symbol.replace('USDT', '')}</span>
+                <span className="text-[8px] font-bold text-slate-500">${formatPrice(e.price)}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <TrendingUp size={10} className="text-[#39FF14]" />
+                <span className="text-[10px] font-black text-[#39FF14] tabular-nums">+{e.change24h.toFixed(1)}%</span>
+              </div>
+            </motion.div>
+          ))}
+          {topMovers.losers.map((e) => (
+            <motion.div
+              key={`l-${e.symbol}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex items-center justify-between p-3 rounded-2xl border border-[#FF4B5C]/10 bg-[#FF4B5C]/[0.03] cursor-pointer hover:bg-[#FF4B5C]/[0.06] transition-all"
+              onClick={() => setSelectedCoinForConfig(e.symbol)}
+            >
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-white">{e.symbol.replace('USDT', '')}</span>
+                <span className="text-[8px] font-bold text-slate-500">${formatPrice(e.price)}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <TrendingDown size={10} className="text-[#FF4B5C]" />
+                <span className="text-[10px] font-black text-[#FF4B5C] tabular-nums">{e.change24h.toFixed(1)}%</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
       {/* ── Main List (Table or Cards) ── */}
       {isMobile ? (
         <div className="flex flex-col pb-32">
-           {loading ? (
-             Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="h-44 rounded-3xl skeleton border border-white/5 opacity-40" />
-             ))
-           ) : filtered.length === 0 ? (
-              <div className="col-span-full py-24 text-center opacity-50 flex flex-col items-center gap-4">
-                <Search size={48} className="text-slate-700" />
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
-              </div>
-           ) : (
-             <AnimatePresence mode="popLayout">
-               {filtered.map((entry, idx) => (
-                 <ScreenerCard
-                   key={entry.symbol}
-                   entry={entry}
-                   idx={idx + 1}
-                   watchlist={watchlist}
-                   toggleWatchlist={toggleWatchlist}
-                   rsiPeriod={rsiPeriod}
-                   onOpenSettings={(s) => setSelectedCoinForConfig(s)}
-                   coinConfigs={coinConfigs}
-                    onSaveConfig={handleSaveConfig}
-                    visibleCols={visibleCols}
-                  />
-               ))}
-             </AnimatePresence>
-           )}
+          {loading ? (
+            Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="h-44 rounded-3xl skeleton border border-white/5 opacity-40" />
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="col-span-full py-24 text-center opacity-50 flex flex-col items-center gap-4">
+              <Search size={48} className="text-slate-700" />
+              <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+            </div>
+          ) : (
+            <AnimatePresence mode="popLayout">
+              {filtered.map((entry, idx) => (
+                <ScreenerCard
+                  key={entry.symbol}
+                  entry={entry}
+                  idx={idx + 1}
+                  watchlist={watchlist}
+                  toggleWatchlist={toggleWatchlist}
+                  rsiPeriod={rsiPeriod}
+                  onOpenSettings={(s) => setSelectedCoinForConfig(s)}
+                  coinConfigs={coinConfigs}
+                  onSaveConfig={handleSaveConfig}
+                  visibleCols={visibleCols}
+                />
+              ))}
+            </AnimatePresence>
+          )}
         </div>
       ) : (
         <div className="rounded-3xl border border-white/5 bg-slate-900/40 overflow-hidden shadow-lg mb-8">
@@ -1820,6 +2058,8 @@ export default function ScreenerDashboard() {
                   {visibleCols.has('confluence') && <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('divergence') && <SortHeader label="Diverg" sortKey="rsiDivergence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('momentum') && <SortHeader label="Momentum" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                  {visibleCols.has('atr') && <SortHeader label="ATR" sortKey="atr" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                  {visibleCols.has('adx') && <SortHeader label="ADX" sortKey="adx" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('vwapDiff') && <SortHeader label="VWAP %" sortKey="vwapDiff" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('volumeSpike') && <SortHeader label="Vol Spike" sortKey="volumeSpike" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
 
@@ -1885,7 +2125,7 @@ export default function ScreenerDashboard() {
                   <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-600 leading-none mb-1">Universe</span>
                   <span className="text-[10px] font-bold text-slate-300 tabular-nums leading-none tracking-tight">{data.length} STABLE PAIRS</span>
                 </div>
-                
+
                 <div className="flex flex-col">
                   <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-600 leading-none mb-1">Engine Status</span>
                   <div className="flex items-center gap-1.5 leading-none">
@@ -1932,12 +2172,12 @@ export default function ScreenerDashboard() {
                 if (res.ok) {
                   const updated = await res.json();
                   setCoinConfigs(prev => ({ ...prev, [selectedCoinForConfig]: updated }));
-                  
+
                   toast.success(`${selectedCoinForConfig.replace('USDT', '')} Configuration applied.`, {
                     description: "Filters and alerts have been updated in real-time.",
                     duration: 3000
                   });
-                  
+
                   setSelectedCoinForConfig(null);
                   // Refresh data to reflect changes immediately
                   fetchData(true);
@@ -1953,9 +2193,9 @@ export default function ScreenerDashboard() {
 
       <AnimatePresence>
         {showAlertPanel && (
-          <AlertHistoryPanel 
-            alerts={alerts} 
-            onClose={() => setShowAlertPanel(false)} 
+          <AlertHistoryPanel
+            alerts={alerts}
+            onClose={() => setShowAlertPanel(false)}
             onClear={clearAlertHistory}
           />
         )}
@@ -1963,7 +2203,7 @@ export default function ScreenerDashboard() {
 
       <AnimatePresence>
         {showGlobalSettings && (
-          <GlobalSettingsModal 
+          <GlobalSettingsModal
             onClose={() => setShowGlobalSettings(false)}
             visibleCols={visibleCols}
             toggleCol={toggleCol}
@@ -1984,26 +2224,26 @@ export default function ScreenerDashboard() {
       </AnimatePresence>
 
       {/* Mobile-only Bottom Navigation Dock */}
-      <BottomDock 
+      <BottomDock
         onOpenAlerts={() => {
-           setActiveTab('alerts');
-           setShowAlertPanel(true);
+          setActiveTab('alerts');
+          setShowAlertPanel(true);
         }}
         onOpenWatchlist={() => {
-           setActiveTab('watchlist');
-           setShowWatchlistOnly(true);
-           window.scrollTo({ top: 0, behavior: 'smooth' });
+          setActiveTab('watchlist');
+          setShowWatchlistOnly(true);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         onOpenSettings={() => {
-           setActiveTab('settings');
-           setShowGlobalSettings(true);
+          setActiveTab('settings');
+          setShowGlobalSettings(true);
         }}
         onGoHome={() => {
-           setActiveTab('home');
-           setShowWatchlistOnly(false);
-           setSignalFilter('all');
-           setSearch('');
-           window.scrollTo({ top: 0, behavior: 'smooth' });
+          setActiveTab('home');
+          setShowWatchlistOnly(false);
+          setSignalFilter('all');
+          setSearch('');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         activeTab={activeTab}
         alertCount={alerts.length}
@@ -2039,6 +2279,7 @@ function CoinSettingsModal({
     alertOn1h: currentConfig?.alertOn1h ?? false,
     alertOnCustom: currentConfig?.alertOnCustom ?? false,
     alertConfluence: currentConfig?.alertConfluence ?? false,
+    alertOnStrategyShift: currentConfig?.alertOnStrategyShift ?? false,
   });
 
   const handleSave = async () => {
@@ -2085,7 +2326,7 @@ function CoinSettingsModal({
                   type="number"
                   min={2} max={50}
                   value={config.rsi1mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi1mPeriod: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, rsi1mPeriod: parseInt(e.target.value) || 14 })}
                   className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
@@ -2095,7 +2336,7 @@ function CoinSettingsModal({
                   type="number"
                   min={2} max={50}
                   value={config.rsi5mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi5mPeriod: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, rsi5mPeriod: parseInt(e.target.value) || 14 })}
                   className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
@@ -2109,7 +2350,7 @@ function CoinSettingsModal({
                   type="number"
                   min={2} max={50}
                   value={config.rsi15mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi15mPeriod: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, rsi15mPeriod: parseInt(e.target.value) || 14 })}
                   className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
@@ -2119,7 +2360,7 @@ function CoinSettingsModal({
                   type="number"
                   min={2} max={50}
                   value={config.rsi1hPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi1hPeriod: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, rsi1hPeriod: parseInt(e.target.value) || 14 })}
                   className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
@@ -2135,7 +2376,7 @@ function CoinSettingsModal({
                   type="number"
                   min={50} max={95}
                   value={config.overboughtThreshold}
-                  onChange={(e) => setConfig({ ...config, overboughtThreshold: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, overboughtThreshold: parseInt(e.target.value) || 70 })}
                   className="w-full bg-[#722f37]/5 border border-[#722f37]/20 rounded-xl px-3 py-2.5 text-[#FF4B5C] font-bold focus:outline-none focus:ring-1 focus:ring-[#FF4B5C]/30 transition-all text-sm"
                 />
               </div>
@@ -2145,11 +2386,20 @@ function CoinSettingsModal({
                   type="number"
                   min={5} max={50}
                   value={config.oversoldThreshold}
-                  onChange={(e) => setConfig({ ...config, oversoldThreshold: parseInt(e.target.value) })}
+                  onChange={(e) => setConfig({ ...config, oversoldThreshold: parseInt(e.target.value) || 30 })}
                   className="w-full bg-[#39FF14]/5 border border-[#39FF14]/20 rounded-xl px-3 py-2.5 text-[#39FF14] font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
             </div>
+
+            {config.overboughtThreshold <= config.oversoldThreshold + 5 && (
+              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-[10px] text-amber-400 font-bold leading-tight flex items-center gap-2">
+                  <Info size={14} className="shrink-0" />
+                  <span>Tight thresholds detected. This may cause frequent alert transitions.</span>
+                </p>
+              </div>
+            )}
 
             <div className="h-px bg-white/5" />
 
@@ -2170,8 +2420,8 @@ function CoinSettingsModal({
                     onClick={() => setConfig({ ...config, [tf.key]: !(config as any)[tf.key] })}
                     className={cn(
                       "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all tracking-wider border shrink-0",
-                      (config as any)[tf.key] 
-                        ? "bg-[#39FF14]/20 border-[#39FF14]/50 text-[#39FF14]" 
+                      (config as any)[tf.key]
+                        ? "bg-[#39FF14]/20 border-[#39FF14]/50 text-[#39FF14]"
                         : "bg-slate-950/50 border-white/5 text-slate-500 hover:text-white"
                     )}
                   >
@@ -2200,6 +2450,31 @@ function CoinSettingsModal({
                   <div className={cn(
                     "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
                     config.alertConfluence ? "translate-x-5" : "translate-x-0"
+                  )} />
+                </button>
+              </div>
+
+              {/* Strategy Shift Alert Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 group">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <BrainCircuit size={12} />
+                    Strategy Shift
+                  </span>
+                  <span className="text-[7px] text-slate-500 font-bold uppercase mt-0.5 leading-tight pr-4">
+                    Alert on Strong Buy/Sell shifts.
+                  </span>
+                </div>
+                <button
+                  onClick={() => setConfig({ ...config, alertOnStrategyShift: !config.alertOnStrategyShift })}
+                  className={cn(
+                    "w-10 h-5 rounded-full p-0.5 transition-all flex items-center",
+                    config.alertOnStrategyShift ? "bg-blue-500" : "bg-slate-800"
+                  )}
+                >
+                  <div className={cn(
+                    "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                    config.alertOnStrategyShift ? "translate-x-5" : "translate-x-0"
                   )} />
                 </button>
               </div>
@@ -2296,7 +2571,7 @@ function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClos
             Alert History
           </h3>
           {alerts.length > 0 && (
-            <button 
+            <button
               onClick={onClear}
               className="px-2 py-1 rounded-md bg-[#FF4B5C]/10 text-[#FF4B5C] text-[8px] font-black uppercase tracking-widest hover:bg-[#FF4B5C]/20 transition-all border border-[#FF4B5C]/20"
             >
@@ -2463,7 +2738,7 @@ function GlobalSettingsModal({
           {/* Alert Global Settings */}
           <section className="space-y-6">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Alerts & Notifications</h3>
-            
+
             <div className="space-y-3">
               <div className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group">
                 <div className="flex flex-col">
@@ -2525,7 +2800,7 @@ function GlobalSettingsModal({
                   <Activity size={12} />
                   Test Flow
                 </button>
-                
+
                 {notificationPermission !== 'granted' ? (
                   <button
                     onClick={requestPermission}
@@ -2555,8 +2830,8 @@ function GlobalSettingsModal({
             <div className="flex items-center gap-4 px-2">
               <input
                 type="range"
-                min="7"
-                max="35"
+                min="2"
+                max="50"
                 step="1"
                 value={rsiPeriod}
                 onChange={(e) => setRsiPeriod(Number(e.target.value))}
@@ -2569,50 +2844,50 @@ function GlobalSettingsModal({
 
           {/* Performance Settings */}
           <section className="grid grid-cols-2 gap-6">
-             <div className="space-y-3">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Refresh</h3>
-                <div className="grid grid-cols-1 gap-1.5">
-                   {REFRESH_OPTIONS.map((opt) => (
-                     <button
-                        key={opt.value}
-                        onClick={() => setRefreshInterval(opt.value)}
-                        className={cn(
-                          "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
-                          refreshInterval === opt.value ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500"
-                        )}
-                     >
-                       {opt.label}
-                     </button>
-                   ))}
-                </div>
-             </div>
-             <div className="space-y-3">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Pairs</h3>
-                <div className="grid grid-cols-1 gap-1.5">
-                   {PAIR_COUNTS.map((cnt) => (
-                     <button
-                        key={cnt}
-                        onClick={() => setPairCount(cnt)}
-                        className={cn(
-                          "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
-                          pairCount === cnt ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500"
-                        )}
-                     >
-                       {cnt} Units
-                     </button>
-                   ))}
-                </div>
-             </div>
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Refresh</h3>
+              <div className="grid grid-cols-1 gap-1.5">
+                {REFRESH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setRefreshInterval(opt.value)}
+                    className={cn(
+                      "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
+                      refreshInterval === opt.value ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500"
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Pairs</h3>
+              <div className="grid grid-cols-1 gap-1.5">
+                {PAIR_COUNTS.map((cnt) => (
+                  <button
+                    key={cnt}
+                    onClick={() => setPairCount(cnt)}
+                    className={cn(
+                      "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
+                      pairCount === cnt ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500"
+                    )}
+                  >
+                    {cnt} Units
+                  </button>
+                ))}
+              </div>
+            </div>
           </section>
         </div>
-        
+
         <div className="p-6 border-t border-white/5 bg-white/[0.02]">
-           <button 
-             onClick={onClose}
-             className="w-full bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] py-5 rounded-3xl shadow-xl shadow-[#39FF14]/10 active:scale-95 transition-all text-xs"
-           >
-             Save & Close
-           </button>
+          <button
+            onClick={onClose}
+            className="w-full bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] py-5 rounded-3xl shadow-xl shadow-[#39FF14]/10 active:scale-95 transition-all text-xs"
+          >
+            Save & Close
+          </button>
         </div>
       </motion.div>
     </motion.div>

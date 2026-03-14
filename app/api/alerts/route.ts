@@ -2,9 +2,18 @@ import { NextResponse } from 'next/server';
 import { createAlertLog, getRecentAlerts, clearAlertLogs } from '@/lib/alert-log';
 import { auth } from '@/lib/auth';
 
-export async function GET() {
-  const alerts = await getRecentAlerts();
-  return NextResponse.json(alerts);
+export async function GET(request: Request) {
+  try {
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const alerts = await getRecentAlerts();
+    return NextResponse.json(alerts);
+  } catch (err) {
+    console.error('[alerts-api] GET error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {

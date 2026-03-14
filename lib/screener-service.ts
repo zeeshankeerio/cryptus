@@ -4,6 +4,7 @@ import {
   calculateBollinger, calculateStochRsi, calculateVwap,
   detectVolumeSpike, computeStrategyScore,
   detectRsiDivergence, calculateROC, calculateConfluence,
+  calculateATR, calculateADX,
 } from './indicators';
 import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
 import { getAllCoinConfigs, type CoinConfig } from './coin-config';
@@ -221,7 +222,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     strategyReasons: [],
     confluence: 0, confluenceLabel: 'No Data', rsiDivergence: 'none',
     rsiDivergenceCustom: 'none',
-    momentum: null, rsiState1m: null,
+    momentum: null, atr: null, adx: null, rsiState1m: null,
     rsiState5m: null, rsiState15m: null, rsiState1h: null,
     rsiCustom: null, rsiStateCustom: null,
     rsiPeriodAtCreation: 14,
@@ -593,6 +594,8 @@ function buildEntry(
 
     const agg15m = aggregateKlines(validKlines, 15, aggCache);
     const closes15m = agg15m.map((c) => c.close);
+    const highs15m = agg15m.map((c) => c.high);
+    const lows15m = agg15m.map((c) => c.low);
     const rsi15m = closes15m.length >= r15mP + 1 ? calculateRsi(closes15m, r15mP) : null;
 
     let rsi1h: number | null = null;
@@ -654,6 +657,11 @@ function buildEntry(
     const rsiState1h = closes1h.length >= r1hP + 1 ? calculateRsiWithState(closes1h, r1hP) : null;
 
     const momentum = calculateROC(closes15m, 10);
+
+    // ATR & ADX (15m timeframe) — pro volatility + trend strength
+    const atr = calculateATR(highs15m, lows15m, closes15m);
+    const adx = calculateADX(highs15m, lows15m, closes15m);
+
     const confluenceResult = calculateConfluence({
       rsi1m, rsi5m, rsi15m, rsi1h,
       macdHistogram: macd?.histogram ?? null,
@@ -722,6 +730,8 @@ function buildEntry(
       rsiDivergence: stdRsiDivergence, // Global column stays at 14 standard
       rsiDivergenceCustom: customDivergence,
       momentum,
+      atr,
+      adx,
       rsiState1m,
       rsiState5m,
       rsiState15m,

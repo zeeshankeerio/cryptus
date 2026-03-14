@@ -43,6 +43,9 @@ export interface ScreenerEntry {
   confluenceLabel: string;
   rsiDivergence: 'bullish' | 'bearish' | 'none';
   momentum: number | null;
+  // ── New: ATR & ADX ──
+  atr: number | null;
+  adx: number | null;
   // ── New: Dynamic/Custom RSI ──
   rsiCustom: number | null;
   rsiStateCustom: { avgGain: number; avgLoss: number; lastClose: number } | null;
@@ -99,7 +102,7 @@ export type SortKey =
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'ema9' | 'ema21' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK' | 'vwapDiff' | 'volumeSpike'
   | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
-  | 'confluence' | 'momentum';
+  | 'confluence' | 'momentum' | 'atr' | 'adx';
 
 export type SortDir = 'asc' | 'desc';
 export type SignalFilter = 'all' | 'oversold' | 'overbought' | 'neutral'
