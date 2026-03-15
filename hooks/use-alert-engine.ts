@@ -72,6 +72,25 @@ export function useAlertEngine(
     }
   }, []);
 
+  // Use global interaction listener to ensure context is always resumed
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleGesture = () => {
+        resumeAudioContext();
+        window.removeEventListener('click', handleGesture);
+        window.removeEventListener('touchstart', handleGesture);
+        window.removeEventListener('keydown', handleGesture);
+    };
+    window.addEventListener('click', handleGesture);
+    window.addEventListener('touchstart', handleGesture);
+    window.addEventListener('keydown', handleGesture);
+    return () => {
+      window.removeEventListener('click', handleGesture);
+      window.removeEventListener('touchstart', handleGesture);
+      window.removeEventListener('keydown', handleGesture);
+    };
+  }, [resumeAudioContext]);
+
   // ── Audio: Play enterprise chime (with background fallback) ──
   const playAlertSound = useCallback(async () => {
     if (!soundEnabled || typeof window === 'undefined') return;
@@ -97,8 +116,24 @@ export function useAlertEngine(
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
+        // Add subtle harmonic richness for "Perfect" sound
+        const osc2 = type === 'sine' ? ctx.createOscillator() : null;
+        const gain2 = osc2 ? ctx.createGain() : null;
+
         osc.type = type;
         osc.frequency.setValueAtTime(freq, startTime);
+
+        if (osc2 && gain2) {
+            osc2.type = 'triangle';
+            osc2.frequency.setValueAtTime(freq * 2, startTime); // One octave up
+            gain2.gain.setValueAtTime(0, startTime);
+            gain2.gain.linearRampToValueAtTime(vol * 0.3, startTime + 0.05);
+            gain2.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.start(startTime);
+            osc2.stop(startTime + duration);
+        }
 
         gain.gain.setValueAtTime(0, startTime);
         gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
@@ -113,16 +148,19 @@ export function useAlertEngine(
         setTimeout(() => {
           osc.disconnect();
           gain.disconnect();
+          if (osc2) osc2.disconnect();
+          if (gain2) gain2.disconnect();
         }, (duration + 0.5) * 1000);
       };
 
       const now = ctx.currentTime;
 
-      // Enterprise "Harmonic Bloom" Chime
-      playTone(1046.50, now, 0.6, 0.12, 'sine');       // C6
-      playTone(1318.51, now + 0.05, 0.5, 0.08, 'sine'); // E6
-      playTone(1567.98, now + 0.1, 0.4, 0.06, 'sine');  // G6
-      playTone(523.25, now, 0.8, 0.05, 'sine');          // C5 soft bed
+      // Elite Enterprise "Harmonic Bloom" — Polished for Perfect delivery
+      playTone(1046.50, now, 0.7, 0.1, 'sine');       // C6 (Primary)
+      playTone(1318.51, now + 0.08, 0.6, 0.07, 'sine'); // E6 (Bright)
+      playTone(1567.98, now + 0.16, 0.5, 0.05, 'sine'); // G6 (High)
+      playTone(523.25, now, 1.0, 0.04, 'sine');         // C5 (Warm Bed)
+      playTone(2093.00, now + 0.24, 0.4, 0.03, 'sine'); // C7 (Airy finish)
 
     } catch (e) {
       console.warn('[alerts] Audio generation failed:', e);
@@ -249,18 +287,22 @@ export function useAlertEngine(
           { key: 'rsiCustom', label: 'Custom', val: rsiCustom, configKey: 'alertOnCustom' }
         ];
 
-        // ── Phase 1: Determine zones ──
+        // ── Phase 1: Determine zones (State-First Hysteresis) ──
         const currentZones = new Map<string, 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT'>();
         timeframes.forEach(({ label, val }) => {
           if (val === null || val === undefined) return;
           const stateKey = `${entry.symbol}-${label}`;
-          const previousZone = zoneState.current.get(stateKey);
+          const previousZone = (zoneState.current.get(stateKey) as 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT') || 'NEUTRAL';
           let zone: 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT' = 'NEUTRAL';
 
-          if (val <= osT) zone = 'OVERSOLD';
-          else if (val >= obT) zone = 'OVERBOUGHT';
-          else if (previousZone === 'OVERSOLD' && val < osT + hysteresis) zone = 'OVERSOLD';
-          else if (previousZone === 'OVERBOUGHT' && val > obT - hysteresis) zone = 'OVERBOUGHT';
+          if (previousZone === 'OVERSOLD') {
+            zone = val > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD';
+          } else if (previousZone === 'OVERBOUGHT') {
+            zone = val < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT';
+          } else {
+            if (val <= osT) zone = 'OVERSOLD';
+            else if (val >= obT) zone = 'OVERBOUGHT';
+          }
 
           currentZones.set(label, zone);
         });
@@ -304,9 +346,11 @@ export function useAlertEngine(
           zoneState.current.set(stateKey, currentZone);
         });
 
-        // ── Phase 3: Strategy Shift Alerts ──
+        // ── Phase 3: Strategy Shift Alerts (State-First) ──
         if (config.alertOnStrategyShift) {
           const stratKey = `${entry.symbol}-STRATEGY`;
+          const prevStrat = zoneState.current.get(stratKey) || 'neutral';
+          
           const liveStrategy = computeStrategyScore({
             rsi1m, rsi5m, rsi15m, rsi1h,
             macdHistogram: entry.macdHistogram,
@@ -323,10 +367,8 @@ export function useAlertEngine(
           });
 
           const currentStrat = liveStrategy.signal;
-          const prevStrat = zoneState.current.get(stratKey);
 
-          if (prevStrat !== undefined && prevStrat !== currentStrat) {
-            if (currentStrat === 'strong-buy' || currentStrat === 'strong-sell') {
+          if (prevStrat !== currentStrat && (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
               const alertKey = `${entry.symbol}-STRAT`;
               const now = Date.now();
               if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
@@ -340,11 +382,42 @@ export function useAlertEngine(
                 logAlert({ symbol: entry.symbol, timeframe: 'STRAT', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
                 triggerNativeNotification(`${entry.symbol} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`, `Strategy shift detected.`);
               }
-            }
           }
           zoneState.current.set(stratKey, currentStrat);
         }
       });
+    };
+
+    // ── Phase 4: Worker-triggered alerts (Instant Response) ──
+    const handleWorkerAlert = (e: Event) => {
+      if (!enabled) return;
+      const { symbol, timeframe, value, type } = (e as CustomEvent).detail;
+      
+      const config = coinConfigs[symbol];
+      if (!config) return;
+
+      const alertKey = `${symbol}-${timeframe}`; // UNIFIED KEY with main thread
+      const now = Date.now();
+      if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
+          lastTriggered.current.set(alertKey, now);
+          
+          const isStrat = timeframe === 'STRAT';
+          const title = isStrat 
+            ? `${symbol} ${type === 'STRATEGY_STRONG_BUY' ? 'STRONG BUY' : 'STRONG SELL'}`
+            : `${symbol} ${timeframe} ${type}`;
+          const desc = isStrat 
+            ? `Score: ${value.toFixed(0)} (Instant)`
+            : `RSI: ${value.toFixed(1)} (Instant)`;
+
+          toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' ? 'success' : 'error'](
+            title,
+            { duration: 8000, description: desc }
+          );
+
+          playAlertSound();
+          logAlert({ symbol, timeframe, value, type: type as Alert['type'] });
+          triggerNativeNotification(title, desc);
+      }
     };
 
     // Use a global listener or find the engine from window
@@ -352,7 +425,11 @@ export function useAlertEngine(
     const engineInstance = window.__priceEngine;
     if (engineInstance) {
       engineInstance.addEventListener('ticks', handleBatchTicks);
-      return () => engineInstance.removeEventListener('ticks', handleBatchTicks);
+      engineInstance.addEventListener('worker-alert', handleWorkerAlert);
+      return () => {
+        engineInstance.removeEventListener('ticks', handleBatchTicks);
+        engineInstance.removeEventListener('worker-alert', handleWorkerAlert);
+      };
     }
   }, [data, coinConfigs, enabled, logAlert, playAlertSound, triggerNativeNotification]);
 

@@ -18,23 +18,23 @@ model User {
   banned        Boolean?  @default(false)
   banReason     String?
   banExpires    DateTime?
-  sessions      Session[]
   accounts      Account[]
+  sessions      Session[]
 
   @@map("user")
 }
 
 model Session {
-  id                   String   @id
-  userId               String
-  token                String   @unique
-  expiresAt            DateTime
-  ipAddress            String?
-  userAgent            String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  impersonatedBy       String?
-  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id             String   @id
+  userId         String
+  token          String   @unique
+  expiresAt      DateTime
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  impersonatedBy String?
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("session")
@@ -71,23 +71,24 @@ model Verification {
   @@index([identifier])
   @@map("verification")
 }
+
 model CoinConfig {
-  symbol             String   @id
-  rsi1mPeriod        Int      @default(14)
-  rsi5mPeriod        Int      @default(14)
-  rsi15mPeriod       Int      @default(14)
-  rsi1hPeriod        Int      @default(14)
-  overboughtThreshold Int      @default(70)
-  oversoldThreshold   Int      @default(30)
-  alertOn1m          Boolean  @default(false)
-  alertOn5m          Boolean  @default(false)
-  alertOn15m         Boolean  @default(false)
-  alertOn1h          Boolean  @default(false)
-  alertOnCustom      Boolean  @default(false)
-  alertConfluence    Boolean  @default(false)
-  alertOnStrategyShift Boolean @default(false)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  symbol               String   @id
+  rsi1mPeriod          Int      @default(14)
+  rsi5mPeriod          Int      @default(14)
+  rsi15mPeriod         Int      @default(14)
+  rsi1hPeriod          Int      @default(14)
+  overboughtThreshold  Int      @default(70)
+  oversoldThreshold    Int      @default(30)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  alertOn15m           Boolean  @default(false)
+  alertOn1h            Boolean  @default(false)
+  alertOn1m            Boolean  @default(false)
+  alertOn5m            Boolean  @default(false)
+  alertOnCustom        Boolean  @default(false)
+  alertConfluence      Boolean  @default(false)
+  alertOnStrategyShift Boolean  @default(false)
 
   @@map("coin_config")
 }
@@ -95,9 +96,9 @@ model CoinConfig {
 model AlertLog {
   id        String   @id @default(uuid())
   symbol    String
-  timeframe String   // 1m, 5m, 15m, 1h, custom
+  timeframe String
   value     Float
-  type      String   // OVERSOLD, OVERBOUGHT
+  type      String
   createdAt DateTime @default(now())
 
   @@map("alert_log")

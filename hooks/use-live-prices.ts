@@ -61,6 +61,12 @@ class PriceTickEngine extends EventTarget {
     return this.prices.get(symbol);
   }
 
+  syncStates(data: { configs?: Record<string, any>, rsiStates?: Record<string, any> }) {
+    if (this.worker) {
+      this.worker.postMessage({ type: 'SYNC_STATES', payload: data });
+    }
+  }
+
   stop() {
     if (this.worker) {
       this.worker.postMessage({ type: 'STOP' });
@@ -120,14 +126,25 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
       }
     };
 
+    const handleWorkerMessage = (e: MessageEvent) => {
+      if (!mountedRef.current) return;
+      const { type, payload } = e.data;
+      if (type === 'ALERT_TRIGGERED') {
+        engine.dispatchEvent(new CustomEvent('worker-alert', { detail: payload }));
+      }
+    };
+
     engine.addEventListener('ticks', handleBatch);
+    if ((engine as any).worker) {
+        (engine as any).worker.addEventListener('message', handleWorkerMessage);
+    }
 
     return () => {
       mountedRef.current = false;
       engine.removeEventListener('ticks', handleBatch);
-      // We don't stop the engine on unmount because other components might use it
-      // or the dashboard might unmount/remount briefly. 
-      // In a real app, you might want ref-counting for stopping.
+      if ((engine as any).worker) {
+          (engine as any).worker.removeEventListener('message', handleWorkerMessage);
+      }
     };
   }, []);
 
@@ -135,7 +152,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     engine.updateSymbols(symbols);
   }, [symbols]);
 
-  return { isConnected, livePrices };
+  return { isConnected, livePrices, syncStates: (d: any) => engine.syncStates(d) };
 }
 
 /**

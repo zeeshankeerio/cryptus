@@ -146,7 +146,7 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean): void {
 
 // ── Per-symbol indicator cache to avoid refetch/recompute on every refresh ──
 const indicatorCache = new Map<string, { entry: ScreenerEntry; ts: number }>();
-const INDICATOR_CACHE_TTL = 300_000; // 5 min — indicators drift slowly, WebSocket keeps prices live
+const INDICATOR_CACHE_TTL = 120_000; // 2 min — tuned for better real-time alignment with WebSocket drift
 const INDICATOR_CACHE_MAX = 5000;
 
 /**
