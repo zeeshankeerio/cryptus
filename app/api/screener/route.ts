@@ -11,13 +11,14 @@ export async function GET(request: Request) {
     const rawCount = parseInt(searchParams.get('count') ?? '500', 10);
     const rawRsiPeriod = parseInt(searchParams.get('rsiPeriod') ?? '14', 10);
     const smart = searchParams.get('smart');
+    const search = searchParams.get('search') ?? undefined;
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
     
     // Sanitize parameters
     const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 1200);
     const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
 
-    const result = await getScreenerData(count, { smartMode, rsiPeriod });
+    const result = await getScreenerData(count, { smartMode, rsiPeriod, search });
 
     // Return 503 if the service returned zero data (upstream failure)
     if (result.data.length === 0) {

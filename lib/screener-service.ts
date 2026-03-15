@@ -12,6 +12,7 @@ import { getAllCoinConfigs, type CoinConfig } from './coin-config';
 interface ScreenerOptions {
   smartMode?: boolean;
   rsiPeriod?: number;
+  search?: string;
 }
 
 interface SmartTuningState {
@@ -77,7 +78,7 @@ const SYMBOL_CACHE_TTL = 3600_000; // 1 hour
 
 // ── Fallback symbols in case Binance API is unreachable ──
 const FALLBACK_SYMBOLS = [
-  'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
+  'SPX', 'NDAQ', 'SILVER', 'PAXGUSDT', 'BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT',
   'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT', 'DOTUSDT', 'LINKUSDT',
   'TRXUSDT', 'MATICUSDT', 'SHIBUSDT', 'UNIUSDT', 'ATOMUSDT',
   'LTCUSDT', 'ETCUSDT', 'NEARUSDT', 'APTUSDT', 'FILUSDT',
@@ -88,6 +89,42 @@ const FALLBACK_SYMBOLS = [
   'JUPUSDT', 'PENDLEUSDT', 'IMXUSDT', 'LDOUSDT', 'DYDXUSDT',
   'GMXUSDT', 'WLDUSDT', 'FLOKIUSDT', 'JASMYUSDT', 'BLURUSDT',
 ];
+
+// ── Multi-Market definitions ──
+const BINANCE_NATIVE_SPECIAL = ['PAXGUSDT', 'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT'];
+const YAHOO_MARKET_MAP: Record<string, string> = {
+  'SPX': '^GSPC',    // S&P 500
+  'NDAQ': '^IXIC',   // NASDAQ
+  'DOW': '^DJI',    // Dow Jones
+  'SILVER': 'XAGUSD=X',
+  'FTSE': '^FTSE',
+  'DAX': '^GDAXI',
+  'NKY': '^N225',    // Nikkei 225
+};
+const YAHOO_SYMBOLS = Object.keys(YAHOO_MARKET_MAP);
+
+function getMarketType(symbol: string): ScreenerEntry['market'] {
+  if (symbol === 'PAXGUSDT' || symbol === 'SILVER') return 'Metal';
+  if (['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY'].includes(symbol)) return 'Index';
+  if (['EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT'].includes(symbol)) return 'Forex';
+  return 'Crypto';
+}
+
+function getSymbolAlias(symbol: string): string {
+  if (symbol === 'PAXGUSDT') return 'GOLD (XAU)';
+  if (symbol === 'SILVER') return 'SILVER (XAG)';
+  if (symbol === 'SPX') return 'S&P 500';
+  if (symbol === 'NDAQ') return 'NASDAQ 100';
+  if (symbol === 'DOW') return 'DOW JONES';
+  if (symbol === 'FTSE') return 'FTSE 100';
+  if (symbol === 'DAX') return 'DAX 40';
+  if (symbol === 'NKY') return 'NIKKEI 225';
+  if (symbol === 'EURUSDT') return 'EUR/USD';
+  if (symbol === 'GBPUSDT') return 'GBP/USD';
+  if (symbol === 'AUDUSDT') return 'AUD/USD';
+  if (symbol === 'JPYUSDT') return 'USD/JPY';
+  return symbol;
+}
 
 // ── Ticker cache for price + change data ──
 let tickerCache: { data: Map<string, BinanceTicker>; ts: number } | null = null;
@@ -228,6 +265,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     rsiPeriodAtCreation: 14,
     signalStartedAt: nowTs,
     updatedAt: nowTs,
+    market: 'Crypto',
   };
 }
 
@@ -374,6 +412,35 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
 /**
  * Get top N USDT trading pairs sorted by 24h quote volume.
  */
+/**
+ * Search all available Binance + Yahoo symbols for a match.
+ * Returns up to 50 matches.
+ */
+async function searchSymbols(query: string): Promise<string[]> {
+  const q = query.toUpperCase();
+  const tickers = await fetchTickers();
+  const matches: string[] = [];
+
+  // Search Yahoo Indices first
+  for (const s of YAHOO_SYMBOLS) {
+    const alias = getSymbolAlias(s).toUpperCase();
+    if (s.includes(q) || alias.includes(q)) {
+      matches.push(s);
+    }
+  }
+
+  // Search Binance Tickers
+  for (const [s, t] of tickers.entries()) {
+    const alias = getSymbolAlias(s).toUpperCase();
+    if (s.includes(q) || alias.includes(q)) {
+      matches.push(s);
+    }
+    if (matches.length >= 50) break;
+  }
+
+  return [...new Set(matches)];
+}
+
 async function getTopSymbols(count: number): Promise<string[]> {
   if (symbolCache && Date.now() - symbolCache.ts < SYMBOL_CACHE_TTL) {
     return symbolCache.data.slice(0, count);
@@ -383,20 +450,38 @@ async function getTopSymbols(count: number): Promise<string[]> {
     const tickers = await fetchTickers();
     const usdtPairs = [...tickers.values()]
       .filter((t) => {
+        // Always include forced symbols (Gold, Forex)
+        if (BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return true;
+        
         if (!t.symbol.endsWith('USDT')) return false;
         // Exclude leverage tokens, stablecoins, wrapped/pegged tokens, and fiat pairs
         const base = t.symbol.slice(0, -4);
-        if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|PYUSD|USD1|PAXG|WBTC|WBETH|BFUSD|EUR|GBP|AUD|BRL|TRY|BIDR|IDRT|UAH|NGN|PLN|RON|ARS|CZK)$/.test(base)) return false;
+        
+        // Smart filter: keep PAXG and major Forex, exclude junk
+        if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|PYUSD|USD1|WBTC|WBETH|BFUSD|EUR|GBP|AUD|BRL|TRY|BIDR|IDRT|UAH|NGN|PLN|RON|ARS|CZK)$/.test(base)) {
+           // Allow if it's explicitly in our SPECIAL list
+           if (!BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return false;
+        }
+
         if (/UP$|DOWN$|BEAR$|BULL$/.test(base)) return false;
         const vol = parseFloat(t.quoteVolume);
         return Number.isFinite(vol) && vol > 0;
       })
-      .sort((a, b) => parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume))
-      .slice(0, Math.max(count, 1200))
-      .map((t) => t.symbol);
+      .sort((a, b) => {
+        // Prioritize special assets so they always make the cut
+        const specA = BINANCE_NATIVE_SPECIAL.includes(a.symbol) ? 1 : 0;
+        const specB = BINANCE_NATIVE_SPECIAL.includes(b.symbol) ? 1 : 0;
+        if (specA !== specB) return specB - specA;
+        return parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume);
+      })
+    // Map back to strings
+    const sortedBinance = usdtPairs.map((t) => t.symbol);
 
-    symbolCache = { data: usdtPairs, ts: Date.now() };
-    return usdtPairs.slice(0, count);
+    // Final merge: Yahoo symbols + Binance Specials first, then the rest of sortedBinance
+    const finalSymbols = [...new Set([...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL, ...sortedBinance])];
+    
+    symbolCache = { data: finalSymbols, ts: Date.now() };
+    return finalSymbols.slice(0, count);
   } catch {
     return FALLBACK_SYMBOLS.slice(0, count);
   }
@@ -451,19 +536,66 @@ async function fetchWithRetry(
 }
 
 /**
+ * Yahoo Finance kline adapter for Global Indices.
+ * Maps Yahoo JSON structure to standard BinanceKline format.
+ */
+async function fetchYahooKlines(symbol: string, interval: string = '1m'): Promise<BinanceKline[]> {
+  const yahooSym = YAHOO_MARKET_MAP[symbol] || symbol;
+  // interval mapping: 1m -> 1m, 1h -> 1h
+  const range = interval === '1h' ? '5d' : '1d';
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=${interval}&range=${range}`;
+
+  try {
+    const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(10000) });
+    if (!res.ok) throw new Error(`Yahoo HTTP ${res.status}`);
+    const json = await res.json();
+    const result = json.chart.result[0];
+    const quote = result.indicators.quote[0];
+    const timestamps = result.timestamp;
+
+    return timestamps.map((ts: number, i: number) => {
+      const open = quote.open[i] || quote.close[i-1] || 0;
+      const high = quote.high[i] || open;
+      const low = quote.low[i] || open;
+      const close = quote.close[i] || open;
+      const volume = quote.volume[i] || 0;
+
+      // Map to BinanceKline: [ts, o, h, l, c, v, closeTs, ...]
+      return [
+        ts * 1000,
+        open.toString(),
+        high.toString(),
+        low.toString(),
+        close.toString(),
+        volume.toString(),
+        (ts * 1000) + 59999, // dummy close ts
+        "0", 0, "0", "0", "0"
+      ] as BinanceKline;
+    });
+  } catch (err) {
+    debugWarn(`[yahoo] fetch failed for ${symbol}:`, err);
+    return [];
+  }
+}
+
+/**
  * Fetch 1m klines for a single symbol.
  */
 async function fetchKlines(symbol: string): Promise<BinanceKline[]> {
-  const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1m&limit=${KLINE_LIMIT}`;
-  return fetchWithRetry(path, `Klines 1m ${symbol}`);
+  if (YAHOO_SYMBOLS.includes(symbol)) {
+    return fetchYahooKlines(symbol, '1m');
+  }
+  return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1m&limit=${KLINE_LIMIT}`, `1m candle for ${symbol}`);
 }
 
 /**
  * Fetch 1h klines for a single symbol.
  */
 async function fetchKlines1h(symbol: string): Promise<BinanceKline[]> {
-  const path = `/api/v3/klines?symbol=${encodeURIComponent(symbol)}&interval=1h&limit=${KLINE_LIMIT_1H}`;
-  return fetchWithRetry(path, `Klines 1h ${symbol}`);
+  if (YAHOO_SYMBOLS.includes(symbol)) {
+    return fetchYahooKlines(symbol, '1h');
+  }
+  return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_LIMIT_1H}`, `1h candle for ${symbol}`);
 }
 
 async function fetchTickersSafe(): Promise<Map<string, BinanceTicker>> {
@@ -741,6 +873,7 @@ function buildEntry(
       rsiPeriodAtCreation: rsiPeriod,
       signalStartedAt,
       updatedAt: nowTs,
+      market: getMarketType(sym),
     };
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
@@ -750,8 +883,8 @@ function buildEntry(
 
 const refreshInFlight = new Map<string, Promise<ScreenerResponse>>();
 
-function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number = 14): Promise<ScreenerResponse> {
-  const inflightKey = makeCacheKey(symbolCount, smartMode, rsiPeriod);
+function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number = 14, search?: string): Promise<ScreenerResponse> {
+  const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod)}:${search || ''}`;
   const existing = refreshInFlight.get(inflightKey);
   if (existing) return existing;
 
@@ -761,11 +894,15 @@ function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number =
     debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}) starting...`);
 
     // 1. Get top symbols + ticker data + custom configs in parallel
-    const [symbols, tickers, coinConfigs] = await Promise.all([
+    const [topSymbols, searchMatches, tickers, coinConfigs] = await Promise.all([
       getTopSymbols(symbolCount),
+      search ? searchSymbols(search) : Promise.resolve([]),
       fetchTickersSafe(),
       getAllCoinConfigs(),
     ]);
+
+    // Merge: search matches first, then top symbols (uniquely)
+    const symbols = [...new Set([...searchMatches, ...topSymbols])];
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
     const staleBefore = nowTs - INDICATOR_CACHE_TTL;
@@ -801,7 +938,12 @@ function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number =
 
     if (symbolsToRefresh.length > refreshCap) {
       symbolsToRefresh.sort((a, b) => {
-        // Strict priority for uncached symbols to fill the "N/A" gaps first
+        // 0. Strict priority for search matches (ensure they ALWAYS get indicators)
+        const aSearch = searchMatches.includes(a) ? 1 : 0;
+        const bSearch = searchMatches.includes(b) ? 1 : 0;
+        if (aSearch !== bSearch) return bSearch - aSearch;
+
+        // 1. Strict priority for uncached symbols to fill the "N/A" gaps first
         const aCached = indicatorCache.has(`${a}:${rsiPeriod}`);
         const bCached = indicatorCache.has(`${b}:${rsiPeriod}`);
         if (aCached !== bCached) return aCached ? 1 : -1;
@@ -857,9 +999,22 @@ function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number =
     const entries: ScreenerEntry[] = [];
 
     for (const sym of symbols) {
-      const ticker = tickers.get(sym);
+      let ticker = tickers.get(sym);
       const res1m = klineResultBySymbol1m.get(sym);
       const res1h = klineResultBySymbol1h.get(sym);
+
+      // Simulation for Yahoo symbols (they don't have a Binance ticker)
+      if (!ticker && YAHOO_SYMBOLS.includes(sym) && res1m?.status === 'fulfilled') {
+        const lastKline = res1m.value[res1m.value.length - 1];
+        if (lastKline) {
+          ticker = {
+            symbol: sym,
+            lastPrice: lastKline[4],
+            priceChangePercent: "0", // Could compute from first kline, but 0 is safe
+            quoteVolume: lastKline[5]
+          };
+        }
+      }
 
       if (res1m?.status === 'fulfilled') {
         const klines1m = res1m.value;
@@ -980,10 +1135,10 @@ export async function getScreenerData(symbolCount = 100, options: ScreenerOption
   // WebSocket keeps prices live between indicator refreshes.
   const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
   if (stale) {
-    void runRefresh(symbolCount, smartMode, rsiPeriod);
+    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search);
     return stale;
   }
 
   // No usable stale snapshot available; compute (deduplicated by symbolCount).
-  return runRefresh(symbolCount, smartMode, rsiPeriod);
+  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search);
 }

@@ -60,6 +60,7 @@ export interface ScreenerEntry {
   signalStartedAt: number;
   lastPriceChange?: number;
   updatedAt: number;
+  market: 'Crypto' | 'Metal' | 'Forex' | 'Index';
 }
 
 export interface ScreenerResponse {

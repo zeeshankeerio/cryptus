@@ -53,6 +53,11 @@ self.onmessage = (e) => {
       stopFlushing();
       break;
     
+    case 'VIRTUAL_TICKET':
+      // payload: { s: symbol, c: close, o: open, q: volume }
+      processTicker(payload);
+      break;
+
     case 'UPDATE_CONFIG':
         if (payload.flushInterval) {
             stopFlushing();

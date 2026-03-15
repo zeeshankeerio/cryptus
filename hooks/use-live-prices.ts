@@ -20,6 +20,7 @@ class PriceTickEngine extends EventTarget {
   private prices = new Map<string, LiveTick>();
   private worker: Worker | null = null;
   private symbols = new Set<string>();
+  private virtualPollInterval: any = null;
 
   start(initialSymbols: Set<string>) {
     if (typeof window === 'undefined' || this.worker) return;
@@ -33,10 +34,8 @@ class PriceTickEngine extends EventTarget {
         payload.forEach(([sym, tick]: [string, LiveTick]) => {
           this.prices.set(sym, tick);
           batch.set(sym, tick);
-          // Dispatch a specific event for this symbol (for individual rows)
           this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
         });
-        // Dispatch batch event (for background alert engine)
         this.dispatchEvent(new CustomEvent('ticks', { detail: batch }));
       }
     };
@@ -45,6 +44,46 @@ class PriceTickEngine extends EventTarget {
       type: 'START',
       payload: { symbols: Array.from(this.symbols), flushInterval: 800 }
     });
+
+    // ── Virtual Market Emulation (Indices/CFDs) ──
+    // Pull fresh data for assets not in Binance WebSocket (Yahook symbols)
+    this.startVirtualPolling();
+  }
+
+  private startVirtualPolling() {
+    if (this.virtualPollInterval) return;
+    
+    this.virtualPollInterval = setInterval(async () => {
+      const yahooSymbols = Array.from(this.symbols).filter(s => 
+        ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
+      );
+      if (yahooSymbols.length === 0) return;
+
+      try {
+        // We can use the screener API itself to get the latest cached entry for these
+        const res = await fetch(`/api/screener?symbolCount=100`); 
+        if (!res.ok) return;
+        const json = await res.json();
+        const data = json.data as any[];
+
+        yahooSymbols.forEach(sym => {
+          const entry = data.find(e => e.symbol === sym);
+          if (entry && this.worker) {
+            this.worker.postMessage({
+              type: 'VIRTUAL_TICKET',
+              payload: {
+                s: sym,
+                c: entry.price,
+                o: entry.price, // simple emulation
+                q: entry.volume24h
+              }
+            });
+          }
+        });
+      } catch (e) {
+        console.warn('[price-engine] virtual poll failed', e);
+      }
+    }, 5000); // 5s poll for indices is plenty for RSI
   }
 
   updateSymbols(newSymbols: Set<string>) {
@@ -68,6 +107,10 @@ class PriceTickEngine extends EventTarget {
   }
 
   stop() {
+    if (this.virtualPollInterval) {
+      clearInterval(this.virtualPollInterval);
+      this.virtualPollInterval = null;
+    }
     if (this.worker) {
       this.worker.postMessage({ type: 'STOP' });
       this.worker.terminate();

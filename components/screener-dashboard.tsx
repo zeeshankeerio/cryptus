@@ -121,6 +121,36 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
   );
 }
 
+function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
+  if (!market || market === 'Crypto') return null;
+  const styles: Record<string, string> = {
+    Metal: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    Forex: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    Index: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  };
+  return (
+    <span className={cn("px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest rounded border shrink-0", styles[market])}>
+      {market}
+    </span>
+  );
+}
+
+function getSymbolAlias(symbol: string): string {
+  if (symbol === 'PAXGUSDT') return 'GOLD (XAU)';
+  if (symbol === 'SILVER') return 'SILVER (XAG)';
+  if (symbol === 'SPX') return 'S&P 500';
+  if (symbol === 'NDAQ') return 'NASDAQ 100';
+  if (symbol === 'DOW') return 'DOW JONES';
+  if (symbol === 'FTSE') return 'FTSE 100';
+  if (symbol === 'DAX') return 'DAX 40';
+  if (symbol === 'NKY') return 'NIKKEI 225';
+  if (symbol === 'EURUSDT') return 'EUR/USD';
+  if (symbol === 'GBPUSDT') return 'GBP/USD';
+  if (symbol === 'AUDUSDT') return 'AUD/USD';
+  if (symbol === 'JPYUSDT') return 'USD/JPY';
+  return symbol.replace('USDT', '');
+}
+
 // ─── Screener Row (Memoized) ───────────────────────────────────
 
 const ScreenerRow = memo(function ScreenerRow({
@@ -316,8 +346,13 @@ const ScreenerRow = memo(function ScreenerRow({
         </button>
       </td>
       <td className="px-3 py-4">
-        <span className="font-black text-white text-sm tracking-tight">{entry.symbol.replace('USDT', '')}</span>
-        <span className="text-slate-700 text-[10px] font-black uppercase ml-1 opacity-50">USDT</span>
+        <div className="flex flex-col">
+          <div className="flex items-center gap-1.5">
+            <span className="font-black text-white text-sm tracking-tight">{getSymbolAlias(entry.symbol)}</span>
+            <MarketBadge market={entry.market} />
+          </div>
+          {entry.market === 'Crypto' && <span className="text-slate-700 text-[9px] font-black uppercase opacity-50">USDT</span>}
+        </div>
       </td>
       <td className="px-3 py-4 text-right tabular-nums font-bold font-mono">
         <motion.span
@@ -984,10 +1019,12 @@ const ScreenerCard = memo(function ScreenerCard({
         </button>
         <div className="flex flex-col">
           <div className="flex items-center gap-1">
-            <span className="font-black text-white text-sm tracking-tight">{entry.symbol.replace('USDT', '')}</span>
-            <span className="text-[7px] font-black text-slate-600">USDT</span>
+            <span className="font-black text-white text-sm tracking-tight">{getSymbolAlias(entry.symbol)}</span>
+            <MarketBadge market={entry.market} />
           </div>
-          <div className="text-[7px] font-black text-[#39FF14]/50 uppercase tracking-widest leading-none">Binance Perp</div>
+          <div className="text-[7px] font-black text-slate-700 uppercase leading-none mt-0.5">
+            {entry.market === 'Crypto' ? 'USDT • Binance' : 'Global Market'}
+          </div>
         </div>
       </div>
 
@@ -1453,7 +1490,7 @@ export default function ScreenerDashboard() {
     try {
       if (!background) setError(null);
       const timeoutMs = pairCount >= 800 ? 60_000 : pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
-      const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}`, {
+      const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}`, {
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -1478,7 +1515,7 @@ export default function ScreenerDashboard() {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [pairCount, smartMode, rsiPeriod]);
+  }, [pairCount, smartMode, rsiPeriod, search]);
 
   // ── Initial fetch with auto-retry and Hydration ──
   const retryCountRef = useRef(0);
@@ -1570,6 +1607,15 @@ export default function ScreenerDashboard() {
     return () => clearTimeout(timer);
   }, [rsiPeriod, fetchData]);
 
+  // ── Debounced Server-side Search ──
+  useEffect(() => {
+    if (!search) return;
+    const timer = setTimeout(() => {
+      fetchData();
+    }, 600); // 600ms debounce for typing
+    return () => clearTimeout(timer);
+  }, [search, fetchData]);
+
   // ── Sorting ──
   const handleSort = useCallback(
     (key: SortKey) => {
@@ -1602,12 +1648,21 @@ export default function ScreenerDashboard() {
     // Search filter
     if (search) {
       const q = search.toUpperCase();
-      items = items.filter((e) => e.symbol.includes(q));
+      items = items.filter((e) => {
+        const alias = getSymbolAlias(e.symbol).toUpperCase();
+        return e.symbol.includes(q) || alias.includes(q);
+      });
     }
 
     // Sort
     const dir = sortDir === 'asc' ? 1 : -1;
     items = [...items].sort((a, b) => {
+      // 0. Market Priority (Keep Metals & Indices at top by default)
+      const marketPriority: Record<string, number> = { Metal: 3, Index: 2, Forex: 1, Crypto: 0 };
+      const pA = marketPriority[a.market] || 0;
+      const pB = marketPriority[b.market] || 0;
+      if (pA !== pB) return pB - pA;
+
       if (sortKey === 'strategyScore') {
         const aMissing = a.strategyLabel === 'N/A';
         const bMissing = b.strategyLabel === 'N/A';
