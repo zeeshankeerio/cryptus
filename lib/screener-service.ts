@@ -171,7 +171,8 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean, exchange: str
 
 // ── Per-symbol indicator cache to avoid refetch/recompute on every refresh ──
 const indicatorCache = new Map<string, { entry: ScreenerEntry; ts: number }>();
-const INDICATOR_CACHE_TTL = 120_000; // 2 min — tuned for better real-time alignment with WebSocket drift
+const INDICATOR_CACHE_TTL = 120_000; // 2 min — standard symbols
+const INDICATOR_CACHE_TTL_ALERT = 60_000; // 1 min — alert-active symbols (tighter accuracy)
 const INDICATOR_CACHE_MAX = 5000;
 
 /**
@@ -191,6 +192,34 @@ export function invalidateSymbolCache(symbol: string) {
   resultCache.clear();
   
   debugLog(`[screener] Cache invalidated for ${symbol}`);
+}
+
+/**
+ * Clear all caches scoped to a specific exchange.
+ * Used on exchange switch to ensure fresh data from the new exchange.
+ */
+export function invalidateExchangeCache(exchange: string) {
+  // 1. Remove indicator cache entries for this exchange
+  for (const key of indicatorCache.keys()) {
+    if (key.endsWith(`:${exchange}`)) {
+      indicatorCache.delete(key);
+    }
+  }
+
+  // 2. Clear result cache entries for this exchange
+  for (const key of resultCache.keys()) {
+    if (key.endsWith(`:${exchange}`)) {
+      resultCache.delete(key);
+    }
+  }
+
+  // 3. Clear ticker cache for this exchange
+  tickerCache.delete(exchange);
+
+  // 4. Clear symbol cache for this exchange
+  symbolCache.delete(exchange);
+
+  debugLog(`[screener] Exchange cache invalidated for ${exchange}`);
 }
 
 function pruneIndicatorCache() {
@@ -380,7 +409,8 @@ interface BybitTickerResponse {
 }
 
 async function fetchBybitTickers(exchange: string): Promise<Map<string, BinanceTicker>> {
-  const category = exchange.includes('spot') ? 'spot' : 'linear';
+  // 'bybit' = spot, 'bybit-linear' = linear (perpetual)
+  const category = exchange === 'bybit-linear' ? 'linear' : 'spot';
   const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=${category}`, {
     signal: AbortSignal.timeout(12000),
     cache: 'no-store' as RequestCache,
@@ -447,10 +477,12 @@ async function fetchTickers(exchange: string = 'binance'): Promise<Map<string, B
   }
 
   // Free-source fallback: KuCoin public market tickers
+  // IMPORTANT: Cache under 'kucoin-fallback' key, NOT the original exchange key,
+  // to prevent misattributing KuCoin prices as Binance data.
   try {
     const map = await fetchKucoinTickers();
     if (map.size > 0) {
-      tickerCache.set(exchange, { data: map, ts: Date.now() });
+      tickerCache.set('kucoin-fallback', { data: map, ts: Date.now() });
       return map;
     }
   } catch (err) {
@@ -614,25 +646,30 @@ async function fetchYahooKlines(symbol: string, interval: string = '1m'): Promis
     const quote = result.indicators.quote[0];
     const timestamps = result.timestamp;
 
-    return timestamps.map((ts: number, i: number) => {
-      const open = quote.open[i] || quote.close[i-1] || 0;
-      const high = quote.high[i] || open;
-      const low = quote.low[i] || open;
-      const close = quote.close[i] || open;
-      const volume = quote.volume[i] || 0;
+    // Filter out bars with null close to prevent NaN in RSI calculations
+    const klines: BinanceKline[] = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      const close = quote.close[i];
+      if (close == null || !Number.isFinite(close)) continue; // Skip incomplete candles
 
-      // Map to BinanceKline: [ts, o, h, l, c, v, closeTs, ...]
-      return [
+      const open = quote.open[i] ?? close;
+      const high = quote.high[i] ?? close;
+      const low = quote.low[i] ?? close;
+      const volume = quote.volume[i] ?? 0;
+      const ts = timestamps[i];
+
+      klines.push([
         ts * 1000,
         open.toString(),
         high.toString(),
         low.toString(),
         close.toString(),
         volume.toString(),
-        (ts * 1000) + 59999, // dummy close ts
+        (ts * 1000) + 59999,
         "0", 0, "0", "0", "0"
-      ] as BinanceKline;
-    });
+      ] as BinanceKline);
+    }
+    return klines;
   } catch (err) {
     debugWarn(`[yahoo] fetch failed for ${symbol}:`, err);
     return [];
@@ -649,7 +686,8 @@ interface BybitKlineResponse {
 async function fetchBybitKlines(symbol: string, interval: string, exchange: string): Promise<BinanceKline[]> {
   try {
     const limit = interval === '60' ? KLINE_LIMIT_1H : KLINE_LIMIT;
-    const category = exchange.includes('spot') ? 'spot' : 'linear';
+    // 'bybit' = spot, 'bybit-linear' = linear (perpetual)
+    const category = exchange === 'bybit-linear' ? 'linear' : 'spot';
     const res = await fetch(`https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`, {
       signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
       cache: 'no-store' as RequestCache,
@@ -794,14 +832,27 @@ function aggregateKlines(
   return result;
 }
 
+/**
+ * Derive signal from RSI value and thresholds.
+ * Supports contrarian (inverted) mode where overbought < oversold (e.g., OB=30, OS=70).
+ */
 function deriveSignal(
   rsi: number | null,
   overbought: number = 70,
   oversold: number = 30
 ): ScreenerEntry['signal'] {
   if (rsi === null) return 'neutral';
-  if (rsi < oversold) return 'oversold';
-  if (rsi > overbought) return 'overbought';
+  
+  const isInverted = overbought < oversold;
+  if (isInverted) {
+    // Contrarian: OB=30, OS=70 → oversold when RSI ≥ 70, overbought when RSI ≤ 30
+    if (rsi >= oversold) return 'oversold';
+    if (rsi <= overbought) return 'overbought';
+  } else {
+    // Standard: OB=70, OS=30 → oversold when RSI < 30, overbought when RSI > 70
+    if (rsi < oversold) return 'oversold';
+    if (rsi > overbought) return 'overbought';
+  }
   return 'neutral';
 }
 
@@ -1058,11 +1109,15 @@ function runRefresh(
     const symbols = [...new Set([...searchMatches, ...topSymbols])];
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
-    const staleBefore = nowTs - INDICATOR_CACHE_TTL;
+    // Alert-active symbols use a shorter TTL for more accurate RSI state refresh
     const uncachedSymbols = symbols.filter((sym) => !indicatorCache.has(`${sym}:${rsiPeriod}:${exchange}`));
     let symbolsToRefresh = symbols.filter((sym) => {
       const cached = indicatorCache.get(`${sym}:${rsiPeriod}:${exchange}`);
-      return !cached || cached.ts < staleBefore;
+      if (!cached) return true;
+      const cfg = coinConfigs.get(sym);
+      const hasAlerts = cfg && (cfg.alertOn1m || cfg.alertOn5m || cfg.alertOn15m || cfg.alertOn1h || cfg.alertOnCustom || cfg.alertOnStrategyShift);
+      const ttl = hasAlerts ? INDICATOR_CACHE_TTL_ALERT : INDICATOR_CACHE_TTL;
+      return cached.ts < nowTs - ttl;
     });
 
     // Bootstrap mode: prioritise full coverage so all selected pairs get indicators quickly.

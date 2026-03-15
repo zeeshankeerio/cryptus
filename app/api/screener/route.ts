@@ -12,7 +12,10 @@ export async function GET(request: Request) {
     const rawRsiPeriod = parseInt(searchParams.get('rsiPeriod') ?? '14', 10);
     const smart = searchParams.get('smart');
     const search = searchParams.get('search') ?? undefined;
-    const exchange = searchParams.get('exchange') ?? 'binance';
+    const rawExchange = searchParams.get('exchange') ?? 'binance';
+    // Validate exchange to prevent arbitrary API calls — only these 3 are supported
+    const VALID_EXCHANGES = ['binance', 'bybit', 'bybit-linear'] as const;
+    const exchange = VALID_EXCHANGES.includes(rawExchange as any) ? rawExchange : 'binance';
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
     
     // Sanitize parameters

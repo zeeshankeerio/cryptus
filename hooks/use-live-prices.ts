@@ -38,13 +38,18 @@ class PriceTickEngine extends EventTarget {
 
   constructor() {
     super();
+  }
+
+  // Hydrate from localStorage on client side only
+  hydrate() {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('crypto-rsi-exchange');
       if (saved) {
-        console.log(`[PriceEngine] Restoring exchange: ${saved}`);
+        console.log(`[PriceEngine] Restored exchange: ${saved}`);
         this.exchange = saved;
       }
     }
+    return this.exchange;
   }
 
   start(initialSymbols: Set<string>) {
@@ -88,37 +93,84 @@ class PriceTickEngine extends EventTarget {
     if (this.virtualPollInterval) return;
     
     this.virtualPollInterval = setInterval(async () => {
-      if (this.exchange !== 'binance') return;
-      const yahooSymbols = Array.from(this.symbols).filter(s => 
-        ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
-      );
-      if (yahooSymbols.length === 0) return;
-
-      try {
-        // We can use the screener API itself to get the latest cached entry for these
-        const res = await fetch(`/api/screener?symbolCount=100`); 
-        if (!res.ok) return;
-        const json = await res.json();
-        const data = json.data as any[];
-
-        yahooSymbols.forEach(sym => {
-          const entry = data.find(e => e.symbol === sym);
-          if (entry && this.worker) {
-            this.worker.postMessage({
-              type: 'VIRTUAL_TICKET',
-              payload: {
-                s: sym,
-                c: entry.price,
-                o: entry.price, // simple emulation
-                q: entry.volume24h
-              }
-            });
-          }
-        });
-      } catch (e) {
-        console.warn('[price-engine] virtual poll failed', e);
+      // Yahoo symbols: poll for indices that don't have a WebSocket source (Binance only)
+      if (this.exchange === 'binance') {
+        const yahooSymbols = Array.from(this.symbols).filter(s => 
+          ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
+        );
+        if (yahooSymbols.length > 0) {
+          await this.pollSymbolsViaRest(yahooSymbols, 'binance');
+        }
       }
-    }, 5000); // 5s poll for indices is plenty for RSI
+
+      // Bybit Spot: WS is limited to ~30 subscriptions, so poll REST for remaining visible symbols
+      if (this.exchange === 'bybit') {
+        try {
+          const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=spot`, {
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!res.ok) return;
+          const payload = await res.json();
+          const rows = payload.result?.list ?? [];
+          
+          for (const row of rows) {
+            if (!row.symbol.endsWith('USDT')) continue;
+            if (!this.symbols.has(row.symbol)) continue;
+            
+            const price = parseFloat(row.lastPrice);
+            if (!Number.isFinite(price) || price <= 0) continue;
+            
+            // Only inject for symbols NOT already covered by WebSocket
+            const existing = this.prices.get(row.symbol);
+            const staleMs = existing ? Date.now() - existing.updatedAt : Infinity;
+            if (staleMs < 3000) continue; // Skip if WS data is fresh
+            
+            if (this.worker) {
+              this.worker.postMessage({
+                type: 'VIRTUAL_TICKET',
+                payload: {
+                  s: row.symbol,
+                  c: price,
+                  o: parseFloat(row.prevPrice24h) || price,
+                  q: parseFloat(row.turnover24h) || 0,
+                  exchange: 'bybit'
+                }
+              });
+            }
+          }
+        } catch (e) {
+          console.warn('[price-engine] Bybit Spot REST poll failed', e);
+        }
+      }
+    }, 5000); // 5s poll cycle
+  }
+  
+  private async pollSymbolsViaRest(symbols: string[], exchange: string) {
+    try {
+      const count = Math.max(100, this.symbols.size);
+      const res = await fetch(`/api/screener?count=${count}&exchange=${exchange}`); 
+      if (!res.ok) return;
+      const json = await res.json();
+      const data = json.data as any[];
+
+      symbols.forEach(sym => {
+        const entry = data.find((e: any) => e.symbol === sym);
+        if (entry && this.worker) {
+          this.worker.postMessage({
+            type: 'VIRTUAL_TICKET',
+            payload: {
+              s: sym,
+              c: entry.price,
+              o: entry.price,
+              q: entry.volume24h,
+              exchange
+            }
+          });
+        }
+      });
+    } catch (e) {
+      console.warn('[price-engine] REST poll failed', e);
+    }
   }
 
   updateSymbols(newSymbols: Set<string>) {
@@ -133,6 +185,7 @@ class PriceTickEngine extends EventTarget {
 
   setExchange(exchange: string) {
     if (this.exchange === exchange) return;
+    const prevExchange = this.exchange;
     this.exchange = exchange;
     
     // Clear UI-side price cache to avoid "flash" of previous exchange data
@@ -145,6 +198,11 @@ class PriceTickEngine extends EventTarget {
         payload: { exchange }
       });
     }
+
+    // Notify alert engine to reset zone states for clean exchange isolation
+    this.dispatchEvent(new CustomEvent('exchange-changed', {
+      detail: { from: prevExchange, to: exchange }
+    }));
   }
 
   getExchange() {
@@ -191,11 +249,17 @@ if (typeof window !== 'undefined') {
 export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
   const [isConnected, setIsConnected] = useState(false);
   const [livePrices, setLivePrices] = useState<Map<string, LiveTick>>(new Map());
-  const [exchange, setExchangeState] = useState<string>(() => engine.getExchange());
+  const [exchange, setExchangeState] = useState<string>('binance');
   const mountedRef = useRef(true);
 
   useEffect(() => {
     mountedRef.current = true;
+    
+    // 1. Hydrate exchange from localStorage
+    const savedExchange = engine.hydrate();
+    setExchangeState(savedExchange);
+
+    // 2. Start engine
     engine.start(symbols);
     setIsConnected(true);
 

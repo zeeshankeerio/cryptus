@@ -1280,33 +1280,15 @@ export default function ScreenerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [alertsEnabled, setAlertsEnabled] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('crypto-rsi-alerts-enabled');
-    if (saved === null) return true; // Default to ENABLED
-    return saved === '1';
-  });
-  const [soundEnabled, setSoundEnabled] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    const saved = localStorage.getItem('crypto-rsi-sound-enabled');
-    if (saved === null) return true; // Default to ENABLED
-    return saved === '1';
-  });
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
   const [showAlertPanel, setShowAlertPanel] = useState(false);
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>('all');
   const [sortKey, setSortKey] = useState<SortKey>('strategyScore');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-  const [refreshInterval, setRefreshInterval] = useState(() => {
-    if (typeof window === 'undefined') return 30;
-    const saved = localStorage.getItem('crypto-rsi-refresh');
-    return saved ? Number(saved) : 30;
-  });
-  const [pairCount, setPairCount] = useState(() => {
-    if (typeof window === 'undefined') return 500;
-    const saved = localStorage.getItem('crypto-rsi-pairs');
-    return saved ? Math.min(Math.max(Number(saved), 10), 600) : 500;
-  });
+  const [refreshInterval, setRefreshInterval] = useState(30);
+  const [pairCount, setPairCount] = useState(500);
   const [smartMode, setSmartMode] = useState(smartModeDefault);
   const [showHeader, setShowHeader] = useState(true);
   const useAnimations = pairCount <= 600; // Disable heavy layout animations for large lists
@@ -1315,6 +1297,7 @@ export default function ScreenerDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
+  const coinConfigsRef = useRef<Record<string, any>>({});
   const [selectedCoinForConfig, setSelectedCoinForConfig] = useState<string | null>(null);
   const fetchingRef = useRef(false);
   const dataLenRef = useRef(0);
@@ -1365,18 +1348,9 @@ export default function ScreenerDashboard() {
   }, []);
 
   // Column visibility
-  const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(() => {
-    if (typeof window === 'undefined') return new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
-    const saved = localStorage.getItem('crypto-rsi-visible-cols');
-    if (saved) {
-      try {
-        return new Set(JSON.parse(saved));
-      } catch {
-        // Fallback
-      }
-    }
-    return new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id));
-  });
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(
+    new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
+  );
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
 
@@ -1484,13 +1458,7 @@ export default function ScreenerDashboard() {
       });
       syncStates({ configs: coinConfigs, rsiStates: states });
 
-      // 5. Ensure worker is connected to both if alerts are active
-      if (alertSymbols.size > 0) {
-        // We ensure both are connected to facilitate background alerts
-        // The worker is now concurrent, so this is safe and expected.
-        postToWorker({ type: 'SET_EXCHANGE', payload: { exchange: 'binance' } });
-        postToWorker({ type: 'SET_EXCHANGE', payload: { exchange: 'bybit' } });
-      }
+      // (Worker exchange connection is managed exclusively by use-live-prices.ts when exchange prop changes)
     }, 800);
 
     return () => clearTimeout(timer);
@@ -1499,6 +1467,9 @@ export default function ScreenerDashboard() {
   // Removed old duplicate processedData block
 
   const { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext } = useAlertEngine(processedData, coinConfigs, alertsEnabled, soundEnabled);
+
+  // Keep coinConfigsRef in sync for stable callbacks (fetchData)
+  useEffect(() => { coinConfigsRef.current = coinConfigs; }, [coinConfigs]);
 
   // Persist alert settings
   useEffect(() => {
@@ -1606,20 +1577,21 @@ export default function ScreenerDashboard() {
     localStorage.setItem('crypto-rsi-visible-cols', JSON.stringify([...visibleCols]));
   }, [visibleCols]);
 
-  // Persist last-known data for "Warm Start" hydration
+  // Persist last-known data for "Warm Start" hydration (keyed by exchange)
   useEffect(() => {
     if (data.length > 0) {
       try {
         localStorage.setItem('crypto-rsi-last-data', JSON.stringify({
           data,
           meta,
+          exchange,
           ts: Date.now()
         }));
       } catch (e) {
         console.warn('[screener] Failed to save hydration data to localStorage', e);
       }
     }
-  }, [data, meta]);
+  }, [data, meta, exchange]);
 
   const toggleWatchlist = useCallback((symbol: string) => {
     setWatchlist((prev) => {
@@ -1722,7 +1694,7 @@ export default function ScreenerDashboard() {
           };
         }
       });
-      syncStates({ rsiStates, configs: coinConfigs });
+      syncStates({ rsiStates, configs: coinConfigsRef.current });
     } catch (err) {
       if (dataLenRef.current === 0) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -1780,8 +1752,12 @@ export default function ScreenerDashboard() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Only hydrate if data is relatively fresh (less than 1 hour old) and correctly formatted
-        if (Date.now() - parsed.ts < 3600_000 && Array.isArray(parsed.data)) {
+        // Only hydrate if data is:
+        // 1. Relatively fresh (less than 1 hour old)
+        // 2. Correctly formatted as an array
+        // 3. Matches the current exchange (prevents stale cross-exchange data)
+        const savedExchange = parsed.exchange || 'binance';
+        if (Date.now() - parsed.ts < 3600_000 && Array.isArray(parsed.data) && savedExchange === exchange) {
           setData(parsed.data);
           setMeta(parsed.meta);
           setLoading(false);
@@ -1859,6 +1835,8 @@ export default function ScreenerDashboard() {
       setData([]);
       dataLenRef.current = 0;
       setLoading(true);
+      // Force-reset fetchingRef to prevent race with in-flight background fetch
+      fetchingRef.current = false;
       fetchData();
     }
   }, [exchange, fetchData, hasMounted]);

@@ -42,6 +42,22 @@ export function useAlertEngine(
 ) {
   const [alerts, setAlerts] = useState<Alert[]>([]);
 
+  // Hydrate alert history from API on mount
+  useEffect(() => {
+    fetch('/api/alerts')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          const normalized = data.map(val => ({
+            ...val,
+            createdAt: typeof val.createdAt === 'string' ? new Date(val.createdAt).getTime() : val.createdAt
+          })).slice(0, 50);
+          setAlerts(normalized);
+        }
+      })
+      .catch(e => console.error('[alerts] Error fetching history:', e));
+  }, []);
+
   // Store the last known zone: undefined = uninitialized, 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT' once seen
   const zoneState = useRef<Map<string, string | undefined>>(new Map());
   // Anti-dancing cooldown — keyed by symbol-timeframe
@@ -198,9 +214,11 @@ export function useAlertEngine(
 
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       try {
+        // Include exchange context for exchange-aware notification tags
+        const currentExchange = (window as any).__priceEngine?.getExchange?.() ?? 'unknown';
         navigator.serviceWorker.controller.postMessage({
           type: 'ALERT_NOTIFICATION',
-          payload: { title, body, icon: '/logo/mindscape-analytics.png' },
+          payload: { title, body, icon: '/logo/mindscape-analytics.png', exchange: currentExchange },
         });
       } catch {
         // SW communication not available
@@ -257,6 +275,8 @@ export function useAlertEngine(
     return cleanup;
 
     function attachListeners(eng: EventTarget) {
+      // Get current exchange for alert context
+      const getExchange = () => (window as any).__priceEngine?.getExchange?.() ?? 'binance';
       const handleBatchTicks = (e: Event) => {
         if (!enabledRef.current) return;
         const batch = (e as CustomEvent).detail as Map<string, any>;
@@ -378,10 +398,10 @@ export function useAlertEngine(
                   { duration: 6000 }
                 );
                 playAlertSoundRef.current();
-                logAlertRef.current({ symbol, timeframe: label, value: val as number, type: currentZone as Alert['type'] });
+                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
                 triggerNativeRef.current(
                   `${getSymbolAlias(symbol)} ${currentZone}`,
-                  `${label} RSI reached ${(val as number).toFixed(1)}`
+                  `[${getExchange().charAt(0).toUpperCase() + getExchange().slice(1)}] ${label} RSI reached ${(val as number).toFixed(1)}`
                 );
               }
             }
@@ -424,10 +444,10 @@ export function useAlertEngine(
                   { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
                 );
                 playAlertSoundRef.current();
-                logAlertRef.current({ symbol, timeframe: 'STRAT', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
+                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRAT', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
                 triggerNativeRef.current(
                   `${getSymbolAlias(symbol)} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                  `Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
+                  `[${getExchange().charAt(0).toUpperCase() + getExchange().slice(1)}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
                 );
               }
             }
@@ -437,6 +457,9 @@ export function useAlertEngine(
       };
 
       // ── Phase 4: Worker-triggered alerts (Instant Response) ──
+      // The worker already evaluated zones and sent ALERT_TRIGGERED. We just need to
+      // present the alert and log it. Cooldown key uses bare symbol-timeframe to match
+      // the worker's key format and prevent the batch evaluator from re-firing.
       const handleWorkerAlert = (e: Event) => {
         if (!enabledRef.current) return;
         const { symbol, exchange, timeframe, value, type } = (e as CustomEvent).detail;
@@ -444,10 +467,11 @@ export function useAlertEngine(
         const config = coinConfigsRef.current[symbol];
         if (!config) return;
 
-        // Gap 2: unified key — same as worker now uses
-        const alertKey = `${exchange}:${symbol}-${timeframe}`;
+        // Unified cooldown key: bare symbol-timeframe (matches worker + batch evaluator)
+        const alertKey = `${symbol}-${timeframe === 'STRATEGY' ? 'STRAT' : timeframe}`;
         const now = Date.now();
         if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
+          // Set cooldown for BOTH this handler AND the batch evaluator
           lastTriggered.current.set(alertKey, now);
 
           const isStrat = timeframe === 'STRATEGY';
@@ -481,15 +505,25 @@ export function useAlertEngine(
     }
   }, []); // Gap 1: empty deps — attaches once, uses refs for live values
 
-  // ── Fetch alert history on mount ──
+  // ── Reset alert zone states when exchange changes ──
+  // Prevents cross-exchange false alerts (e.g., Binance RSI zone bleeding into Bybit)
   useEffect(() => {
-    fetch('/api/alerts')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) setAlerts(data);
-      })
-      .catch(e => console.error('[alerts] History fetch failed:', e));
+    if (typeof window === 'undefined') return;
+    const engineInstance = (window as any).__priceEngine;
+    if (!engineInstance) return;
+
+    const handleExchangeChange = () => {
+      zoneState.current.clear();
+      lastTriggered.current.clear();
+    };
+
+    engineInstance.addEventListener('exchange-changed', handleExchangeChange);
+    return () => {
+      engineInstance.removeEventListener('exchange-changed', handleExchangeChange);
+    };
   }, []);
+
+  // (Removed: duplicate fetch('/api/alerts') — already handled at lines 46-59)
 
   // ── Test alert ──
   const triggerTestAlert = useCallback(() => {

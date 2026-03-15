@@ -1,19 +1,34 @@
 /**
- * RSIQ PRO Ticker Worker — v3 (Multi-Exchange Architecture)
+ * RSIQ PRO Ticker Worker — v4 (Robust Multi-Exchange Architecture)
  * Offloads WebSocket parsing, buffering, and real-time alert evaluation.
  * Supports Binance and Bybit (Spot & Linear).
+ *
+ * v4 changes:
+ * - Exponential backoff with jitter for WebSocket reconnections
+ * - Zombie connection watchdog (force reconnect if no data for 60s)
+ * - Fixed zone/cooldown cleanup key parsing (was never matching bare symbols)
+ * - Normalised alert cooldown keys (bare symbol) to prevent duplicate alerts
+ * - Alert-active symbols prioritised in Bybit Spot subscriptions
  */
 
-const RECONNECT_DELAY = 2000;
+const RECONNECT_BASE_DELAY = 2000;
+const RECONNECT_MAX_DELAY = 30000;
 const HEARTBEAT_MS = 30000;
+const ZOMBIE_WATCHDOG_MS = 30000;   // check every 30s
+const ZOMBIE_THRESHOLD_MS = 60000;  // force reconnect if no data for 60s
 
 // Internal buffer to minimize postMessage frequency
 let tickerBuffer = new Map();
 let flushInterval = null;
+let zombieWatchdog = null;
+let lastDataReceived = Date.now();  // track data freshness
 let currentSymbols = new Set();
 let volatilityBuffer = new Map(); 
 let currentExchangeName = 'binance';
 let activeExchange = null;
+
+// Per-exchange reconnection tracking (exponential backoff with jitter)
+let reconnectAttempts = new Map();
 
 // Real-time Intelligence State
 let rsiStates = new Map();   
@@ -58,10 +73,12 @@ class BinanceAdapter extends ExchangeAdapter {
     this.socket = new WebSocket('wss://stream.binance.com:9443/ws/!miniTicker@arr');
     this.socket.onopen = () => {
       console.log('[worker] Binance Connected');
+      resetReconnectAttempts(this.exchangeName || 'binance');
       this.startHeartbeat();
     };
     this.socket.onmessage = (event) => {
       try {
+        lastDataReceived = Date.now();
         const data = JSON.parse(event.data);
         if (Array.isArray(data)) {
           data.forEach(t => this.process(t));
@@ -71,9 +88,10 @@ class BinanceAdapter extends ExchangeAdapter {
       } catch (e) {}
     };
     this.socket.onclose = () => {
-      console.log('[worker] Binance Closed, reconnecting...');
+      const delay = getReconnectDelay(this.exchangeName || 'binance');
+      console.log(`[worker] Binance Closed, reconnecting in ${Math.round(delay)}ms...`);
       this.disconnect();
-      setTimeout(() => ensureExchange(currentExchangeName), RECONNECT_DELAY);
+      setTimeout(() => ensureExchange(this.exchangeName || currentExchangeName), delay);
     };
     this.socket.onerror = () => this.socket?.close();
   }
@@ -100,6 +118,7 @@ class BybitAdapter extends ExchangeAdapter {
   constructor(type = 'spot') {
     super();
     this.type = type; // 'spot' or 'linear'
+    this.subscribedTopics = [];
   }
 
   connect() {
@@ -110,11 +129,13 @@ class BybitAdapter extends ExchangeAdapter {
     this.socket = new WebSocket(url);
     this.socket.onopen = () => {
       console.log(`[worker] Bybit ${this.type} Connected`);
+      resetReconnectAttempts(this.exchangeName || 'bybit');
       this.startHeartbeat();
       this.subscribeAll();
     };
     this.socket.onmessage = (event) => {
       try {
+        lastDataReceived = Date.now();
         const data = JSON.parse(event.data);
         if (data.op === 'pong') return;
         
@@ -130,9 +151,10 @@ class BybitAdapter extends ExchangeAdapter {
       } catch (e) {}
     };
     this.socket.onclose = () => {
-      console.log(`[worker] Bybit ${this.type} Closed, reconnecting...`);
+      const delay = getReconnectDelay(this.exchangeName || 'bybit');
+      console.log(`[worker] Bybit ${this.type} Closed, reconnecting in ${Math.round(delay)}ms...`);
       this.disconnect();
-      setTimeout(() => ensureExchange(currentExchangeName), RECONNECT_DELAY);
+      setTimeout(() => ensureExchange(this.exchangeName || currentExchangeName), delay);
     };
     this.socket.onerror = () => this.socket?.close();
   }
@@ -153,26 +175,51 @@ class BybitAdapter extends ExchangeAdapter {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return;
     
     if (this.type !== 'spot') {
-      // PRO TRICK: For Linear/Inverse, user unified "tickers" topic to get ALL symbols at once
+      // PRO TRICK: For Linear/Inverse, use unified "tickers" topic to get ALL symbols at once
+      if (this.subscribedTopics.includes('tickers')) return;
       this.socket.send(JSON.stringify({
         op: 'subscribe',
         args: ['tickers']
       }));
+      this.subscribedTopics = ['tickers'];
       return;
     }
 
     // Bybit Spot requires explicit subscription. Max 10 per message. Max 33 topics per connection.
-    // We prioritize the top symbols for Spot.
-    const symbols = Array.from(currentSymbols).slice(0, 30);
-    const topics = symbols.map(s => `tickers.${s}`);
+    // Unsubscribe all previous to keep topic count low
+    if (this.subscribedTopics.length > 0) {
+      for (let i = 0; i < this.subscribedTopics.length; i += 10) {
+        this.socket.send(JSON.stringify({
+          op: 'unsubscribe',
+          args: this.subscribedTopics.slice(i, i + 10)
+        }));
+      }
+    }
+
+    // Prioritise: alert symbols → viewport symbols → major pairs → remaining by volume
+    const allSymbols = Array.from(currentSymbols);
+    const alertSymbols = allSymbols.filter(s => {
+      const cfg = coinConfigs.get(s);
+      return cfg && (cfg.alertOn1m || cfg.alertOn5m || cfg.alertOn15m || cfg.alertOn1h || cfg.alertOnCustom || cfg.alertOnStrategyShift);
+    });
     
-    for (let i = 0; i < topics.length; i += 10) {
-      const batch = topics.slice(i, i + 10);
+    // Major pairs should always get live ticks for best UX
+    const majorPairs = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT'];
+    const majors = majorPairs.filter(s => currentSymbols.has(s));
+    
+    const remaining = allSymbols.filter(s => !alertSymbols.includes(s) && !majors.includes(s));
+    const prioritised = [...new Set([...alertSymbols, ...majors, ...remaining])].slice(0, 30);
+    const topicSet = prioritised.map(s => `tickers.${s}`);
+    this.subscribedTopics = topicSet;
+    
+    for (let i = 0; i < topicSet.length; i += 10) {
+      const batch = topicSet.slice(i, i + 10);
       this.socket.send(JSON.stringify({
         op: 'subscribe',
         args: batch
       }));
     }
+    console.log(`[worker] Bybit Spot subscribed to ${topicSet.length} symbols (${alertSymbols.length} alerts, ${majors.length} majors)`);
   }
 
   process(data) {
@@ -191,6 +238,19 @@ class BybitAdapter extends ExchangeAdapter {
 // ── Controller Logic ──────────────────────────────────────────
 let activeAdapters = new Map();
 
+/** Exponential backoff with jitter — prevents thundering herd on reconnect */
+function getReconnectDelay(exchangeName) {
+  const attempts = reconnectAttempts.get(exchangeName) || 0;
+  reconnectAttempts.set(exchangeName, attempts + 1);
+  const base = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, attempts), RECONNECT_MAX_DELAY);
+  const jitter = Math.random() * Math.min(1000, base * 0.3);
+  return base + jitter;
+}
+
+function resetReconnectAttempts(exchangeName) {
+  reconnectAttempts.set(exchangeName, 0);
+}
+
 function ensureExchange(name) {
   if (activeAdapters.has(name)) return;
 
@@ -205,6 +265,31 @@ function ensureExchange(name) {
   activeAdapters.set(name, adapter);
   adapter.connect();
   console.log(`[worker] Concurrent adapter added: ${name}`);
+}
+
+/** Zombie connection watchdog — forces reconnect if no data received for ZOMBIE_THRESHOLD_MS */
+function startZombieWatchdog() {
+  stopZombieWatchdog();
+  zombieWatchdog = setInterval(() => {
+    if (activeAdapters.size === 0) return;
+    const silenceMs = Date.now() - lastDataReceived;
+    if (silenceMs > ZOMBIE_THRESHOLD_MS) {
+      console.warn(`[worker] ZOMBIE DETECTED: No data for ${Math.round(silenceMs/1000)}s — forcing reconnect`);
+      // Force reconnect all active adapters
+      const names = Array.from(activeAdapters.keys());
+      activeAdapters.forEach(adapter => adapter.disconnect());
+      activeAdapters.clear();
+      lastDataReceived = Date.now(); // reset to avoid immediate re-trigger
+      names.forEach(name => ensureExchange(name));
+    }
+  }, ZOMBIE_WATCHDOG_MS);
+}
+
+function stopZombieWatchdog() {
+  if (zombieWatchdog) {
+    clearInterval(zombieWatchdog);
+    zombieWatchdog = null;
+  }
 }
 
 function stopExchange(name) {
@@ -304,6 +389,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     };
 
     // ── Alert Evaluation ──
+    // NOTE: Zone state keys use exchange:symbol for isolation per-exchange.
+    // Cooldown/alert keys use bare symbol-timeframe to match main-thread and prevent duplicate alerts.
     const tfs = [
       { label: '1m',     rsi: rsi1m,     cfgKey: 'alertOn1m'     },
       { label: '5m',     rsi: rsi5m,     cfgKey: 'alertOn5m'     },
@@ -315,8 +402,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     tfs.forEach(tf => {
       if (!config[tf.cfgKey] || tf.rsi === null || tf.rsi === undefined) return;
 
-      const stateKey = `${trackingKey}-${tf.label}`;
-      const previousZone = zoneStates.get(stateKey);
+      // Zone state key includes exchange to track per-exchange zones separately
+      const zoneKey = `${trackingKey}-${tf.label}`;
+      const previousZone = zoneStates.get(zoneKey);
       let zone = 'NEUTRAL';
       const isInverted = obT < osT;
 
@@ -347,7 +435,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
         );
 
         if (hasConfluence) {
-          const alertKey = stateKey;
+          // Cooldown key uses BARE symbol (no exchange prefix) to prevent duplicate alerts
+          // when the main-thread evaluator also fires for the same event
+          const alertKey = `${t.s}-${tf.label}`;
           const nowTs = Date.now();
           if (nowTs - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
             lastTriggered.set(alertKey, nowTs);
@@ -364,17 +454,18 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
           }
         }
       }
-      zoneStates.set(stateKey, zone);
+      zoneStates.set(zoneKey, zone);
     });
 
     if (config.alertOnStrategyShift) {
-      const stratKey = `${trackingKey}-STRAT`;
-      const prevStrat = zoneStates.get(stratKey);
+      const stratZoneKey = `${trackingKey}-STRAT`;
+      const prevStrat = zoneStates.get(stratZoneKey);
       const currentStrat = currentStrategy.signal;
 
       if (prevStrat !== undefined && prevStrat !== currentStrat &&
           (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
-        const alertKey = stratKey;
+        // Cooldown key uses BARE symbol to match main-thread
+        const alertKey = `${t.s}-STRAT`;
         const nowTs = Date.now();
         if (nowTs - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
           lastTriggered.set(alertKey, nowTs);
@@ -390,7 +481,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
           });
         }
       }
-      zoneStates.set(stratKey, currentStrat);
+      zoneStates.set(stratZoneKey, currentStrat);
     }
   }
 
@@ -417,30 +508,57 @@ self.onmessage = (e) => {
       currentSymbols = new Set(payload.symbols);
       currentExchangeName = payload.exchange || 'binance';
       ensureExchange(currentExchangeName);
-      startFlushing(payload.flushInterval || 800);
+      startFlushing(payload.flushInterval || 300);
+      startZombieWatchdog();
       break;
 
-    case 'SET_EXCHANGE':
-      if (payload.exchange) {
-        currentExchangeName = payload.exchange;
-        ensureExchange(payload.exchange);
+    case 'SET_EXCHANGE': {
+      if (!payload.exchange || payload.exchange === currentExchangeName) break;
+      const prevExchange = currentExchangeName;
+      currentExchangeName = payload.exchange;
+
+      // ── Tear down old adapter to stop stale data flow ──
+      const oldAdapter = activeAdapters.get(prevExchange);
+      if (oldAdapter) {
+        oldAdapter.disconnect();
+        activeAdapters.delete(prevExchange);
+        console.log(`[worker] Disconnected old adapter: ${prevExchange}`);
       }
+
+      // ── Clear all cross-exchange state for clean isolation ──
+      tickerBuffer.clear();
+      zoneStates.clear();
+      lastTriggered.clear();
+      rsiStates.clear();
+      volatilityBuffer.clear();
+      lastDataReceived = Date.now(); // Reset zombie watchdog
+
+      // Connect the new exchange
+      ensureExchange(currentExchangeName);
+      console.log(`[worker] Exchange switched: ${prevExchange} → ${currentExchangeName}`);
       break;
+    }
 
     case 'UPDATE_SYMBOLS':
       currentSymbols = new Set(payload.symbols);
       // Memory Hygiene: Clean up state for symbols no longer being tracked
       for (const [s] of rsiStates) { if (!currentSymbols.has(s)) rsiStates.delete(s); }
       for (const [s] of coinConfigs) { if (!currentSymbols.has(s)) coinConfigs.delete(s); }
+      // Zone keys: "exchange:SYMBOL-timeframe" → extract bare symbol
       for (const [k] of zoneStates) {
-        const symbol = k.split('-')[0];
-        if (!currentSymbols.has(symbol)) zoneStates.delete(k);
+        const bareSymbol = extractBareSymbol(k);
+        if (!currentSymbols.has(bareSymbol)) zoneStates.delete(k);
       }
+      // Alert cooldown keys: "SYMBOL-timeframe" (bare) → extract bare symbol
       for (const [k] of lastTriggered) {
-        const symbol = k.split('-')[0];
-        if (!currentSymbols.has(symbol)) lastTriggered.delete(k);
+        const bareSymbol = extractBareSymbol(k);
+        if (!currentSymbols.has(bareSymbol)) lastTriggered.delete(k);
       }
-      for (const [s] of volatilityBuffer) { if (!currentSymbols.has(s)) volatilityBuffer.delete(s); }
+      // Volatility keys: "exchange:SYMBOL" → extract bare symbol
+      for (const [s] of volatilityBuffer) {
+        const bareSymbol = s.includes(':') ? s.split(':').pop() : s;
+        if (!currentSymbols.has(bareSymbol)) volatilityBuffer.delete(s);
+      }
       for (const [s] of tickerBuffer) { if (!currentSymbols.has(s)) tickerBuffer.delete(s); }
 
       activeAdapters.forEach(adapter => adapter.updateSymbols(currentSymbols));
@@ -461,9 +579,12 @@ self.onmessage = (e) => {
     case 'SYNC_CONFIG_FAST':
       if (payload.symbol && payload.config) {
         coinConfigs.set(payload.symbol, payload.config);
+        // Clear zone states: keys may be "exchange:SYMBOL-tf" or "SYMBOL-tf"
         for (const [key] of zoneStates) {
-          if (key.startsWith(`${payload.symbol}-`)) zoneStates.delete(key);
+          const bare = extractBareSymbol(key);
+          if (bare === payload.symbol) zoneStates.delete(key);
         }
+        // Clear cooldown: keys are "SYMBOL-tf" (bare)
         for (const [key] of lastTriggered) {
           if (key.startsWith(`${payload.symbol}-`)) lastTriggered.delete(key);
         }
@@ -483,6 +604,7 @@ self.onmessage = (e) => {
       activeAdapters.forEach(adapter => adapter.disconnect());
       activeAdapters.clear();
       stopFlushing();
+      stopZombieWatchdog();
       break;
 
     case 'VIRTUAL_TICKET':
@@ -505,8 +627,26 @@ self.onmessage = (e) => {
 
 // ── Utility Helpers ────────────────────────────────────────────
 
+/**
+ * Extract bare symbol from composite keys.
+ * Handles multiple formats:
+ *   "exchange:SYMBOL-timeframe" → "SYMBOL"
+ *   "SYMBOL-timeframe"         → "SYMBOL"
+ *   "exchange:SYMBOL"          → "SYMBOL"
+ *   "SYMBOL"                   → "SYMBOL"
+ */
+function extractBareSymbol(key) {
+  // Remove exchange prefix (e.g., "binance:BTCUSDT-1m" → "BTCUSDT-1m")
+  let bare = key.includes(':') ? key.split(':').pop() : key;
+  // Remove timeframe suffix (e.g., "BTCUSDT-1m" → "BTCUSDT")
+  const dashIdx = bare.indexOf('-');
+  if (dashIdx > 0) bare = bare.substring(0, dashIdx);
+  return bare;
+}
+
 function approximateRsi(state, livePrice, period = 14) {
-  if (!state || !state.avgGain || !state.avgLoss) return null;
+  // Fix: use == null instead of ! to allow avgGain=0 (flat market edge case)
+  if (!state || state.avgGain == null || state.avgLoss == null) return null;
   const change = livePrice - (state.lastClose || 0);
   let avgGain, avgLoss;
 
