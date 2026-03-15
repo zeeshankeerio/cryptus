@@ -8,12 +8,14 @@ import {
 } from './indicators';
 import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
 import { getAllCoinConfigs, type CoinConfig } from './coin-config';
+import { getSymbolAlias } from './symbol-utils';
 
 interface ScreenerOptions {
   smartMode?: boolean;
   rsiPeriod?: number;
   search?: string;
   prioritySymbols?: string[]; // Viewport symbols to prioritise
+  exchange?: string;
 }
 
 interface SmartTuningState {
@@ -74,7 +76,7 @@ function getWeightRemaining(): number {
 }
 
 // ── In-memory symbol cache ──
-let symbolCache: { data: string[]; ts: number } | null = null;
+const symbolCache = new Map<string, { data: string[]; ts: number }>();
 const SYMBOL_CACHE_TTL = 3600_000; // 1 hour
 
 // ── Fallback symbols in case Binance API is unreachable ──
@@ -111,24 +113,9 @@ function getMarketType(symbol: string): ScreenerEntry['market'] {
   return 'Crypto';
 }
 
-function getSymbolAlias(symbol: string): string {
-  if (symbol === 'PAXGUSDT') return 'GOLD (XAU)';
-  if (symbol === 'SILVER') return 'SILVER (XAG)';
-  if (symbol === 'SPX') return 'S&P 500';
-  if (symbol === 'NDAQ') return 'NASDAQ 100';
-  if (symbol === 'DOW') return 'DOW JONES';
-  if (symbol === 'FTSE') return 'FTSE 100';
-  if (symbol === 'DAX') return 'DAX 40';
-  if (symbol === 'NKY') return 'NIKKEI 225';
-  if (symbol === 'EURUSDT') return 'EUR/USD';
-  if (symbol === 'GBPUSDT') return 'GBP/USD';
-  if (symbol === 'AUDUSDT') return 'AUD/USD';
-  if (symbol === 'JPYUSDT') return 'USD/JPY';
-  return symbol;
-}
 
 // ── Ticker cache for price + change data ──
-let tickerCache: { data: Map<string, BinanceTicker>; ts: number } | null = null;
+const tickerCache = new Map<string, { data: Map<string, BinanceTicker>; ts: number }>();
 const TICKER_CACHE_TTL = 30_000; // 30 seconds
 const TRAFFIC_WARM_COOLDOWN_MS = 45_000;
 
@@ -149,8 +136,8 @@ function getSmartModeDefault(): boolean {
   return process.env.SMART_MODE_DEFAULT !== '0';
 }
 
-function makeCacheKey(symbolCount: number, smartMode: boolean, rsiPeriod: number): string {
-  return `${symbolCount}:${smartMode ? 'smart' : 'classic'}:rsi${rsiPeriod}`;
+function makeCacheKey(symbolCount: number, smartMode: boolean, rsiPeriod: number, exchange: string = 'binance'): string {
+  return `${symbolCount}:${smartMode ? 'smart' : 'classic'}:rsi${rsiPeriod}:${exchange}`;
 }
 
 function getTrafficWarmCandidates(symbolCount: number): number[] {
@@ -159,7 +146,7 @@ function getTrafficWarmCandidates(symbolCount: number): number[] {
   return [300, 100];
 }
 
-function maybeTrafficWarm(symbolCount: number, smartMode: boolean): void {
+function maybeTrafficWarm(symbolCount: number, smartMode: boolean, exchange: string = 'binance', rsiPeriod: number = 14): void {
   if (process.env.TRAFFIC_WARM_DISABLED === '1') return;
 
   const key = smartMode ? 'smart' : 'classic';
@@ -170,14 +157,14 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean): void {
   const candidates = getTrafficWarmCandidates(symbolCount);
   for (const candidate of candidates) {
     if (candidate === symbolCount) continue;
-    const cache = resultCache.get(makeCacheKey(candidate, smartMode, 14)); // Warm defaults to 14
+    const cache = resultCache.get(makeCacheKey(candidate, smartMode, rsiPeriod, exchange));
     const ttl = getResultCacheTtl(candidate);
     const fresh = cache && now - cache.ts < ttl;
     if (fresh) continue;
 
     trafficWarmLastRun.set(key, now);
-    debugLog(`[screener] traffic-warm trigger: request=${symbolCount}, warming=${candidate}, smart=${smartMode}`);
-    void runRefresh(candidate, smartMode, 14);
+    debugLog(`[screener] traffic-warm trigger: request=${symbolCount}, warming=${candidate}, smart=${smartMode}, exchange=${exchange}`);
+    void runRefresh(candidate, smartMode, rsiPeriod, undefined, [], exchange);
     break;
   }
 }
@@ -193,7 +180,6 @@ const INDICATOR_CACHE_MAX = 5000;
  */
 export function invalidateSymbolCache(symbol: string) {
   // 1. Remove from indicator cache for any combination of cache keys
-  // Since we don't know all rsiPeriods that might be cached, we iterate and match the symbol prefix.
   const prefix = `${symbol}:`;
   for (const key of indicatorCache.keys()) {
     if (key.startsWith(prefix)) {
@@ -305,9 +291,23 @@ function buildMeta(
   };
 }
 
-function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: number): ScreenerResponse | null {
-  const cache = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod));
-  if (!cache) return null;
+function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: number, exchange: string = 'binance'): ScreenerResponse | null {
+  const cache = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange));
+  if (!cache) {
+    // Partial match: find any cached result for this exchange/mode/period and slice it
+    for (const [key, val] of resultCache.entries()) {
+      if (key.includes(`:${smartMode ? 'smart' : 'classic'}:rsi${rsiPeriod}:${exchange}`) && val.data.data.length > 0) {
+        const sliced = val.data.data.slice(0, symbolCount);
+        return {
+          ...val.data,
+          data: sliced,
+          meta: buildMeta(sliced, val.data.meta.computeTimeMs, val.data.meta.fetchedAt, smartMode, val.data.meta.refreshCap),
+        };
+      }
+    }
+    return null;
+  }
+
   // Don't serve data older than 10 minutes
   if (Date.now() - cache.ts > 600_000) return null;
   const sliced = cache.data.data.slice(0, symbolCount);
@@ -367,12 +367,60 @@ async function fetchKucoinTickers(): Promise<Map<string, BinanceTicker>> {
   return map;
 }
 
+interface BybitTickerResponse {
+  retCode: number;
+  result: {
+    list: {
+      symbol: string;
+      lastPrice: string;
+      price24hPcnt: string;
+      turnover24h: string;
+    }[];
+  };
+}
+
+async function fetchBybitTickers(exchange: string): Promise<Map<string, BinanceTicker>> {
+  const category = exchange.includes('spot') ? 'spot' : 'linear';
+  const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=${category}`, {
+    signal: AbortSignal.timeout(12000),
+    cache: 'no-store' as RequestCache,
+  });
+  if (!res.ok) throw new Error(`Bybit ticker API ${res.status}`);
+
+  const payload = await res.json() as BybitTickerResponse;
+  const rows = payload.result?.list ?? [];
+  const map = new Map<string, BinanceTicker>();
+
+  for (const row of rows) {
+    if (!row.symbol.endsWith('USDT')) continue;
+    const changePct = Number.isFinite(parseFloat(row.price24hPcnt))
+      ? (parseFloat(row.price24hPcnt) * 100).toString()
+      : '0';
+
+    map.set(row.symbol, {
+      symbol: row.symbol,
+      lastPrice: row.lastPrice,
+      priceChangePercent: changePct,
+      quoteVolume: row.turnover24h,
+    });
+  }
+
+  return map;
+}
+
 /**
- * Fetch 24hr tickers from Binance. Returns Map<symbol, ticker>.
+ * Fetch 24hr tickers from Binance or Bybit. Returns Map<symbol, ticker>.
  */
-async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
-  if (tickerCache && Date.now() - tickerCache.ts < TICKER_CACHE_TTL) {
-    return tickerCache.data;
+async function fetchTickers(exchange: string = 'binance'): Promise<Map<string, BinanceTicker>> {
+  const cached = tickerCache.get(exchange);
+  if (cached && Date.now() - cached.ts < TICKER_CACHE_TTL) {
+    return cached.data;
+  }
+
+  if (exchange.startsWith('bybit')) {
+    const map = await fetchBybitTickers(exchange);
+    tickerCache.set(exchange, { data: map, ts: Date.now() });
+    return map;
   }
 
   let lastError: unknown;
@@ -391,7 +439,7 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
         map.set(t.symbol, t);
       }
 
-      tickerCache = { data: map, ts: Date.now() };
+      tickerCache.set(exchange, { data: map, ts: Date.now() });
       return map;
     } catch (err) {
       lastError = err;
@@ -402,7 +450,7 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
   try {
     const map = await fetchKucoinTickers();
     if (map.size > 0) {
-      tickerCache = { data: map, ts: Date.now() };
+      tickerCache.set(exchange, { data: map, ts: Date.now() });
       return map;
     }
   } catch (err) {
@@ -419,16 +467,18 @@ async function fetchTickers(): Promise<Map<string, BinanceTicker>> {
  * Search all available Binance + Yahoo symbols for a match.
  * Returns up to 50 matches.
  */
-async function searchSymbols(query: string): Promise<string[]> {
+async function searchSymbols(query: string, exchange: string = 'binance'): Promise<string[]> {
   const q = query.toUpperCase();
-  const tickers = await fetchTickers();
+  const tickers = await fetchTickers(exchange);
   const matches: string[] = [];
 
-  // Search Yahoo Indices first
-  for (const s of YAHOO_SYMBOLS) {
-    const alias = getSymbolAlias(s).toUpperCase();
-    if (s.includes(q) || alias.includes(q)) {
-      matches.push(s);
+  // Search Yahoo Indices first (Binance only)
+  if (exchange === 'binance') {
+    for (const s of YAHOO_SYMBOLS) {
+      const alias = getSymbolAlias(s).toUpperCase();
+      if (s.includes(q) || alias.includes(q)) {
+        matches.push(s);
+      }
     }
   }
 
@@ -444,17 +494,18 @@ async function searchSymbols(query: string): Promise<string[]> {
   return [...new Set(matches)];
 }
 
-async function getTopSymbols(count: number): Promise<string[]> {
-  if (symbolCache && Date.now() - symbolCache.ts < SYMBOL_CACHE_TTL) {
-    return symbolCache.data.slice(0, count);
+async function getTopSymbols(count: number, exchange: string = 'binance'): Promise<string[]> {
+  const cached = symbolCache.get(exchange);
+  if (cached && Date.now() - cached.ts < SYMBOL_CACHE_TTL) {
+    return cached.data.slice(0, count);
   }
 
   try {
-    const tickers = await fetchTickers();
+    const tickers = await fetchTickers(exchange);
     const usdtPairs = [...tickers.values()]
       .filter((t) => {
-        // Always include forced symbols (Gold, Forex)
-        if (BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return true;
+        // Always include forced symbols (Gold, Forex) ONLY for Binance
+        if (exchange === 'binance' && BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return true;
         
         if (!t.symbol.endsWith('USDT')) return false;
         // Exclude leverage tokens, stablecoins, wrapped/pegged tokens, and fiat pairs
@@ -462,8 +513,8 @@ async function getTopSymbols(count: number): Promise<string[]> {
         
         // Smart filter: keep PAXG and major Forex, exclude junk
         if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|PYUSD|USD1|WBTC|WBETH|BFUSD|EUR|GBP|AUD|BRL|TRY|BIDR|IDRT|UAH|NGN|PLN|RON|ARS|CZK)$/.test(base)) {
-           // Allow if it's explicitly in our SPECIAL list
-           if (!BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return false;
+           // Allow if it's explicitly in our SPECIAL list (Binance only)
+           if (exchange !== 'binance' || !BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return false;
         }
 
         if (/UP$|DOWN$|BEAR$|BULL$/.test(base)) return false;
@@ -471,22 +522,29 @@ async function getTopSymbols(count: number): Promise<string[]> {
         return Number.isFinite(vol) && vol > 0;
       })
       .sort((a, b) => {
-        // Prioritize special assets so they always make the cut
-        const specA = BINANCE_NATIVE_SPECIAL.includes(a.symbol) ? 1 : 0;
-        const specB = BINANCE_NATIVE_SPECIAL.includes(b.symbol) ? 1 : 0;
-        if (specA !== specB) return specB - specA;
+        // Prioritize special assets so they always make the cut (Binance only)
+        if (exchange === 'binance') {
+          const specA = BINANCE_NATIVE_SPECIAL.includes(a.symbol) ? 1 : 0;
+          const specB = BINANCE_NATIVE_SPECIAL.includes(b.symbol) ? 1 : 0;
+          if (specA !== specB) return specB - specA;
+        }
         return parseFloat(b.quoteVolume) - parseFloat(a.quoteVolume);
       })
     // Map back to strings
     const sortedBinance = usdtPairs.map((t) => t.symbol);
 
-    // Final merge: Yahoo symbols + Binance Specials first, then the rest of sortedBinance
-    const finalSymbols = [...new Set([...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL, ...sortedBinance])];
+    // Final merge: Yahoo symbols + Binance Specials first (Binance only), then the rest of sortedBinance
+    const finalSymbols = exchange === 'binance' 
+      ? [...new Set([...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL, ...sortedBinance])]
+      : sortedBinance;
     
-    symbolCache = { data: finalSymbols, ts: Date.now() };
+    symbolCache.set(exchange, { data: finalSymbols, ts: Date.now() });
     return finalSymbols.slice(0, count);
   } catch {
-    return FALLBACK_SYMBOLS.slice(0, count);
+    const list = exchange === 'binance' 
+      ? FALLBACK_SYMBOLS 
+      : FALLBACK_SYMBOLS.filter(s => !YAHOO_SYMBOLS.includes(s) && !BINANCE_NATIVE_SPECIAL.includes(s));
+    return list.slice(0, count);
   }
 }
 
@@ -581,12 +639,57 @@ async function fetchYahooKlines(symbol: string, interval: string = '1m'): Promis
   }
 }
 
+interface BybitKlineResponse {
+  retCode: number;
+  result: {
+    list: string[][];
+  };
+}
+
+async function fetchBybitKlines(symbol: string, interval: string, exchange: string): Promise<BinanceKline[]> {
+  try {
+    const limit = interval === '60' ? KLINE_LIMIT_1H : KLINE_LIMIT;
+    const category = exchange.includes('spot') ? 'spot' : 'linear';
+    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`, {
+      signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
+      cache: 'no-store' as RequestCache,
+    });
+    if (!res.ok) throw new Error(`Bybit kline API ${res.status}`);
+    const payload = await res.json() as BybitKlineResponse;
+    const rows = payload.result?.list ?? [];
+
+    // Bybit returns newest first, reverse to match Binance (oldest first)
+    rows.reverse();
+
+    return rows.map((row) => {
+      const ts = parseInt(row[0], 10);
+      return [
+        ts,
+        row[1], // open
+        row[2], // high
+        row[3], // low
+        row[4], // close
+        row[5], // volume
+        ts + (interval === '60' ? 3600000 : 60000) - 1, // closeTime
+        row[6], // turnover
+        0, "0", "0", "0"
+      ] as BinanceKline;
+    });
+  } catch (err) {
+    debugWarn(`[bybit] kline fetch failed for ${symbol}:`, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
 /**
  * Fetch 1m klines for a single symbol.
  */
-async function fetchKlines(symbol: string): Promise<BinanceKline[]> {
+async function fetchKlines(symbol: string, exchange: string = 'binance'): Promise<BinanceKline[]> {
   if (YAHOO_SYMBOLS.includes(symbol)) {
     return fetchYahooKlines(symbol, '1m');
+  }
+  if (exchange.startsWith('bybit')) {
+    return fetchBybitKlines(symbol, '1', exchange);
   }
   return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1m&limit=${KLINE_LIMIT}`, `1m candle for ${symbol}`);
 }
@@ -594,18 +697,21 @@ async function fetchKlines(symbol: string): Promise<BinanceKline[]> {
 /**
  * Fetch 1h klines for a single symbol.
  */
-async function fetchKlines1h(symbol: string): Promise<BinanceKline[]> {
+async function fetchKlines1h(symbol: string, exchange: string = 'binance'): Promise<BinanceKline[]> {
   if (YAHOO_SYMBOLS.includes(symbol)) {
     return fetchYahooKlines(symbol, '1h');
+  }
+  if (exchange.startsWith('bybit')) {
+    return fetchBybitKlines(symbol, '60', exchange);
   }
   return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_LIMIT_1H}`, `1h candle for ${symbol}`);
 }
 
-async function fetchTickersSafe(): Promise<Map<string, BinanceTicker>> {
+async function fetchTickersSafe(exchange: string = 'binance'): Promise<Map<string, BinanceTicker>> {
   try {
-    return await fetchTickers();
+    return await fetchTickers(exchange);
   } catch {
-    return tickerCache?.data ?? new Map<string, BinanceTicker>();
+    return tickerCache.get(exchange)?.data ?? new Map<string, BinanceTicker>();
   }
 }
 
@@ -613,7 +719,8 @@ async function fetchTickersSafe(): Promise<Map<string, BinanceTicker>> {
  * Fetch both 1m and 1h klines in a single concurrent pass per symbol.
  */
 async function fetchAllKlinesBatched(
-  symbols: string[]
+  symbols: string[],
+  exchange: string = 'binance'
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
   // Greatly reduced concurrency for stability on Vercel/Cloud functions to avoid 429 Too Many Requests
@@ -628,8 +735,8 @@ async function fetchAllKlinesBatched(
 
       // Fetch both in parallel for this symbol
       const [res1m, res1h] = await Promise.allSettled([
-        fetchKlines(sym),
-        fetchKlines1h(sym)
+        fetchKlines(sym, exchange),
+        fetchKlines1h(sym, exchange)
       ]);
 
       // Adaptive stagger to avoid slamming all API end-points at exactly the same microsecond
@@ -927,22 +1034,23 @@ function runRefresh(
   smartMode: boolean,
   rsiPeriod: number = 14,
   search?: string,
-  prioritySymbols: string[] = []
+  prioritySymbols: string[] = [],
+  exchange: string = 'binance'
 ): Promise<ScreenerResponse> {
-  const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod)}:${search || ''}:${prioritySymbols.join(',')}`;
+  const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange)}:${search || ''}:${prioritySymbols.join(',')}`;
   const existing = refreshInFlight.get(inflightKey);
   if (existing) return existing;
 
   const work = (async (): Promise<ScreenerResponse> => {
     const start = Date.now();
     const nowTs = Date.now();
-    debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}) starting...`);
+    debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}, exchange=${exchange}) starting...`);
 
     // 1. Get top symbols + ticker data + custom configs in parallel
     const [topSymbols, searchMatches, tickers, coinConfigs] = await Promise.all([
-      getTopSymbols(symbolCount),
-      search ? searchSymbols(search) : Promise.resolve([]),
-      fetchTickersSafe(),
+      getTopSymbols(symbolCount, exchange),
+      search ? searchSymbols(search, exchange) : Promise.resolve([]),
+      fetchTickersSafe(exchange),
       getAllCoinConfigs(),
     ]);
 
@@ -951,9 +1059,9 @@ function runRefresh(
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
     const staleBefore = nowTs - INDICATOR_CACHE_TTL;
-    const uncachedSymbols = symbols.filter((sym) => !indicatorCache.has(`${sym}:${rsiPeriod}`));
+    const uncachedSymbols = symbols.filter((sym) => !indicatorCache.has(`${sym}:${rsiPeriod}:${exchange}`));
     let symbolsToRefresh = symbols.filter((sym) => {
-      const cached = indicatorCache.get(`${sym}:${rsiPeriod}`);
+      const cached = indicatorCache.get(`${sym}:${rsiPeriod}:${exchange}`);
       return !cached || cached.ts < staleBefore;
     });
 
@@ -1001,12 +1109,12 @@ function runRefresh(
         if (Math.abs(volA - volB) > 2) return volB - volA;
 
         // 3. Gap Fill priority (Uncached symbols)
-        const aCached = indicatorCache.has(`${a}:${rsiPeriod}`);
-        const bCached = indicatorCache.has(`${b}:${rsiPeriod}`);
+        const aCached = indicatorCache.has(`${a}:${rsiPeriod}:${exchange}`);
+        const bCached = indicatorCache.has(`${b}:${rsiPeriod}:${exchange}`);
         if (aCached !== bCached) return aCached ? 1 : -1;
         
-        const ta = indicatorCache.get(`${a}:${rsiPeriod}`)?.ts ?? 0;
-        const tb = indicatorCache.get(`${b}:${rsiPeriod}`)?.ts ?? 0;
+        const ta = indicatorCache.get(`${a}:${rsiPeriod}:${exchange}`)?.ts ?? 0;
+        const tb = indicatorCache.get(`${b}:${rsiPeriod}:${exchange}`)?.ts ?? 0;
         return ta - tb; // oldest first
       });
       symbolsToRefresh = symbolsToRefresh.slice(0, refreshCap);
@@ -1021,7 +1129,7 @@ function runRefresh(
     let failedCount = 0;
 
     if (symbolsToRefresh.length > 0) {
-      const batchResults = await fetchAllKlinesBatched(symbolsToRefresh);
+      const batchResults = await fetchAllKlinesBatched(symbolsToRefresh, exchange);
 
       for (const { sym, res1m, res1h } of batchResults) {
         klineResultBySymbol1m.set(sym, res1m);
@@ -1080,7 +1188,7 @@ function runRefresh(
         if (!klines1m || klines1m.length === 0) {
           debugWarn(`[screener] ${sym}: kline fetch returned empty`);
         } else {
-          const prevEntry = indicatorCache.get(`${sym}:${rsiPeriod}`)?.entry;
+          const prevEntry = indicatorCache.get(`${sym}:${rsiPeriod}:${exchange}`)?.entry;
           const entry = buildEntry(
             sym,
             klines1m,
@@ -1093,13 +1201,13 @@ function runRefresh(
           );
           if (entry) {
             entries.push(entry);
-            indicatorCache.set(`${sym}:${rsiPeriod}`, { entry: entry, ts: nowTs });
+            indicatorCache.set(`${sym}:${rsiPeriod}:${exchange}`, { entry: entry, ts: nowTs });
             continue;
           }
         }
       }
 
-      const cached = indicatorCache.get(`${sym}:${rsiPeriod}`);
+      const cached = indicatorCache.get(`${sym}:${rsiPeriod}:${exchange}`);
       if (cached) {
         entries.push(withTickerOverlay(cached.entry, ticker, nowTs));
         continue;
@@ -1140,7 +1248,7 @@ function runRefresh(
 
     // Cache the result if there is useful data; keep stale cache on total outage.
     if (response.data.length > 0) {
-      resultCache.set(makeCacheKey(symbolCount, smartMode, rsiPeriod), {
+      resultCache.set(makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange), {
         data: response,
         count: symbolCount,
         smartMode,
@@ -1149,13 +1257,13 @@ function runRefresh(
       return response;
     }
 
-    const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
+    const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
     if (stale) return stale;
 
     return response;
   })()
     .catch(() => {
-      const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
+      const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
       if (stale) return stale;
       return {
         data: [],
@@ -1177,25 +1285,26 @@ function runRefresh(
 export async function getScreenerData(symbolCount = 100, options: ScreenerOptions = {}): Promise<ScreenerResponse> {
   const smartMode = options.smartMode ?? getSmartModeDefault();
   const rsiPeriod = options.rsiPeriod ?? 14;
-  maybeTrafficWarm(symbolCount, smartMode);
+  const exchange = options.exchange ?? 'binance';
+  maybeTrafficWarm(symbolCount, smartMode, exchange, rsiPeriod);
 
   // Return cached result if fresh enough and same count.
   const resultCacheTtl = getResultCacheTtl(symbolCount);
-  const cachedEntry = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod));
+  const cachedEntry = resultCache.get(makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange));
   if (cachedEntry && cachedEntry.count >= symbolCount && Date.now() - cachedEntry.ts < resultCacheTtl) {
     if (cachedEntry.count === symbolCount) return cachedEntry.data;
-    const cached = fromCachedResult(symbolCount, smartMode, rsiPeriod);
+    const cached = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
     if (cached) return cached;
   }
 
   // Stale-first: always return cached snapshot instantly.
   // WebSocket keeps prices live between indicator refreshes.
-  const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
+  const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
   if (stale) {
-    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols);
+    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, exchange);
     return stale;
   }
 
   // No usable stale snapshot available; compute (deduplicated by symbolCount).
-  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols);
+  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, exchange);
 }

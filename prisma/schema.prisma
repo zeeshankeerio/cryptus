@@ -96,6 +96,7 @@ model CoinConfig {
 model AlertLog {
   id        String   @id @default(uuid())
   symbol    String
+  exchange  String?
   timeframe String
   value     Float
   type      String

@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import type { ScreenerEntry } from '@/lib/types';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
 import { computeStrategyScore } from '@/lib/indicators';
+import { getSymbolAlias } from '@/lib/symbol-utils';
 
 declare global {
   interface Window {
@@ -13,6 +14,7 @@ declare global {
 export interface Alert {
   id: string;
   symbol: string;
+  exchange?: string;
   timeframe: string;
   value: number;
   type: 'OVERSOLD' | 'OVERBOUGHT' | 'STRATEGY_STRONG_BUY' | 'STRATEGY_STRONG_SELL';
@@ -319,15 +321,25 @@ export function useAlertEngine(
             const stateKey = `${symbol}-${label}`;
             // Gap 8: undefined = uninitialized, treat same as NEUTRAL for zone calc
             const previousZone = (zoneState.current.get(stateKey) ?? 'NEUTRAL') as 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT';
+            const isInverted = obT < osT;
             let zone: 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT' = 'NEUTRAL';
 
             if (previousZone === 'OVERSOLD') {
-              zone = val > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD';
+              zone = isInverted 
+                ? (val < osT - hysteresis ? 'NEUTRAL' : 'OVERSOLD')
+                : (val > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD');
             } else if (previousZone === 'OVERBOUGHT') {
-              zone = val < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT';
+              zone = isInverted
+                ? (val > obT + hysteresis ? 'NEUTRAL' : 'OVERBOUGHT')
+                : (val < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT');
             } else {
-              if (val <= osT) zone = 'OVERSOLD';
-              else if (val >= obT) zone = 'OVERBOUGHT';
+              if (isInverted) {
+                if (val >= osT) zone = 'OVERSOLD';
+                else if (val <= obT) zone = 'OVERBOUGHT';
+              } else {
+                if (val <= osT) zone = 'OVERSOLD';
+                else if (val >= obT) zone = 'OVERBOUGHT';
+              }
             }
 
             currentZones.set(label, zone);
@@ -362,13 +374,13 @@ export function useAlertEngine(
                 const val = timeframes.find(t => t.label === label)?.val ?? 0;
 
                 toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
-                  `${symbol.replace('USDT', '')} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
+                  `${getSymbolAlias(symbol)} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
                   { duration: 6000 }
                 );
                 playAlertSoundRef.current();
                 logAlertRef.current({ symbol, timeframe: label, value: val as number, type: currentZone as Alert['type'] });
                 triggerNativeRef.current(
-                  `${symbol.replace('USDT', '')} ${currentZone}`,
+                  `${getSymbolAlias(symbol)} ${currentZone}`,
                   `${label} RSI reached ${(val as number).toFixed(1)}`
                 );
               }
@@ -408,13 +420,13 @@ export function useAlertEngine(
                 lastTriggered.current.set(alertKey, now);
                 const isBuy = currentStrat === 'strong-buy';
                 toast[isBuy ? 'success' : 'error'](
-                  `${symbol.replace('USDT', '')} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
+                  `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
                   { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
                 );
                 playAlertSoundRef.current();
                 logAlertRef.current({ symbol, timeframe: 'STRAT', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
                 triggerNativeRef.current(
-                  `${symbol.replace('USDT', '')} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
+                  `${getSymbolAlias(symbol)} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
                   `Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
                 );
               }
@@ -427,22 +439,24 @@ export function useAlertEngine(
       // ── Phase 4: Worker-triggered alerts (Instant Response) ──
       const handleWorkerAlert = (e: Event) => {
         if (!enabledRef.current) return;
-        const { symbol, timeframe, value, type } = (e as CustomEvent).detail;
+        const { symbol, exchange, timeframe, value, type } = (e as CustomEvent).detail;
 
         const config = coinConfigsRef.current[symbol];
         if (!config) return;
 
         // Gap 2: unified key — same as worker now uses
-        const alertKey = `${symbol}-${timeframe}`;
+        const alertKey = `${exchange}:${symbol}-${timeframe}`;
         const now = Date.now();
         if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
           lastTriggered.current.set(alertKey, now);
 
-          const isStrat = timeframe === 'STRAT';
-          const cleanSymbol = symbol.replace('USDT', '');
+          const isStrat = timeframe === 'STRATEGY';
+          const alias = getSymbolAlias(symbol);
+          const exchangeLabel = exchange ? ` [${exchange.charAt(0).toUpperCase() + exchange.slice(1)}]` : '';
+          
           const title = isStrat
-            ? `${cleanSymbol} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
-            : `${cleanSymbol} ${timeframe} RSI ${type}`;
+            ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
+            : `${alias}${exchangeLabel} ${timeframe} RSI ${type}`;
           const desc = isStrat
             ? `Strategy Score: ${value.toFixed(0)}`
             : `RSI: ${value.toFixed(1)}`;
@@ -453,16 +467,16 @@ export function useAlertEngine(
           );
 
           playAlertSoundRef.current();
-          logAlertRef.current({ symbol, timeframe, value, type: type as Alert['type'] });
+          logAlertRef.current({ symbol, exchange, timeframe, value, type: type as Alert['type'] });
           triggerNativeRef.current(title, desc);
         }
       };
 
       eng.addEventListener('ticks', handleBatchTicks);
-      eng.addEventListener('worker-alert', handleWorkerAlert);
+      eng.addEventListener('alert', handleWorkerAlert);
       return () => {
         eng.removeEventListener('ticks', handleBatchTicks);
-        eng.removeEventListener('worker-alert', handleWorkerAlert);
+        eng.removeEventListener('alert', handleWorkerAlert);
       };
     }
   }, []); // Gap 1: empty deps — attaches once, uses refs for live values

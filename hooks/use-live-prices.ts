@@ -17,11 +17,11 @@ export interface LiveTick {
   rsiCustom?: number;
   ema9?: number;
   ema21?: number;
-  emaCross?: string;
+  emaCross?: 'bullish' | 'bearish' | 'none';
   macdHistogram?: number;
   bbPosition?: number;
   strategyScore?: number;
-  strategySignal?: string;
+  strategySignal?: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
 }
 
 /**
@@ -34,12 +34,25 @@ class PriceTickEngine extends EventTarget {
   private worker: Worker | null = null;
   private symbols = new Set<string>();
   private virtualPollInterval: any = null;
+  private exchange: string = 'binance';
+
+  constructor() {
+    super();
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('crypto-rsi-exchange');
+      if (saved) {
+        console.log(`[PriceEngine] Restoring exchange: ${saved}`);
+        this.exchange = saved;
+      }
+    }
+  }
 
   start(initialSymbols: Set<string>) {
     if (typeof window === 'undefined' || this.worker) return;
     this.symbols = initialSymbols;
-    
+
     this.worker = new Worker('/ticker-worker.js');
+
     this.worker.onmessage = (e) => {
       const { type, payload } = e.data;
       if (type === 'TICKS') {
@@ -50,12 +63,20 @@ class PriceTickEngine extends EventTarget {
           this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
         });
         this.dispatchEvent(new CustomEvent('ticks', { detail: batch }));
+      } else if (type === 'ALERT_TRIGGERED') {
+        this.dispatchEvent(new CustomEvent('alert', { detail: payload }));
+      } else if (type === 'PRIORITY_SYNC') {
+        this.dispatchEvent(new CustomEvent('priority-sync', { detail: payload }));
       }
     };
 
     this.worker.postMessage({
       type: 'START',
-      payload: { symbols: Array.from(this.symbols), flushInterval: 800 }
+      payload: { 
+        symbols: Array.from(this.symbols), 
+        flushInterval: 300,
+        exchange: this.exchange
+      }
     });
 
     // ── Virtual Market Emulation (Indices/CFDs) ──
@@ -67,6 +88,7 @@ class PriceTickEngine extends EventTarget {
     if (this.virtualPollInterval) return;
     
     this.virtualPollInterval = setInterval(async () => {
+      if (this.exchange !== 'binance') return;
       const yahooSymbols = Array.from(this.symbols).filter(s => 
         ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
       );
@@ -109,6 +131,26 @@ class PriceTickEngine extends EventTarget {
     }
   }
 
+  setExchange(exchange: string) {
+    if (this.exchange === exchange) return;
+    this.exchange = exchange;
+    
+    // Clear UI-side price cache to avoid "flash" of previous exchange data
+    this.prices.clear();
+    
+    localStorage.setItem('crypto-rsi-exchange', exchange);
+    if (this.worker) {
+      this.worker.postMessage({
+        type: 'SET_EXCHANGE',
+        payload: { exchange }
+      });
+    }
+  }
+
+  getExchange() {
+    return this.exchange;
+  }
+
   getLatest(symbol: string): LiveTick | undefined {
     return this.prices.get(symbol);
   }
@@ -149,6 +191,7 @@ if (typeof window !== 'undefined') {
 export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
   const [isConnected, setIsConnected] = useState(false);
   const [livePrices, setLivePrices] = useState<Map<string, LiveTick>>(new Map());
+  const [exchange, setExchangeState] = useState<string>(() => engine.getExchange());
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -217,7 +260,18 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     engine.updateSymbols(symbols);
   }, [symbols]);
 
-  return { isConnected, livePrices, syncStates: (d: any) => engine.syncStates(d) };
+  return { 
+    isConnected, 
+    livePrices, 
+    syncStates: (d: any) => engine.syncStates(d),
+    exchange,
+    setExchange: (e: string) => {
+      engine.setExchange(e);
+      setExchangeState(e);
+    },
+    updateSymbols: (s: Set<string>) => engine.updateSymbols(s),
+    postToWorker: (m: any) => engine.postToWorker(m)
+  };
 }
 
 /**

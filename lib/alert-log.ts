@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 
 export interface AlertLogEntry {
   symbol: string;
+  exchange?: string;
   timeframe: string;
   value: number;
   type: string;
@@ -12,6 +13,7 @@ export async function createAlertLog(entry: AlertLogEntry) {
     return await prisma.alertLog.create({
       data: {
         symbol: entry.symbol,
+        exchange: entry.exchange,
         timeframe: entry.timeframe,
         value: entry.value,
         type: entry.type,

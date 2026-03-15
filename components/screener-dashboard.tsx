@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Search, Bell, Settings, Filter, Star, Info, Download,
+  Search, Bell, BellOff, Settings, Filter, Star, Info, Download,
   RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
@@ -19,6 +19,7 @@ import { useLivePrices, useSymbolPrice } from '@/hooks/use-live-prices';
 import { useAlertEngine } from '@/hooks/use-alert-engine';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
 import { computeStrategyScore } from '@/lib/indicators';
+import { getSymbolAlias } from '@/lib/symbol-utils';
 import { toast } from 'sonner';
 
 // ─── Formatting helpers ────────────────────────────────────────
@@ -97,9 +98,9 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
     neutral: 'bg-slate-800/50 text-slate-400 border-slate-700/50',
   };
   return (
-    <span className={cn("inline-flex items-center px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-tight rounded-full border", styles[signal])}>
-      {signal === 'oversold' && <ChevronDown size={10} className="mr-1" />}
-      {signal === 'overbought' && <ChevronUp size={10} className="mr-1" />}
+    <span className={cn("inline-flex items-center px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm transition-all duration-300", styles[signal])}>
+      {signal === 'oversold' && <div className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />}
+      {signal === 'overbought' && <div className="w-1.5 h-1.5 rounded-full bg-current mr-2 animate-pulse" />}
       {signal}
     </span>
   );
@@ -115,7 +116,7 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
   };
   const title = reasons?.length ? reasons.join(' \u00B7 ') : undefined;
   return (
-    <span className={cn("inline-flex items-center px-2 py-0.5 text-[10px] font-bold uppercase rounded border", styles[signal])} title={title}>
+    <span className={cn("inline-flex items-center px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all", styles[signal])} title={title}>
       {label}
     </span>
   );
@@ -129,27 +130,12 @@ function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
     Index: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
   };
   return (
-    <span className={cn("px-1.5 py-0.5 text-[7px] font-black uppercase tracking-widest rounded border shrink-0", styles[market])}>
+    <span className={cn("px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.2em] rounded-sm border shrink-0 shadow-sm", styles[market])}>
       {market}
     </span>
   );
 }
 
-function getSymbolAlias(symbol: string): string {
-  if (symbol === 'PAXGUSDT') return 'GOLD (XAU)';
-  if (symbol === 'SILVER') return 'SILVER (XAG)';
-  if (symbol === 'SPX') return 'S&P 500';
-  if (symbol === 'NDAQ') return 'NASDAQ 100';
-  if (symbol === 'DOW') return 'DOW JONES';
-  if (symbol === 'FTSE') return 'FTSE 100';
-  if (symbol === 'DAX') return 'DAX 40';
-  if (symbol === 'NKY') return 'NIKKEI 225';
-  if (symbol === 'EURUSDT') return 'EUR/USD';
-  if (symbol === 'GBPUSDT') return 'GBP/USD';
-  if (symbol === 'AUDUSDT') return 'AUD/USD';
-  if (symbol === 'JPYUSDT') return 'USD/JPY';
-  return symbol.replace('USDT', '');
-}
 
 // ─── Screener Row (Memoized) ───────────────────────────────────
 
@@ -363,7 +349,7 @@ const ScreenerRow = memo(function ScreenerRow({
       transition={{ duration: 0.3 }}
       ref={rowRef}
       className={cn(
-        "group transition-colors duration-500 hover:bg-white/[0.02]",
+        "group transition-colors duration-300 hover:bg-white/[0.04]",
         !isFlash && getRsiBg(display.rsiCustom ?? display.rsi15m)
       )}
       style={{
@@ -376,43 +362,53 @@ const ScreenerRow = memo(function ScreenerRow({
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
           className={cn(
-            "transition-all duration-200 transform group-hover:scale-110",
-            isStarred ? "text-yellow-400" : "text-slate-800 hover:text-slate-600"
+            "transition-all duration-200 transform hover:scale-125 focus:outline-none",
+            isStarred ? "text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.4)]" : "text-slate-800 hover:text-slate-600"
           )}
         >
-          <Star size={14} fill={isStarred ? "currentColor" : "none"} />
+          <Star size={13} fill={isStarred ? "currentColor" : "none"} strokeWidth={isStarred ? 0 : 2} />
         </button>
       </td>
       <td className="px-3 py-4">
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5">
-            <span className="font-black text-white text-sm tracking-tight">{getSymbolAlias(entry.symbol)}</span>
+            <span className="font-black text-white text-[13px] tracking-tight hover:text-[#39FF14] transition-colors cursor-pointer" onClick={() => onOpenSettings(entry.symbol)}>{getSymbolAlias(entry.symbol)}</span>
             <MarketBadge market={entry.market} />
           </div>
-          {entry.market === 'Crypto' && <span className="text-slate-700 text-[9px] font-black uppercase opacity-50">USDT</span>}
+          {entry.market === 'Crypto' && <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">USDT</span>}
         </div>
       </td>
-      <td className="px-3 py-4 text-right tabular-nums font-bold font-mono">
+      <td className="px-3 py-4 text-right tabular-nums font-bold font-mono text-[13px] relative overflow-hidden">
         <motion.span
           key={`${entry.symbol}-price-${display.price}`}
-          initial={{
-            opacity: display.lastPriceChange ? 0.4 : 1,
-            scale: display.lastPriceChange ? 0.95 : 1,
-            color: display.lastPriceChange && display.lastPriceChange > 0 ? '#39FF14' : display.lastPriceChange && display.lastPriceChange < 0 ? '#FF4B5C' : '#e2e8f0'
-          }}
-          animate={{ opacity: 1, scale: 1, color: '#e2e8f0' }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
-          className="text-white inline-block"
+          initial={{ y: display.lastPriceChange > 0 ? 4 : -4, opacity: 0.5 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className={cn(
+            "inline-block transition-colors duration-700",
+            display.lastPriceChange > 0 ? "text-[#39FF14]" : display.lastPriceChange < 0 ? "text-[#FF4B5C]" : "text-slate-100"
+          )}
         >
           ${formatPrice(display.price)}
         </motion.span>
+        {display.lastPriceChange !== 0 && (
+          <motion.div
+            initial={{ opacity: 0.6, scaleX: 0 }}
+            animate={{ opacity: 0, scaleX: 1 }}
+            transition={{ duration: 0.4 }}
+            className={cn(
+              "absolute inset-x-0 bottom-0 h-[1px]",
+              display.lastPriceChange > 0 ? "bg-[#39FF14]" : "bg-[#FF4B5C]"
+            )}
+          />
+        )}
       </td>
       <td className={cn(
         "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
         display.change24h > 0 ? "text-[#39FF14]" : display.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"
       )}>
         <div className="flex items-center justify-end gap-1.5">
-          {display.change24h > 0 ? <TrendingUp size={12} /> : display.change24h < 0 ? <TrendingDown size={12} /> : null}
+          {display.change24h > 0 ? <TrendingUp size={11} className="drop-shadow-[0_0_5px_rgba(57,255,20,0.3)]" /> : display.change24h < 0 ? <TrendingDown size={11} className="drop-shadow-[0_0_5px_rgba(255,75,92,0.3)]" /> : null}
           {display.change24h > 0 ? '+' : ''}{display.change24h.toFixed(2)}%
         </div>
       </td>
@@ -878,6 +874,7 @@ const ScreenerCard = memo(function ScreenerCard({
   onSaveConfig,
   visibleCols,
   reportVisibility,
+  exchange,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -889,6 +886,7 @@ const ScreenerCard = memo(function ScreenerCard({
   onSaveConfig: (symbol: string, config: any) => Promise<void>;
   visibleCols: Set<ColumnId>;
   reportVisibility: (symbol: string, isVisible: boolean) => void;
+  exchange: string;
 }) {
   const isStarred = watchlist.has(entry.symbol);
 
@@ -1100,7 +1098,7 @@ const ScreenerCard = memo(function ScreenerCard({
             <MarketBadge market={entry.market} />
           </div>
           <div className="text-[7px] font-black text-slate-700 uppercase leading-none mt-0.5">
-            {entry.market === 'Crypto' ? 'USDT • Binance' : 'Global Market'}
+            {entry.market === 'Crypto' ? `USDT • ${exchange.startsWith('bybit') ? 'Bybit' : 'Binance'}` : 'Global Market'}
           </div>
         </div>
       </div>
@@ -1283,13 +1281,13 @@ export default function ScreenerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [alertsEnabled, setAlertsEnabled] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('crypto-rsi-alerts-enabled');
     if (saved === null) return true; // Default to ENABLED
     return saved === '1';
   });
   const [soundEnabled, setSoundEnabled] = useState(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     const saved = localStorage.getItem('crypto-rsi-sound-enabled');
     if (saved === null) return true; // Default to ENABLED
     return saved === '1';
@@ -1327,7 +1325,7 @@ export default function ScreenerDashboard() {
 
   useEffect(() => {
     setHasMounted(true);
-    
+
     // Defer localStorage reads to after mount to prevent hydration mismatch
     const alerts = localStorage.getItem('crypto-rsi-alerts-enabled');
     if (alerts !== null) setAlertsEnabled(alerts === '1');
@@ -1354,7 +1352,7 @@ export default function ScreenerDashboard() {
     if (cols) {
       try {
         setVisibleCols(new Set(JSON.parse(cols)));
-      } catch {}
+      } catch { }
     }
   }, []);
 
@@ -1393,20 +1391,77 @@ export default function ScreenerDashboard() {
     // Pre-flight sharding: warm up sockets with majors while waiting for API
     return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
   }, [data]);
-  const { livePrices, isConnected, syncStates } = useLivePrices(symbolSet);
+  const { livePrices, isConnected, syncStates, exchange, setExchange, updateSymbols, postToWorker } = useLivePrices(symbolSet, 300);
+
+  // ─── Hybrid Atomic Data ───
+  // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
+  // It merges the SWR data (from API) with the Live WebSocket prices (from useLivePrices).
+  const processedData = useMemo<ScreenerEntry[]>(() => {
+    if (data.length === 0) return [];
+    
+    return data.map(entry => {
+      // 1. Get live price data
+      const live = livePrices.get(entry.symbol);
+      
+      // 2. Base merged entry
+      let merged: ScreenerEntry = live ? {
+        ...entry,
+        price: live.price,
+        change24h: live.change24h,
+        volume24h: live.volume24h,
+        rsi1m: live.rsi1m ?? entry.rsi1m,
+        rsi5m: live.rsi5m ?? entry.rsi5m,
+        rsi15m: live.rsi15m ?? entry.rsi15m,
+        rsi1h: live.rsi1h ?? entry.rsi1h,
+        rsiCustom: live.rsiCustom ?? entry.rsiCustom,
+        emaCross: (live.emaCross ?? entry.emaCross) as any, // Cast to any then back if needed, or just satisfy the type
+        strategyScore: live.strategyScore ?? entry.strategyScore,
+        strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
+      } : entry;
+
+      // Type safety enforcement for the unions
+      if (live) {
+        if (live.emaCross) merged.emaCross = live.emaCross;
+        if (live.strategySignal) merged.strategySignal = live.strategySignal;
+      }
+
+      // 3. Apply custom RSI approximation if period changed
+      if (merged.rsiStateCustom && (merged.rsiPeriodAtCreation !== rsiPeriod)) {
+        const approx = approximateRsi(merged.rsiStateCustom, merged.price, rsiPeriod);
+        merged = { ...merged, rsiCustom: approx };
+      }
+
+      return merged;
+    });
+  }, [data, livePrices, rsiPeriod]);
 
   // Sync state to Background Worker for Instant Alerts (Debounced)
   useEffect(() => {
-    if (data.length === 0) return;
+    if (processedData.length === 0 && watchlist.size === 0) return;
 
     const timer = setTimeout(() => {
       const states: Record<string, any> = {};
-      const visibleSymbols = visibleSymbolsRef.current;
       
-      data.forEach(entry => {
-        // Sync everything initially, or prioritize visible symbols
-        // To ensure alert logic works even for off-screen items, we sync all
-        // but we could throttle the update frequency for off-screen items in the future.
+      // 1. Collect all alertable symbols from configs
+      const alertSymbols = new Set<string>();
+      Object.entries(coinConfigs).forEach(([sym, cfg]) => {
+        if (cfg.alertOn1m || cfg.alertOn5m || cfg.alertOn15m || cfg.alertOn1h || cfg.alertOnCustom || cfg.alertOnStrategyShift) {
+          alertSymbols.add(sym);
+        }
+      });
+
+      // 2. Union of all symbols the worker should track
+      const allTrackedSymbols = new Set([
+        ...processedData.map(e => e.symbol),
+        ...Array.from(watchlist),
+        ...Array.from(alertSymbols)
+      ]);
+
+      // 3. Update worker with full symbol set
+      updateSymbols(allTrackedSymbols);
+
+      // 4. Sync intelligence states
+      processedData.forEach(entry => {
         states[entry.symbol] = {
           rsiState1m: entry.rsiState1m,
           rsiState5m: entry.rsiState5m,
@@ -1428,24 +1483,20 @@ export default function ScreenerDashboard() {
         };
       });
       syncStates({ configs: coinConfigs, rsiStates: states });
-    }, 800); // Higher debounce for mass sync
+
+      // 5. Ensure worker is connected to both if alerts are active
+      if (alertSymbols.size > 0) {
+        // We ensure both are connected to facilitate background alerts
+        // The worker is now concurrent, so this is safe and expected.
+        postToWorker({ type: 'SET_EXCHANGE', payload: { exchange: 'binance' } });
+        postToWorker({ type: 'SET_EXCHANGE', payload: { exchange: 'bybit' } });
+      }
+    }, 800);
 
     return () => clearTimeout(timer);
-  }, [data, coinConfigs, syncStates]);
+  }, [processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker]);
 
-  // ─── Hybrid Atomic Data ───
-  // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
-  // It does NOT update on every WebSocket flush, preventing full-table re-renders.
-  const processedData = useMemo(() => {
-    return data.map(entry => {
-      if (entry.rsiPeriodAtCreation !== rsiPeriod || !entry.rsiStateCustom) {
-        return entry;
-      }
-      const rsiCustom = approximateRsi(entry.rsiStateCustom, entry.price, rsiPeriod);
-      if (rsiCustom === entry.rsiCustom) return entry;
-      return { ...entry, rsiCustom };
-    });
-  }, [data, rsiPeriod]);
+  // Removed old duplicate processedData block
 
   const { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext } = useAlertEngine(processedData, coinConfigs, alertsEnabled, soundEnabled);
 
@@ -1628,10 +1679,10 @@ export default function ScreenerDashboard() {
     try {
       if (!background) setError(null);
       const timeoutMs = pairCount >= 800 ? 60_000 : pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
-      
+
       const prioritySymbols = Array.from(visibleSymbolsRef.current).join(',');
-      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}`;
-      
+      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}`;
+
       const res = await fetch(url, {
         signal: AbortSignal.timeout(timeoutMs),
       });
@@ -1648,6 +1699,30 @@ export default function ScreenerDashboard() {
       setMeta(json.meta);
       setError(null);
       setLoading(false);
+
+      // PERFECT COUPLING: Sync indicator baselines for shadowing engine
+      const rsiStates: Record<string, any> = {};
+      json.data.forEach((e: any) => {
+        if (e.rsi1m !== null) {
+          rsiStates[e.symbol] = {
+            rsiState1m: e.rsiState1m,
+            rsiState5m: e.rsiState5m,
+            rsiState15m: e.rsiState15m,
+            rsiState1h: e.rsiState1h,
+            rsiStateCustom: e.rsiStateCustom,
+            ema9State: e.ema9State,
+            ema21State: e.ema21State,
+            macdFastState: e.macdFastState,
+            macdSlowState: e.macdSlowState,
+            macdSignalState: e.macdSignalState,
+            bbUpper: e.bbUpper,
+            bbLower: e.bbLower,
+            confluence: e.confluence,
+            lastClose: e.price
+          };
+        }
+      });
+      syncStates({ rsiStates, configs: coinConfigs });
     } catch (err) {
       if (dataLenRef.current === 0) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
@@ -1657,7 +1732,7 @@ export default function ScreenerDashboard() {
       setRefreshing(false);
       setLoading(false);
     }
-  }, [pairCount, smartMode, rsiPeriod, search]);
+  }, [pairCount, smartMode, rsiPeriod, search, exchange]);
 
   // Handle priority syncs from worker for fast-moving coins
   useEffect(() => {
@@ -1694,7 +1769,7 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     if (alertsEnabled && typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => {});
+        Notification.requestPermission().catch(() => { });
       }
     }
   }, [alertsEnabled]);
@@ -1776,6 +1851,17 @@ export default function ScreenerDashboard() {
     }, 400); // 400ms debounce to avoid spamming while dragging slider
     return () => clearTimeout(timer);
   }, [rsiPeriod, fetchData]);
+
+  // ── Trigger refetch on Exchange change ──
+  useEffect(() => {
+    if (hasMounted && dataLenRef.current > 0) {
+      // Clear data for visual feedback that a full reload is happening
+      setData([]);
+      dataLenRef.current = 0;
+      setLoading(true);
+      fetchData();
+    }
+  }, [exchange, fetchData, hasMounted]);
 
   // ── Debounced Server-side Search ──
   useEffect(() => {
@@ -1968,35 +2054,40 @@ export default function ScreenerDashboard() {
           {/* Desktop Header Layout */}
           <div className="hidden lg:flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 relative z-10">
             <div>
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[9px] font-bold tracking-widest text-slate-400 uppercase backdrop-blur-sm transition-all hover:bg-white/10">
-                  Mindscape Analytics LLC
-                </div>
-                {session && (
-                  <div className="inline-flex items-center gap-1.5 rounded-full border border-white/5 bg-white/5 px-1.5 py-1 group/auth transition-all hover:bg-white/10">
-                    <div className="w-4 h-4 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
-                      <UserIcon size={10} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-300 pr-1 truncate">
-                      {session.user.name || session.user.email}
-                    </span>
-                    <button
-                      onClick={async () => {
-                        setIsLoggingOut(true);
-                        await signOut({
-                          fetchOptions: {
-                            onSuccess: () => { router.push('/login'); }
-                          }
-                        });
-                      }}
-                      disabled={isLoggingOut}
-                      className="p-1 rounded-full hover:bg-[#FF4B5C]/20 text-slate-400 hover:text-[#FF4B5C] transition-colors"
-                    >
-                      <LogOut size={10} />
-                    </button>
+              <div className="flex items-center justify-between w-full">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/20 bg-gradient-to-r from-[#39FF14]/10 to-transparent px-3 py-1.2 shadow-[0_0_20px_rgba(57,255,20,0.05)] text-[9px] font-black tracking-widest text-[#39FF14] uppercase backdrop-blur-md transition-all hover:bg-[#39FF14]/20 group/llc">
+                    <Activity size={10} className="text-[#39FF14] animate-pulse" />
+                    <span>Mindscape Analytics LLC</span>
                   </div>
-                )}
+                  {session && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-1 group/auth transition-all hover:bg-white/10">
+                      <div className="w-4 h-4 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
+                        <UserIcon size={10} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-300 pr-1 truncate">
+                        {session.user.name || session.user.email}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          setIsLoggingOut(true);
+                          await signOut({
+                            fetchOptions: {
+                              onSuccess: () => { router.push('/login'); }
+                            }
+                          });
+                        }}
+                        disabled={isLoggingOut}
+                        className="p-1 rounded-full hover:bg-[#FF4B5C]/20 text-slate-400 hover:text-[#FF4B5C] transition-colors"
+                      >
+                        <LogOut size={10} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
               </div>
+
               <h1 className="mt-3 text-4xl font-black text-white tracking-tighter">
                 RSIQ <span className="text-[#39FF14]">Pro</span>
               </h1>
@@ -2058,36 +2149,82 @@ export default function ScreenerDashboard() {
                 </div>
 
                 <div className="h-4 w-px bg-white/5 mx-1" />
-                <div className={cn("inline-flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all", isConnected ? 'border-[#39FF14]/20 bg-[#39FF14]/5 text-[#39FF14]' : 'border-white/5 bg-white/[0.02] text-slate-600')}>
-                  <div className={cn("h-1 w-1 rounded-full", isConnected ? 'bg-[#39FF14]' : 'bg-slate-600')} />
-                  <span className="font-black tracking-tight uppercase text-[9px]">{isConnected ? 'LIVE' : 'OFFLINE'}</span>
+                <div className="flex items-center bg-slate-900/40 rounded-2xl border border-white/5 p-1 shrink-0">
+                  <button
+                    onClick={() => setExchange('binance')}
+                    className={cn(
+                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
+                      exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
+                    )}
+                  >
+                    Binance
+                  </button>
+                  <button
+                    onClick={() => setExchange('bybit')}
+                    className={cn(
+                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
+                      exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
+                    )}
+                  >
+                    Bybit Spot
+                  </button>
+                  <button
+                    onClick={() => setExchange('bybit-linear')}
+                    className={cn(
+                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
+                      exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
+                    )}
+                  >
+                    Bybit Perp
+                  </button>
+                </div>
+                <div className="h-4 w-px bg-white/5 mx-1" />
+                <div className={cn("inline-flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all shadow-sm backdrop-blur-md", isConnected ? 'border-[#39FF14]/20 bg-[#39FF14]/5 text-[#39FF14]' : 'border-white/5 bg-white/[0.02] text-slate-600')}>
+                  <motion.div 
+                    initial={{ scale: 1, opacity: 0.8 }}
+                    animate={{ scale: [1, 1.3, 1], opacity: [0.8, 1, 0.8] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                    className={cn("h-1.5 w-1.5 rounded-full", isConnected ? 'bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.6)]' : 'bg-slate-600')} 
+                  />
+                  <span className="font-black tracking-widest uppercase text-[9px]">{isConnected ? 'LIVE' : 'OFFLINE'}</span>
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-slate-400">
                   <LayoutGrid size={12} className="text-slate-600" />
                   <span className="font-black tracking-tight text-[9px] tabular-nums">{data.length}</span>
                 </div>
-                <button onClick={() => fetchData()} className="group inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/20 bg-[#39FF14]/5 px-4 py-2 text-[9px] font-black tracking-widest text-[#39FF14] hover:bg-[#39FF14]/10 transition-all active:scale-95">
-                  <RefreshCcw size={12} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
-                  <span>{refreshing ? 'UPDATING' : `${countdown}S`}</span>
-                </button>
-                <button onClick={handleExportCsv} className="group inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[9px] font-black tracking-widest text-slate-400 hover:bg-white/5 hover:text-white transition-all active:scale-95" title="Export CSV (Ctrl+E)">
-                  <Download size={12} />
-                  <span>CSV</span>
-                </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between lg:justify-end gap-6 bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-2.5">
-              {[
-                { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
-                { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
-                { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
-              ].map((s) => (
-                <button key={s.label} onClick={s.onClick} className="flex flex-col items-end group/stat">
-                  <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 mb-1 leading-none">{s.label}</span>
-                  <span className={cn("text-sm font-black tabular-nums tracking-tight leading-none", s.color)}><Counter value={s.value} /></span>
+            <div className="flex flex-col items-end gap-4 self-center lg:self-end">
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => fetchData()}
+                  className="group inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/30 bg-[#39FF14]/10 px-4 py-2 text-[10px] font-black tracking-widest text-[#39FF14] hover:bg-[#39FF14]/20 transition-all active:scale-95 shadow-[0_0_20px_rgba(57,255,20,0.1)]"
+                >
+                  <RefreshCcw size={12} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
+                  <span>{refreshing ? 'UPDATING' : `${countdown}S`}</span>
                 </button>
-              ))}
+                <button 
+                  onClick={handleExportCsv} 
+                  className="p-2.5 rounded-2xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all active:scale-90 shadow-sm" 
+                  title="Export CSV (Ctrl+E)"
+                >
+                  <Download size={14} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between lg:justify-end gap-6 bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-3 shadow-inner">
+                {[
+                  { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
+                  { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
+                  { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
+                ].map((s) => (
+                  <button key={s.label} onClick={s.onClick} className="flex flex-col items-end group/stat min-w-[70px]">
+                    <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 mb-1 leading-none transition-colors group-hover/stat:text-slate-300">{s.label}</span>
+                    <span className={cn("text-lg font-black tabular-nums tracking-tighter leading-none", s.color)}><Counter value={s.value} /></span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -2102,7 +2239,12 @@ export default function ScreenerDashboard() {
                 <div>
                   <h1 className="text-xl font-black text-white tracking-widest leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></h1>
                   <div className="flex items-center gap-1.5 mt-1">
-                    <div className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14] animate-pulse" : "bg-slate-700")} />
+                    <motion.div 
+                      initial={{ scale: 1, opacity: 0.8 }}
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
+                      transition={{ duration: 2, repeat: Infinity }}
+                      className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14]" : "bg-slate-700")} 
+                    />
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "LIVE" : "OFFLINE"}</span>
                     <div className="w-1 h-1 rounded-full bg-slate-800" />
                     <span className="text-[8px] font-black text-[#39FF14] tabular-nums">{data.length} PAIRS</span>
@@ -2127,6 +2269,22 @@ export default function ScreenerDashboard() {
 
             {/* Controls Row: Alerts, Toggles, Actions */}
             <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-2 shadow-inner">
+              <div className="w-px h-5 bg-white/10 mx-1" />
+              <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-xl border border-white/10 p-1">
+                <button
+                  onClick={() => setExchange('binance')}
+                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                >BIN</button>
+                <button
+                  onClick={() => setExchange('bybit')}
+                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                >BYB</button>
+                <button
+                  onClick={() => setExchange('bybit-linear')}
+                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                >PRP</button>
+              </div>
+              <div className="w-px h-5 bg-white/10 mx-1" />
               <div className="flex items-center gap-1.5">
                 <motion.button
                   onClick={async () => {
@@ -2428,13 +2586,13 @@ export default function ScreenerDashboard() {
               <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
             </div>
           ) : (
-          <AnimatePresence mode="popLayout">
-            {filtered.map((entry, idx) => (
-              <ScreenerCard
-                key={entry.symbol}
-                entry={entry}
-                idx={idx}
-                watchlist={watchlist}
+            <AnimatePresence mode="popLayout">
+              {filtered.map((entry, idx) => (
+                <ScreenerCard
+                  key={entry.symbol}
+                  entry={entry}
+                  idx={idx}
+                  watchlist={watchlist}
                   toggleWatchlist={toggleWatchlist}
                   rsiPeriod={rsiPeriod}
                   onOpenSettings={(s) => setSelectedCoinForConfig(s)}
@@ -2442,6 +2600,7 @@ export default function ScreenerDashboard() {
                   onSaveConfig={handleSaveConfig}
                   visibleCols={visibleCols}
                   reportVisibility={reportVisibility}
+                  exchange={exchange}
                 />
               ))}
             </AnimatePresence>
@@ -2981,98 +3140,157 @@ function MiniStatCard({ label, value, color }: { label: string; value: number; c
 // Gap 6: Human-readable labels for alert types
 function formatAlertType(type: string): { label: string; isBullish: boolean } {
   switch (type) {
-    case 'OVERSOLD':             return { label: 'Oversold',    isBullish: true };
-    case 'OVERBOUGHT':           return { label: 'Overbought',  isBullish: false };
-    case 'STRATEGY_STRONG_BUY':  return { label: 'Strong Buy',  isBullish: true };
+    case 'OVERSOLD': return { label: 'Oversold', isBullish: true };
+    case 'OVERBOUGHT': return { label: 'Overbought', isBullish: false };
+    case 'STRATEGY_STRONG_BUY': return { label: 'Strong Buy', isBullish: true };
     case 'STRATEGY_STRONG_SELL': return { label: 'Strong Sell', isBullish: false };
     default: return { label: type, isBullish: true };
   }
 }
 
-function formatAlertDetail(timeframe: string, value: number, type: string): string {
-  if (timeframe === 'STRAT') return `Strategy score: ${value.toFixed(0)}`;
-  return `${timeframe} RSI: ${value.toFixed(1)}`;
+function formatAlertDetail(timeframe: string, value: number, type: string, exchange?: string): string {
+  const exchangeLabel = exchange ? `[${exchange.charAt(0).toUpperCase() + exchange.slice(1)}] ` : '';
+  if (timeframe === 'STRATEGY') return `${exchangeLabel}Strategy score: ${value.toFixed(0)}`;
+  return `${exchangeLabel}${timeframe} RSI: ${value.toFixed(1)}`;
 }
 
 function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClose: () => void; onClear: () => void }) {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
   return (
     <motion.div
-      initial={{ y: '100%' }}
-      animate={{ y: 0 }}
-      exit={{ y: '100%' }}
+      initial={{ x: isMobile ? 0 : '100%', y: isMobile ? '100%' : 0 }}
+      animate={{ x: 0, y: 0 }}
+      exit={{ x: isMobile ? 0 : '100%', y: isMobile ? '100%' : 0 }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-      className="fixed bottom-0 left-0 right-0 top-0 sm:top-auto sm:right-0 sm:h-screen w-full sm:w-80 bg-slate-900/95 backdrop-blur-xl border-t sm:border-t-0 sm:border-l border-white/10 z-[100] shadow-2xl overflow-hidden flex flex-col rounded-t-[2rem] sm:rounded-none"
+      className={cn(
+        "fixed z-[200] bg-slate-900/90 backdrop-blur-2xl border-white/10 shadow-2xl overflow-hidden flex flex-col",
+        "bottom-0 left-0 right-0 top-0 sm:top-0 sm:left-auto sm:right-0 sm:h-screen sm:w-[22rem] sm:border-l",
+        isMobile ? "rounded-t-[2.5rem]" : ""
+      )}
     >
-      <div className="p-5 sm:p-6 border-b border-white/10 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+      <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02] sticky top-0 z-10">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] flex items-center gap-2">
             <Bell size={16} className="text-[#39FF14]" />
             Alert History
           </h3>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{alerts.length} signals tracked</p>
+        </div>
+        <div className="flex items-center gap-2">
           {alerts.length > 0 && (
             <button
               onClick={onClear}
-              className="px-2 py-1 rounded-md bg-[#FF4B5C]/10 text-[#FF4B5C] text-[8px] font-black uppercase tracking-widest hover:bg-[#FF4B5C]/20 transition-all border border-[#FF4B5C]/20"
+              className="px-3 py-1.5 rounded-xl bg-[#FF4B5C]/10 text-[#FF4B5C] text-[9px] font-black uppercase tracking-widest hover:bg-[#FF4B5C]/20 transition-all border border-[#FF4B5C]/20"
             >
-              Clear All
+              Flush
             </button>
           )}
+          <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-all hover:bg-white/10">
+            {isMobile ? <ChevronDown size={20} /> : <LogOut size={16} className="rotate-180" />}
+          </button>
         </div>
-        <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition-colors">
-          <ChevronUp size={20} className="rotate-90" />
-        </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-        <AnimatePresence initial={false}>
+
+      <div className="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-gradient-to-b from-transparent to-slate-950/20">
+        <AnimatePresence initial={false} mode="popLayout">
           {alerts.length === 0 ? (
-            <div className="text-center py-20 text-slate-600 text-[10px] font-bold uppercase tracking-widest">
-              No alerts triggered yet
-            </div>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex flex-col items-center justify-center py-24 text-center space-y-4"
+            >
+              <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center border border-white/5">
+                <BellOff size={24} className="text-slate-600" />
+              </div>
+              <div>
+                <p className="text-xs font-black text-slate-500 uppercase tracking-widest">No signals detected</p>
+                <p className="text-[10px] font-bold text-slate-700 uppercase mt-1">Watching markets real-time...</p>
+              </div>
+            </motion.div>
           ) : (
-            alerts.map((alert) => {
+            alerts.map((alert, idx) => {
               const { label, isBullish } = formatAlertType(alert.type);
-              const detail = formatAlertDetail(alert.timeframe, alert.value, alert.type);
-              const createdAt = typeof alert.createdAt === 'string'
-                ? new Date(alert.createdAt).getTime()
-                : alert.createdAt;
-              const isNew = Date.now() - createdAt < 60000;
+              const createdAt = typeof alert.createdAt === 'string' ? new Date(alert.createdAt).getTime() : alert.createdAt;
+              const isNew = Date.now() - createdAt < 30000;
+              
               return (
                 <motion.div
-                  key={alert.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  key={alert.id || idx}
+                  layout
+                  initial={{ opacity: 0, x: 30, scale: 0.95 }}
+                  animate={{ opacity: 1, x: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
                   className={cn(
-                    "p-4 rounded-xl border border-white/5 bg-white/[0.03] relative overflow-hidden group",
-                    isBullish ? "hover:border-[#39FF14]/30" : "hover:border-[#FF4B5C]/30"
+                    "p-5 rounded-2xl border transition-all relative overflow-hidden group min-h-[5.5rem] flex flex-col justify-center",
+                    "bg-slate-800/30 backdrop-blur-sm border-white/5",
+                    isBullish ? "hover:border-[#39FF14]/30 hover:bg-[#39FF14]/5" : "hover:border-[#FF4B5C]/30 hover:bg-[#FF4B5C]/5"
                   )}
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-white">{getSymbolAlias(alert.symbol)}</span>
-                      {isNew && (
-                        <span className="px-1.5 py-0.5 rounded-full bg-[#39FF14]/20 text-[#39FF14] text-[7px] font-black uppercase animate-pulse">NEW</span>
-                      )}
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-white tracking-widest">{getSymbolAlias(alert.symbol)}</span>
+                        {alert.exchange && (
+                          <span className="px-1.5 py-0.5 rounded-md bg-white/5 text-slate-500 text-[8px] font-black uppercase tracking-tighter">
+                            {alert.exchange}
+                          </span>
+                        )}
+                        {isNew && (
+                          <span className="flex h-1.5 w-1.5 rounded-full bg-[#39FF14] animate-ping" />
+                        )}
+                      </div>
+                      <span className="text-[10px] font-black uppercase opacity-60 mt-1">{alert.timeframe} Signal</span>
                     </div>
-                    <span className="text-[8px] font-bold text-slate-500">{formatTimeAgo(createdAt)}</span>
+                    <span className="text-[8px] font-bold text-slate-500 uppercase tabular-nums">{formatTimeAgo(createdAt)}</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={cn(
-                      "text-[8px] font-black uppercase px-1.5 py-0.5 rounded",
-                      isBullish ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#FF4B5C]/20 text-[#FF4B5C]"
+
+                  <div className="flex items-center justify-between">
+                    <div className={cn(
+                      "flex items-center gap-2 px-2.5 py-1 rounded-lg border",
+                      isBullish 
+                        ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" 
+                        : "bg-[#FF4B5C]/10 border-[#FF4B5C]/30 text-[#FF4B5C]"
                     )}>
-                      {label}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-300">{detail}</span>
+                      {isBullish ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+                      <span className="text-[9px] font-black uppercase tracking-[0.1em]">{label}</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[10px] font-black text-white/90 tabular-nums">
+                        {alert.value.toFixed(2)}
+                      </div>
+                      <div className="text-[7px] font-bold text-slate-600 uppercase tracking-widest">Reading</div>
+                    </div>
                   </div>
+
+                  {/* High-fidelity glowing edge */}
                   <div className={cn(
-                    "absolute top-0 right-0 w-1 h-full",
-                    isBullish ? "bg-[#39FF14]/30" : "bg-[#FF4B5C]/30"
+                    "absolute top-0 right-0 bottom-0 w-[3px]",
+                    isBullish ? "bg-[#39FF14]/40 shadow-[0_0_10px_rgba(57,255,20,0.3)]" : "bg-[#FF4B5C]/40 shadow-[0_0_10px_rgba(255,75,92,0.3)]"
                   )} />
                 </motion.div>
               );
             })
           )}
         </AnimatePresence>
+      </div>
+
+      <div className="p-6 border-t border-white/5 bg-slate-900/50">
+        <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-center gap-4">
+          <div className="w-10 h-10 rounded-xl bg-[#39FF14]/10 flex items-center justify-center shrink-0 border border-[#39FF14]/20">
+            <Zap size={20} className="text-[#39FF14]" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-white uppercase tracking-widest">Real-time Stream</span>
+            <span className="text-[8px] font-bold text-slate-500 uppercase mt-0.5 leading-tight">Monitoring all configured exchanges for optimal entry points</span>
+          </div>
+        </div>
       </div>
     </motion.div>
   );

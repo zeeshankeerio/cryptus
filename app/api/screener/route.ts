@@ -12,6 +12,7 @@ export async function GET(request: Request) {
     const rawRsiPeriod = parseInt(searchParams.get('rsiPeriod') ?? '14', 10);
     const smart = searchParams.get('smart');
     const search = searchParams.get('search') ?? undefined;
+    const exchange = searchParams.get('exchange') ?? 'binance';
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
     
     // Sanitize parameters
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const prioritySymbols = searchParams.get('prioritySymbols')?.split(',').filter(Boolean) ?? [];
     const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
 
-    const result = await getScreenerData(count, { smartMode, rsiPeriod, search, prioritySymbols });
+    const result = await getScreenerData(count, { smartMode, rsiPeriod, search, prioritySymbols, exchange });
 
     // Return 503 if the service returned zero data (upstream failure)
     if (result.data.length === 0) {
