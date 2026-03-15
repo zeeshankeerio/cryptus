@@ -56,6 +56,12 @@ export interface ScreenerEntry {
   rsiState5m: { avgGain: number; avgLoss: number; lastClose: number } | null;
   rsiState15m: { avgGain: number; avgLoss: number; lastClose: number } | null;
   rsiState1h: { avgGain: number; avgLoss: number; lastClose: number } | null;
+  // ── Indicator states for live shadowing ──
+  ema9State: { ema: number } | null;
+  ema21State: { ema: number } | null;
+  macdFastState: { ema: number } | null;
+  macdSlowState: { ema: number } | null;
+  macdSignalState: { ema: number } | null;
   isLiveRsi?: boolean;
   signalStartedAt: number;
   lastPriceChange?: number;

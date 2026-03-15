@@ -1,6 +1,6 @@
 import { calculateRsi, calculateRsiWithState } from './rsi';
 import {
-  latestEma, detectEmaCross, calculateMacd,
+  latestEma, detectEmaCross, calculateMacd, calculateEma,
   calculateBollinger, calculateStochRsi, calculateVwap,
   detectVolumeSpike, computeStrategyScore,
   detectRsiDivergence, calculateROC, calculateConfluence,
@@ -13,6 +13,7 @@ interface ScreenerOptions {
   smartMode?: boolean;
   rsiPeriod?: number;
   search?: string;
+  prioritySymbols?: string[]; // Viewport symbols to prioritise
 }
 
 interface SmartTuningState {
@@ -45,7 +46,7 @@ const FETCH_HEADERS: HeadersInit = {
   'Accept': 'application/json',
 };
 const RSI_PERIOD = 14;
-const KLINE_LIMIT = 499; // 499 candles ensures weight 1 (500+ is weight 5). Great for 15m MACD/RSI stability.
+const KLINE_LIMIT = 1000; // 1000 candles ensures enough 15m data for divergence (1000/15 = 66)
 const KLINE_LIMIT_1H = 40; // 40 1h candles: Perfect for 1h RSI (needs > 28 for Wilder stability)
 const BATCH_SIZE = 16;
 const FETCH_RETRY_COUNT = 4; // increased for 600-coin robustness
@@ -261,6 +262,8 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     rsiDivergenceCustom: 'none',
     momentum: null, atr: null, adx: null, rsiState1m: null,
     rsiState5m: null, rsiState15m: null, rsiState1h: null,
+    ema9State: null, ema21State: null, macdFastState: null,
+    macdSlowState: null, macdSignalState: null,
     rsiCustom: null, rsiStateCustom: null,
     rsiPeriodAtCreation: 14,
     signalStartedAt: nowTs,
@@ -632,6 +635,11 @@ async function fetchAllKlinesBatched(
         fetchKlines1h(sym)
       ]);
 
+      // Tiny stagger to avoid slamming all API end-points at exactly the same microsecond
+      if (symbols.length > 200) {
+        await new Promise(r => setTimeout(r, Math.random() * 50));
+      }
+
       results[idx] = { sym, res1m, res1h };
     }
   });
@@ -747,10 +755,38 @@ function buildEntry(
     const rsiCustom = calculateRsi(closes15m, rsiPeriod);
     const rsiStateCustom = calculateRsiWithState(closes15m, rsiPeriod);
 
-    const ema9 = latestEma(closes15m, 9);
-    const ema21 = latestEma(closes15m, 21);
+    const ema9Val = latestEma(closes15m, 9);
+    const ema21Val = latestEma(closes15m, 21);
     const emaCross = detectEmaCross(closes15m, 9, 21);
-    const macd = calculateMacd(closes15m);
+    
+    // MACD states (12, 26, 9)
+    const ema12Arr = calculateEma(closes15m, 12);
+    const ema26Arr = calculateEma(closes15m, 26);
+    const ema12 = ema12Arr.length > 0 ? ema12Arr[ema12Arr.length - 1] : null;
+    const ema26 = ema26Arr.length > 0 ? ema26Arr[ema26Arr.length - 1] : null;
+    
+    let macdLineVal: number | null = null;
+    let macdSignalVal: number | null = null;
+    let macdHistogramVal: number | null = null;
+    let macdSignalState: { ema: number } | null = null;
+
+    if (ema12 !== null && ema26 !== null) {
+      const offset = ema12Arr.length - ema26Arr.length;
+      const macdLineArr: number[] = [];
+      for (let i = 0; i < ema26Arr.length; i++) {
+        macdLineArr.push(ema12Arr[i + offset] - ema26Arr[i]);
+      }
+      const signalArr = calculateEma(macdLineArr, 9);
+      if (signalArr.length > 0) {
+        macdLineVal = macdLineArr[macdLineArr.length - 1];
+        macdSignalVal = signalArr[signalArr.length - 1];
+        if (macdLineVal !== null && macdSignalVal !== null) {
+          macdHistogramVal = macdLineVal - macdSignalVal;
+          macdSignalState = { ema: macdSignalVal };
+        }
+      }
+    }
+
     const bb = calculateBollinger(closes15m);
     const stochRsi = calculateStochRsi(closes15m);
 
@@ -796,7 +832,7 @@ function buildEntry(
 
     const confluenceResult = calculateConfluence({
       rsi1m, rsi5m, rsi15m, rsi1h,
-      macdHistogram: macd?.histogram ?? null,
+      macdHistogram: macdHistogramVal,
       emaCross,
       stochK: stochRsi?.k ?? null,
       bbPosition: bb?.position ?? null,
@@ -807,7 +843,7 @@ function buildEntry(
       rsi5m,
       rsi15m,
       rsi1h,
-      macdHistogram: macd?.histogram ?? null,
+      macdHistogram: macdHistogramVal,
       bbPosition: bb?.position ?? null,
       stochK: stochRsi?.k ?? null,
       stochD: stochRsi?.d ?? null,
@@ -838,12 +874,12 @@ function buildEntry(
       rsi15m,
       signal,
       rsi1h,
-      ema9,
-      ema21,
+      ema9: ema9Val,
+      ema21: ema21Val,
       emaCross,
-      macdLine: macd?.macdLine ?? null,
-      macdSignal: macd?.signalLine ?? null,
-      macdHistogram: macd?.histogram ?? null,
+      macdLine: macdLineVal,
+      macdSignal: macdSignalVal,
+      macdHistogram: macdHistogramVal,
       bbUpper: bb?.upper ?? null,
       bbMiddle: bb?.middle ?? null,
       bbLower: bb?.lower ?? null,
@@ -859,7 +895,7 @@ function buildEntry(
       strategyReasons: strategy.reasons,
       confluence: confluenceResult.score,
       confluenceLabel: confluenceResult.label,
-      rsiDivergence: stdRsiDivergence, // Global column stays at 14 standard
+      rsiDivergence: stdRsiDivergence,
       rsiDivergenceCustom: customDivergence,
       momentum,
       atr,
@@ -868,6 +904,11 @@ function buildEntry(
       rsiState5m,
       rsiState15m,
       rsiState1h,
+      ema9State: ema9Val !== null ? { ema: ema9Val } : null,
+      ema21State: ema21Val !== null ? { ema: ema21Val } : null,
+      macdFastState: ema12 !== null ? { ema: ema12 } : null,
+      macdSlowState: ema26 !== null ? { ema: ema26 } : null,
+      macdSignalState,
       rsiCustom,
       rsiStateCustom,
       rsiPeriodAtCreation: rsiPeriod,
@@ -883,8 +924,14 @@ function buildEntry(
 
 const refreshInFlight = new Map<string, Promise<ScreenerResponse>>();
 
-function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number = 14, search?: string): Promise<ScreenerResponse> {
-  const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod)}:${search || ''}`;
+function runRefresh(
+  symbolCount: number,
+  smartMode: boolean,
+  rsiPeriod: number = 14,
+  search?: string,
+  prioritySymbols: string[] = []
+): Promise<ScreenerResponse> {
+  const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod)}:${search || ''}:${prioritySymbols.join(',')}`;
   const existing = refreshInFlight.get(inflightKey);
   if (existing) return existing;
 
@@ -938,12 +985,24 @@ function runRefresh(symbolCount: number, smartMode: boolean, rsiPeriod: number =
 
     if (symbolsToRefresh.length > refreshCap) {
       symbolsToRefresh.sort((a, b) => {
-        // 0. Strict priority for search matches (ensure they ALWAYS get indicators)
-        const aSearch = searchMatches.includes(a) ? 1 : 0;
-        const bSearch = searchMatches.includes(b) ? 1 : 0;
+        // 0. Strict priority for Viewport symbols (Ensure the user sees live data first)
+        const aPriority = prioritySymbols.includes(a) ? 1 : 0;
+        const bPriority = prioritySymbols.includes(b) ? 1 : 0;
+        if (aPriority !== bPriority) return bPriority - aPriority;
+
+        // 1. Strict priority for search matches
+        const aSearch = search?.toUpperCase().includes(a) || searchMatches.includes(a) ? 1 : 0;
+        const bSearch = search?.toUpperCase().includes(b) || searchMatches.includes(b) ? 1 : 0;
         if (aSearch !== bSearch) return bSearch - aSearch;
 
-        // 1. Strict priority for uncached symbols to fill the "N/A" gaps first
+        // 2. Volatility Boost (Prioritise coins that are actually moving)
+        const tickA = tickers.get(a);
+        const tickB = tickers.get(b);
+        const volA = Math.abs(parseFloat(tickA?.priceChangePercent || '0'));
+        const volB = Math.abs(parseFloat(tickB?.priceChangePercent || '0'));
+        if (Math.abs(volA - volB) > 2) return volB - volA;
+
+        // 3. Gap Fill priority (Uncached symbols)
         const aCached = indicatorCache.has(`${a}:${rsiPeriod}`);
         const bCached = indicatorCache.has(`${b}:${rsiPeriod}`);
         if (aCached !== bCached) return aCached ? 1 : -1;
@@ -1135,10 +1194,10 @@ export async function getScreenerData(symbolCount = 100, options: ScreenerOption
   // WebSocket keeps prices live between indicator refreshes.
   const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod);
   if (stale) {
-    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search);
+    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols);
     return stale;
   }
 
   // No usable stale snapshot available; compute (deduplicated by symbolCount).
-  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search);
+  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols);
 }

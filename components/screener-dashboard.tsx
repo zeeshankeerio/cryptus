@@ -163,7 +163,8 @@ const ScreenerRow = memo(function ScreenerRow({
   rsiPeriod,
   onOpenSettings,
   coinConfigs,
-  onSaveConfig
+  onSaveConfig,
+  reportVisibility
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -175,16 +176,32 @@ const ScreenerRow = memo(function ScreenerRow({
   onOpenSettings: (symbol: string) => void;
   coinConfigs: Record<string, any>;
   onSaveConfig: (symbol: string, config: any) => Promise<void>;
+  reportVisibility: (symbol: string, isVisible: boolean) => void;
 }) {
   const isStarred = watchlist.has(entry.symbol);
+  const [isVisible, setIsVisible] = useState(false);
+  const rowRef = useRef<HTMLTableRowElement>(null);
 
-  // ─── Atomic Real-Time State ───
-  const tick = useSymbolPrice(entry.symbol, entry.price);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([e]) => {
+        setIsVisible(e.isIntersecting);
+        reportVisibility(entry.symbol, e.isIntersecting);
+      },
+      { threshold: 0.01 }
+    );
+    if (rowRef.current) observer.observe(rowRef.current);
+    return () => {
+      observer.disconnect();
+      reportVisibility(entry.symbol, false);
+    };
+  }, [entry.symbol, reportVisibility]);
 
-  // Derived state that updates only when price or config changes
+  // ─── Atomic Real-Time State (Viewport Aware) ───
+  const tick = useSymbolPrice(entry.symbol, entry.price, isVisible);
+
   const liveState = useMemo(() => {
     if (!tick) return null;
-
     const config = coinConfigs[entry.symbol];
     const r1mP = config?.rsi1mPeriod ?? 14;
     const r5mP = config?.rsi5mPeriod ?? 14;
@@ -192,13 +209,11 @@ const ScreenerRow = memo(function ScreenerRow({
     const r1hP = config?.rsi1hPeriod ?? 14;
     const obT = config?.overboughtThreshold ?? 70;
     const osT = config?.oversoldThreshold ?? 30;
-
     let rsi1m = entry.rsi1m;
     let rsi5m = entry.rsi5m;
     let rsi15m = entry.rsi15m;
     let rsi1h = entry.rsi1h;
     let rsiCustom = entry.rsiCustom;
-
     if (entry.rsiState1m) rsi1m = approximateRsi(entry.rsiState1m, tick.price, r1mP);
     if (entry.rsiState5m) rsi5m = approximateRsi(entry.rsiState5m, tick.price, r5mP);
     if (entry.rsiState15m) rsi15m = approximateRsi(entry.rsiState15m, tick.price, r15mP);
@@ -206,30 +221,24 @@ const ScreenerRow = memo(function ScreenerRow({
     if (entry.rsiStateCustom && entry.rsiPeriodAtCreation === rsiPeriod) {
       rsiCustom = approximateRsi(entry.rsiStateCustom, tick.price, rsiPeriod);
     }
-
     let ema9 = entry.ema9;
     let ema21 = entry.ema21;
     if (ema9 !== null) ema9 = approximateEma(ema9, tick.price, 9);
     if (ema21 !== null) ema21 = approximateEma(ema21, tick.price, 21);
-
     let emaCross = entry.emaCross;
-    if (ema9 !== null && ema21 !== null) emaCross = ema9 > ema21 ? 'bullish' : 'bearish';
-
+    if (ema9 !== null && ema21 !== null) emaCross = ema9 > ema21 ? "bullish" : "bearish";
     let bbPosition = entry.bbPosition;
     if (entry.bbUpper !== null && entry.bbLower !== null) {
       const range = entry.bbUpper - entry.bbLower;
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
-
-    // Dynamic signal hijack logic (reproducing what was in mergedData)
     let signal = entry.signal;
     const leadRsi = rsi15m ?? rsi1m;
     if (leadRsi !== null) {
-      if (leadRsi <= osT) signal = 'oversold';
-      else if (leadRsi >= obT) signal = 'overbought';
-      else signal = 'neutral';
+      if (leadRsi <= osT) signal = "oversold";
+      else if (leadRsi >= obT) signal = "overbought";
+      else signal = "neutral";
     }
-
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
       macdHistogram: entry.macdHistogram,
@@ -244,24 +253,47 @@ const ScreenerRow = memo(function ScreenerRow({
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
     });
-
     return {
       price: tick.price,
       change24h: tick.change24h,
       volume24h: tick.volume24h,
-      rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom,
-      ema9, ema21, emaCross, bbPosition,
+      rsi1m: tick.rsi1m ?? rsi1m,
+      rsi5m: tick.rsi5m ?? rsi5m,
+      rsi15m: tick.rsi15m ?? rsi15m,
+      rsi1h: tick.rsi1h ?? rsi1h,
+      rsiCustom: tick.rsiCustom ?? rsiCustom,
+      ema9: tick.ema9 ?? ema9,
+      ema21: tick.ema21 ?? ema21,
+      emaCross: (tick.emaCross as any) ?? emaCross,
+      bbPosition: tick.bbPosition ?? bbPosition,
       signal,
-      strategyScore: liveStrategy.score,
-      strategySignal: liveStrategy.signal,
-      strategyLabel: liveStrategy.label,
+      rsiDivergence: entry.rsiDivergence,
+      macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
+      confluence: entry.confluence,
+      rsiDivergenceCustom: entry.rsiDivergenceCustom,
+      momentum: entry.momentum,
+      atr: entry.atr,
+      adx: entry.adx,
+      vwapDiff: entry.vwapDiff,
+      volumeSpike: entry.volumeSpike,
+      stochK: entry.stochK,
+      stochD: entry.stochD,
+      bbUpper: entry.bbUpper,
+      bbLower: entry.bbLower,
+      bbMiddle: entry.bbMiddle,
+      vwap: entry.vwap,
+      macdLine: entry.macdLine,
+      macdSignal: entry.macdSignal,
+      confluenceLabel: entry.confluenceLabel,
+      strategyScore: tick.strategyScore ?? liveStrategy.score,
+      strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
+      strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
 
-  // Fallback to entry data if no live tick yet
   const display = liveState || {
     price: entry.price,
     change24h: entry.change24h,
@@ -280,24 +312,30 @@ const ScreenerRow = memo(function ScreenerRow({
     strategySignal: entry.strategySignal,
     strategyLabel: entry.strategyLabel,
     strategyReasons: entry.strategyReasons,
+    rsiDivergence: entry.rsiDivergence,
+    rsiDivergenceCustom: entry.rsiDivergenceCustom,
+    momentum: entry.momentum,
+    atr: entry.atr,
+    adx: entry.adx,
+    vwapDiff: entry.vwapDiff,
+    volumeSpike: entry.volumeSpike,
+    macdHistogram: entry.macdHistogram,
+    confluence: entry.confluence,
+    stochK: entry.stochK,
+    stochD: entry.stochD,
+    bbUpper: entry.bbUpper,
+    bbLower: entry.bbLower,
+    bbMiddle: entry.bbMiddle,
+    vwap: entry.vwap,
+    macdLine: entry.macdLine,
+    macdSignal: entry.macdSignal,
+    confluenceLabel: entry.confluenceLabel,
     lastPriceChange: 0,
     isLiveRsi: entry.isLiveRsi
   };
-
   // Intelligence: Signal Pulse state
   const [isFlash, setIsFlash] = useState(false);
   const prevSignal = useRef(display.strategySignal);
-  const [isVisible, setIsVisible] = useState(false);
-  const rowRef = useRef<HTMLTableRowElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([e]) => setIsVisible(e.isIntersecting),
-      { threshold: 0.1 }
-    );
-    if (rowRef.current) observer.observe(rowRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (isVisible && prevSignal.current !== display.strategySignal) {
@@ -453,12 +491,12 @@ const ScreenerRow = memo(function ScreenerRow({
               </>
             )}
 
-            {entry.rsiPeriodAtCreation === rsiPeriod && entry.rsiDivergenceCustom && entry.rsiDivergenceCustom !== 'none' && (
+            {entry.rsiPeriodAtCreation === rsiPeriod && display.rsiDivergenceCustom && display.rsiDivergenceCustom !== 'none' && (
               <span className={cn(
                 "text-[8px] px-1 rounded-sm font-black tracking-tighter uppercase",
-                entry.rsiDivergenceCustom === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#722f37]/20 text-[#FF4B5C]"
+                display.rsiDivergenceCustom === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#722f37]/20 text-[#FF4B5C]"
               )}>
-                {entry.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
+                {display.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
               </span>
             )}
             <motion.span
@@ -488,20 +526,20 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('macdHistogram') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          entry.macdHistogram === null ? "text-slate-700" : entry.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+          display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
-          {formatNum(entry.macdHistogram, 4)}
+          {formatNum(display.macdHistogram, 4)}
         </td>
       )}
 
       {visibleCols.has('bbUpper') && (
         <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-[#FF4B5C]/70">
-          ${entry.bbUpper ? formatPrice(entry.bbUpper) : '—'}
+          ${display.bbUpper ? formatPrice(display.bbUpper) : '—'}
         </td>
       )}
       {visibleCols.has('bbLower') && (
         <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-[#39FF14]/70">
-          ${entry.bbLower ? formatPrice(entry.bbLower) : '—'}
+          ${display.bbLower ? formatPrice(display.bbLower) : '—'}
         </td>
       )}
 
@@ -516,64 +554,64 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('stochK') && (
         <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono">
-          <span className={getRsiColor(entry.stochK)}>{formatRsi(entry.stochK)}</span>
-          {entry.stochD !== null && <span className="text-slate-600 ml-1">/{entry.stochD.toFixed(0)}</span>}
+          <span className={getRsiColor(display.stochK)}>{formatRsi(display.stochK)}</span>
+          {display.stochD !== null && <span className="text-slate-600 ml-1">/{display.stochD.toFixed(0)}</span>}
         </td>
       )}
 
       {visibleCols.has('confluence') && (
         <td className={cn(
           "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
-          entry.confluence >= 15 ? "text-[#39FF14]" : entry.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
+          display.confluence >= 15 ? "text-[#39FF14]" : display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
         )}>
-          {entry.confluenceLabel}
+          {display.confluenceLabel}
         </td>
       )}
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {entry.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
-            entry.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
+          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
+            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
         </td>
       )}
 
       {visibleCols.has('vwapDiff') && (
         <td className={cn(
           "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
-          entry.vwapDiff === null ? "text-slate-700" : entry.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+          display.vwapDiff === null ? "text-slate-700" : display.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
-          {formatPct(entry.vwapDiff)}
+          {formatPct(display.vwapDiff)}
         </td>
       )}
       {visibleCols.has('volumeSpike') && (
         <td className={cn(
           "px-3 py-4 text-right text-[10px] font-black uppercase",
-          entry.volumeSpike === true ? "text-[#39FF14]" : "text-slate-600"
+          display.volumeSpike === true ? "text-[#39FF14]" : "text-slate-600"
         )}>
-          {entry.volumeSpike ? 'SPIKE' : 'Normal'}
+          {display.volumeSpike ? 'SPIKE' : 'Normal'}
         </td>
       )}
 
       {visibleCols.has('momentum') && (
         <td className={cn(
           "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          entry.momentum === null ? "text-slate-700" : entry.momentum > 0 ? "text-emerald-300" : entry.momentum < 0 ? "text-red-300" : "text-slate-500"
+          display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
         )}>
-          {formatPct(entry.momentum)}
+          {formatPct(display.momentum)}
         </td>
       )}
 
       {visibleCols.has('atr') && (
         <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-amber-300/80">
-          {entry.atr !== null ? entry.atr.toFixed(entry.atr < 1 ? 6 : 2) : '—'}
+          {display.atr !== null ? display.atr.toFixed(display.atr < 1 ? 6 : 2) : '—'}
         </td>
       )}
       {visibleCols.has('adx') && (
         <td className={cn(
           "px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono",
-          entry.adx === null ? "text-slate-700" : entry.adx >= 25 ? "text-[#39FF14]" : "text-slate-500"
+          display.adx === null ? "text-slate-700" : display.adx >= 25 ? "text-[#39FF14]" : "text-slate-500"
         )}>
-          {entry.adx !== null ? entry.adx.toFixed(1) : '—'}
+          {display.adx !== null ? display.adx.toFixed(1) : '—'}
         </td>
       )}
 
@@ -839,6 +877,7 @@ const ScreenerCard = memo(function ScreenerCard({
   coinConfigs,
   onSaveConfig,
   visibleCols,
+  reportVisibility,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -847,18 +886,35 @@ const ScreenerCard = memo(function ScreenerCard({
   rsiPeriod: number;
   onOpenSettings: (symbol: string) => void;
   coinConfigs: Record<string, any>;
-  onSaveConfig: (symbol: string, config: any) => void;
-  visibleCols: Set<ColumnId> | undefined;
+  onSaveConfig: (symbol: string, config: any) => Promise<void>;
+  visibleCols: Set<ColumnId>;
+  reportVisibility: (symbol: string, isVisible: boolean) => void;
 }) {
   const isStarred = watchlist.has(entry.symbol);
 
-  // ─── Atomic Real-Time State ───
-  const tick = useSymbolPrice(entry.symbol, entry.price);
+  const [isVisible, setIsVisible] = useState(false);
+  const cardRef = useRef<HTMLDivElement>(null);
 
-  // Derived state that updates only when price or config changes
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([e]) => {
+        setIsVisible(e.isIntersecting);
+        reportVisibility(entry.symbol, e.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => {
+      observer.disconnect();
+      reportVisibility(entry.symbol, false);
+    };
+  }, [entry.symbol, reportVisibility]);
+
+  // ─── Atomic Real-Time State (Viewport Aware) ───
+  const tick = useSymbolPrice(entry.symbol, entry.price, isVisible);
+
   const liveState = useMemo(() => {
     if (!tick) return null;
-
     const config = coinConfigs[entry.symbol];
     const r1mP = config?.rsi1mPeriod ?? 14;
     const r5mP = config?.rsi5mPeriod ?? 14;
@@ -866,13 +922,11 @@ const ScreenerCard = memo(function ScreenerCard({
     const r1hP = config?.rsi1hPeriod ?? 14;
     const obT = config?.overboughtThreshold ?? 70;
     const osT = config?.oversoldThreshold ?? 30;
-
     let rsi1m = entry.rsi1m;
     let rsi5m = entry.rsi5m;
     let rsi15m = entry.rsi15m;
     let rsi1h = entry.rsi1h;
     let rsiCustom = entry.rsiCustom;
-
     if (entry.rsiState1m) rsi1m = approximateRsi(entry.rsiState1m, tick.price, r1mP);
     if (entry.rsiState5m) rsi5m = approximateRsi(entry.rsiState5m, tick.price, r5mP);
     if (entry.rsiState15m) rsi15m = approximateRsi(entry.rsiState15m, tick.price, r15mP);
@@ -880,30 +934,24 @@ const ScreenerCard = memo(function ScreenerCard({
     if (entry.rsiStateCustom && entry.rsiPeriodAtCreation === rsiPeriod) {
       rsiCustom = approximateRsi(entry.rsiStateCustom, tick.price, rsiPeriod);
     }
-
     let ema9 = entry.ema9;
     let ema21 = entry.ema21;
     if (ema9 !== null) ema9 = approximateEma(ema9, tick.price, 9);
     if (ema21 !== null) ema21 = approximateEma(ema21, tick.price, 21);
-
     let emaCross = entry.emaCross;
-    if (ema9 !== null && ema21 !== null) emaCross = ema9 > ema21 ? 'bullish' : 'bearish';
-
+    if (ema9 !== null && ema21 !== null) emaCross = ema9 > ema21 ? "bullish" : "bearish";
     let bbPosition = entry.bbPosition;
     if (entry.bbUpper !== null && entry.bbLower !== null) {
       const range = entry.bbUpper - entry.bbLower;
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
-
-    // Dynamic signal hijack logic (reproducing what was in mergedData)
     let signal = entry.signal;
     const leadRsi = rsi15m ?? rsi1m;
     if (leadRsi !== null) {
-      if (leadRsi <= osT) signal = 'oversold';
-      else if (leadRsi >= obT) signal = 'overbought';
-      else signal = 'neutral';
+      if (leadRsi <= osT) signal = "oversold";
+      else if (leadRsi >= obT) signal = "overbought";
+      else signal = "neutral";
     }
-
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
       macdHistogram: entry.macdHistogram,
@@ -918,24 +966,47 @@ const ScreenerCard = memo(function ScreenerCard({
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
     });
-
     return {
       price: tick.price,
       change24h: tick.change24h,
       volume24h: tick.volume24h,
-      rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom,
-      ema9, ema21, emaCross, bbPosition,
+      rsi1m: tick.rsi1m ?? rsi1m,
+      rsi5m: tick.rsi5m ?? rsi5m,
+      rsi15m: tick.rsi15m ?? rsi15m,
+      rsi1h: tick.rsi1h ?? rsi1h,
+      rsiCustom: tick.rsiCustom ?? rsiCustom,
+      ema9: tick.ema9 ?? ema9,
+      ema21: tick.ema21 ?? ema21,
+      emaCross: (tick.emaCross as any) ?? emaCross,
+      bbPosition: tick.bbPosition ?? bbPosition,
       signal,
-      strategyScore: liveStrategy.score,
-      strategySignal: liveStrategy.signal,
-      strategyLabel: liveStrategy.label,
+      rsiDivergence: entry.rsiDivergence,
+      macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
+      confluence: entry.confluence,
+      rsiDivergenceCustom: entry.rsiDivergenceCustom,
+      momentum: entry.momentum,
+      atr: entry.atr,
+      adx: entry.adx,
+      vwapDiff: entry.vwapDiff,
+      volumeSpike: entry.volumeSpike,
+      stochK: entry.stochK,
+      stochD: entry.stochD,
+      bbUpper: entry.bbUpper,
+      bbLower: entry.bbLower,
+      bbMiddle: entry.bbMiddle,
+      vwap: entry.vwap,
+      macdLine: entry.macdLine,
+      macdSignal: entry.macdSignal,
+      confluenceLabel: entry.confluenceLabel,
+      strategyScore: tick.strategyScore ?? liveStrategy.score,
+      strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
+      strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
 
-  // Fallback to entry data if no live tick yet
   const display = liveState || {
     price: entry.price,
     change24h: entry.change24h,
@@ -954,24 +1025,30 @@ const ScreenerCard = memo(function ScreenerCard({
     strategySignal: entry.strategySignal,
     strategyLabel: entry.strategyLabel,
     strategyReasons: entry.strategyReasons,
+    rsiDivergence: entry.rsiDivergence,
+    rsiDivergenceCustom: entry.rsiDivergenceCustom,
+    momentum: entry.momentum,
+    atr: entry.atr,
+    adx: entry.adx,
+    vwapDiff: entry.vwapDiff,
+    volumeSpike: entry.volumeSpike,
+    macdHistogram: entry.macdHistogram,
+    confluence: entry.confluence,
+    stochK: entry.stochK,
+    stochD: entry.stochD,
+    bbUpper: entry.bbUpper,
+    bbLower: entry.bbLower,
+    bbMiddle: entry.bbMiddle,
+    vwap: entry.vwap,
+    macdLine: entry.macdLine,
+    macdSignal: entry.macdSignal,
+    confluenceLabel: entry.confluenceLabel,
     lastPriceChange: 0,
     isLiveRsi: entry.isLiveRsi
   };
-
   // Intelligence: Signal Pulse state
   const [isFlash, setIsFlash] = useState(false);
   const prevSignal = useRef(display.strategySignal);
-  const [isVisible, setIsVisible] = useState(false);
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([e]) => setIsVisible(e.isIntersecting),
-      { threshold: 0.1 }
-    );
-    if (cardRef.current) observer.observe(cardRef.current);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (isVisible && prevSignal.current !== display.strategySignal) {
@@ -1010,7 +1087,7 @@ const ScreenerCard = memo(function ScreenerCard({
     >
       {/* 1. Asset & Meta */}
       <div className="flex items-center gap-2 w-[110px] shrink-0">
-        <span className="text-[9px] font-black text-slate-700 w-4 tabular-nums">#{idx}</span>
+        <span className="text-[9px] font-black text-slate-700 w-4 tabular-nums">#{idx + 1}</span>
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
           className={cn("transition-all shrink-0", isStarred ? "text-yellow-400" : "text-slate-800")}
@@ -1048,8 +1125,8 @@ const ScreenerCard = memo(function ScreenerCard({
                 ) : col.id === 'strategy' ? (
                   <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} />
                 ) : col.id === 'divergence' ? (
-                  <span className={cn("text-[8px] font-black uppercase", entry.rsiDivergence === 'bullish' ? "text-[#39FF14]" : entry.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {entry.rsiDivergence === 'bullish' ? 'DIV+' : entry.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
+                  <span className={cn("text-[8px] font-black uppercase", display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {display.rsiDivergence === 'bullish' ? 'DIV+' : display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
                   </span>
                 ) : col.id === 'vwapDiff' ? (
                   <span className={cn("text-[10px] font-black tabular-nums font-mono", (val as number) > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
@@ -1232,22 +1309,10 @@ export default function ScreenerDashboard() {
     const saved = localStorage.getItem('crypto-rsi-pairs');
     return saved ? Math.min(Math.max(Number(saved), 10), 600) : 500;
   });
-  const [smartMode, setSmartMode] = useState(() => {
-    if (typeof window === 'undefined') return smartModeDefault;
-    const saved = localStorage.getItem('crypto-rsi-smart-mode');
-    if (saved === null) return smartModeDefault;
-    return saved === '1';
-  });
-  const [showHeader, setShowHeader] = useState(() => {
-    if (typeof window === 'undefined') return true;
-    return localStorage.getItem('crypto-rsi-show-header') !== '0';
-  });
+  const [smartMode, setSmartMode] = useState(smartModeDefault);
+  const [showHeader, setShowHeader] = useState(true);
   const useAnimations = pairCount <= 600; // Disable heavy layout animations for large lists
-  const [rsiPeriod, setRsiPeriod] = useState(() => {
-    if (typeof window === 'undefined') return 14;
-    const saved = localStorage.getItem('crypto-rsi-period');
-    return saved ? Math.min(Math.max(Number(saved), 2), 50) : 14;
-  });
+  const [rsiPeriod, setRsiPeriod] = useState(14);
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
@@ -1255,6 +1320,51 @@ export default function ScreenerDashboard() {
   const [selectedCoinForConfig, setSelectedCoinForConfig] = useState<string | null>(null);
   const fetchingRef = useRef(false);
   const dataLenRef = useRef(0);
+  const visibleSymbolsRef = useRef<Set<string>>(new Set());
+
+  // Use a refined mount-aware hydration strategy for client-only defaults
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+    
+    // Defer localStorage reads to after mount to prevent hydration mismatch
+    const alerts = localStorage.getItem('crypto-rsi-alerts-enabled');
+    if (alerts !== null) setAlertsEnabled(alerts === '1');
+
+    const sound = localStorage.getItem('crypto-rsi-sound-enabled');
+    if (sound !== null) setSoundEnabled(sound === '1');
+
+    const refresh = localStorage.getItem('crypto-rsi-refresh');
+    if (refresh) setRefreshInterval(Number(refresh));
+
+    const pairs = localStorage.getItem('crypto-rsi-pairs');
+    if (pairs) setPairCount(Math.min(Math.max(Number(pairs), 10), 600));
+
+    const smart = localStorage.getItem('crypto-rsi-smart-mode');
+    if (smart !== null) setSmartMode(smart === '1');
+
+    const header = localStorage.getItem('crypto-rsi-show-header');
+    if (header !== null) setShowHeader(header !== '0');
+
+    const rsi = localStorage.getItem('crypto-rsi-period');
+    if (rsi) setRsiPeriod(Math.min(Math.max(Number(rsi), 2), 50));
+
+    const cols = localStorage.getItem('crypto-rsi-visible-cols');
+    if (cols) {
+      try {
+        setVisibleCols(new Set(JSON.parse(cols)));
+      } catch {}
+    }
+  }, []);
+
+  const reportVisibility = useCallback((symbol: string, isVisible: boolean) => {
+    if (isVisible) {
+      visibleSymbolsRef.current.add(symbol);
+    } else {
+      visibleSymbolsRef.current.delete(symbol);
+    }
+  }, []);
 
   // Column visibility
   const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(() => {
@@ -1285,11 +1395,18 @@ export default function ScreenerDashboard() {
   }, [data]);
   const { livePrices, isConnected, syncStates } = useLivePrices(symbolSet);
 
-  // Sync state to Background Worker for Instant Alerts
+  // Sync state to Background Worker for Instant Alerts (Debounced)
   useEffect(() => {
-    if (data.length > 0) {
+    if (data.length === 0) return;
+
+    const timer = setTimeout(() => {
       const states: Record<string, any> = {};
+      const visibleSymbols = visibleSymbolsRef.current;
+      
       data.forEach(entry => {
+        // Sync everything initially, or prioritize visible symbols
+        // To ensure alert logic works even for off-screen items, we sync all
+        // but we could throttle the update frequency for off-screen items in the future.
         states[entry.symbol] = {
           rsiState1m: entry.rsiState1m,
           rsiState5m: entry.rsiState5m,
@@ -1298,14 +1415,22 @@ export default function ScreenerDashboard() {
           rsiStateCustom: entry.rsiStateCustom,
           rsiPeriodAtCreation: entry.rsiPeriodAtCreation,
           lastPrice: entry.price,
-          // Background Strategy Scoring context
           macdHistogram: entry.macdHistogram,
+          ema9State: entry.ema9State,
+          ema21State: entry.ema21State,
+          macdFastState: entry.macdFastState,
+          macdSlowState: entry.macdSlowState,
+          macdSignalState: entry.macdSignalState,
+          bbUpper: entry.bbUpper,
+          bbLower: entry.bbLower,
           bbPosition: entry.bbPosition,
           confluence: entry.confluence
         };
       });
       syncStates({ configs: coinConfigs, rsiStates: states });
-    }
+    }, 800); // Higher debounce for mass sync
+
+    return () => clearTimeout(timer);
   }, [data, coinConfigs, syncStates]);
 
   // ─── Hybrid Atomic Data ───
@@ -1490,7 +1615,11 @@ export default function ScreenerDashboard() {
     try {
       if (!background) setError(null);
       const timeoutMs = pairCount >= 800 ? 60_000 : pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
-      const res = await fetch(`/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}`, {
+      
+      const prioritySymbols = Array.from(visibleSymbolsRef.current).join(',');
+      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}`;
+      
+      const res = await fetch(url, {
         signal: AbortSignal.timeout(timeoutMs),
       });
 
@@ -1516,6 +1645,25 @@ export default function ScreenerDashboard() {
       setLoading(false);
     }
   }, [pairCount, smartMode, rsiPeriod, search]);
+
+  // Handle priority syncs from worker for fast-moving coins
+  useEffect(() => {
+    const handlePrioritySync = (e: Event) => {
+      const symbol = (e as CustomEvent).detail;
+      console.log(`[screener] Priority sync triggered for mover: ${symbol}`);
+      // Add immediately to visible to force precision data fetch
+      visibleSymbolsRef.current.add(symbol);
+      fetchData(true);
+    };
+
+    if (typeof window !== 'undefined') {
+      const engine = (window as any).__priceEngine;
+      if (engine) engine.addEventListener('priority-sync', handlePrioritySync);
+      return () => {
+        if (engine) engine.removeEventListener('priority-sync', handlePrioritySync);
+      };
+    }
+  }, [fetchData]);
 
   // ── Initial fetch with auto-retry and Hydration ──
   const retryCountRef = useRef(0);
@@ -2258,19 +2406,20 @@ export default function ScreenerDashboard() {
               <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
             </div>
           ) : (
-            <AnimatePresence mode="popLayout">
-              {filtered.map((entry, idx) => (
-                <ScreenerCard
-                  key={entry.symbol}
-                  entry={entry}
-                  idx={idx + 1}
-                  watchlist={watchlist}
+          <AnimatePresence mode="popLayout">
+            {filtered.map((entry, idx) => (
+              <ScreenerCard
+                key={entry.symbol}
+                entry={entry}
+                idx={idx}
+                watchlist={watchlist}
                   toggleWatchlist={toggleWatchlist}
                   rsiPeriod={rsiPeriod}
                   onOpenSettings={(s) => setSelectedCoinForConfig(s)}
                   coinConfigs={coinConfigs}
                   onSaveConfig={handleSaveConfig}
                   visibleCols={visibleCols}
+                  reportVisibility={reportVisibility}
                 />
               ))}
             </AnimatePresence>
@@ -2342,6 +2491,7 @@ export default function ScreenerDashboard() {
                         onOpenSettings={(s) => setSelectedCoinForConfig(s)}
                         coinConfigs={coinConfigs}
                         onSaveConfig={handleSaveConfig}
+                        reportVisibility={reportVisibility}
                       />
                     ))}
                   </AnimatePresence>
@@ -3140,4 +3290,3 @@ function GlobalSettingsModal({
     </motion.div>
   );
 }
-

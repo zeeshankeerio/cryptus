@@ -9,6 +9,19 @@ export interface LiveTick {
   volume24h: number;
   updatedAt: number;
   tickDelta?: number;
+  // shadowed indicators
+  rsi1m?: number;
+  rsi5m?: number;
+  rsi15m?: number;
+  rsi1h?: number;
+  rsiCustom?: number;
+  ema9?: number;
+  ema21?: number;
+  emaCross?: string;
+  macdHistogram?: number;
+  bbPosition?: number;
+  strategyScore?: number;
+  strategySignal?: string;
 }
 
 /**
@@ -174,6 +187,8 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
       const { type, payload } = e.data;
       if (type === 'ALERT_TRIGGERED') {
         engine.dispatchEvent(new CustomEvent('worker-alert', { detail: payload }));
+      } else if (type === 'PRIORITY_SYNC') {
+        engine.dispatchEvent(new CustomEvent('priority-sync', { detail: payload }));
       }
     };
 
@@ -201,23 +216,26 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
 /**
  * Hook for individual rows to subscribe to their own updates.
  * ZERO parent-level re-renders.
+ * Now supports an 'enabled' flag for viewport-aware optimizations.
  */
-export function useSymbolPrice(symbol: string, initialPrice: number = 0) {
+export function useSymbolPrice(symbol: string, initialPrice: number = 0, enabled: boolean = true) {
   const [tick, setTick] = useState<LiveTick | null>(() => engine.getLatest(symbol) || null);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
       setTick(detail);
     };
 
     engine.addEventListener(`tick:${symbol}`, handler);
-    // Grab latest once in case it updated during mount
+    // Grab latest once in case it updated during mount or while disabled
     const latest = engine.getLatest(symbol);
     if (latest) setTick(latest);
 
     return () => engine.removeEventListener(`tick:${symbol}`, handler);
-  }, [symbol]);
+  }, [symbol, enabled]);
 
   return tick;
 }

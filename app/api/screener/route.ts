@@ -16,9 +16,10 @@ export async function GET(request: Request) {
     
     // Sanitize parameters
     const count = Math.min(Math.max(Number.isFinite(rawCount) ? rawCount : 100, 10), 1200);
+    const prioritySymbols = searchParams.get('prioritySymbols')?.split(',').filter(Boolean) ?? [];
     const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
 
-    const result = await getScreenerData(count, { smartMode, rsiPeriod, search });
+    const result = await getScreenerData(count, { smartMode, rsiPeriod, search, prioritySymbols });
 
     // Return 503 if the service returned zero data (upstream failure)
     if (result.data.length === 0) {
