@@ -22,8 +22,28 @@ import {
   Layers,
   ArrowUpRight
 } from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
+import { useRouter } from 'next/navigation';
 
 export default function LandingPage() {
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+
+  React.useEffect(() => {
+    if (session && !isPending) {
+      router.push('/terminal');
+    }
+  }, [session, isPending, router]);
+
+  // If session is present, show a minimal loading state while redirecting
+  if (session && !isPending) {
+    return (
+      <div className="min-h-screen bg-[#05080F] flex items-center justify-center">
+        <div className="w-16 h-16 border-t-2 border-[#39FF14] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#05080F] text-slate-300 selection:bg-[#39FF14]/30 selection:text-white overflow-hidden font-sans">
       {/* ─── Grid Overlay ─── */}

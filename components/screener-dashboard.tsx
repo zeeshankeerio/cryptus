@@ -1506,6 +1506,19 @@ export default function ScreenerDashboard() {
       if (res.ok) {
         const updated = await res.json();
         setCoinConfigs(prev => ({ ...prev, [symbol]: updated }));
+
+        // Gap 3: Immediately push new thresholds/periods to the worker without
+        // waiting for the 800ms debounced syncStates — ensures no stale-threshold alerts
+        if (typeof window !== 'undefined') {
+          const eng = (window as any).__priceEngine;
+          if (eng?.postToWorker) {
+            eng.postToWorker({
+              type: 'SYNC_CONFIG_FAST',
+              payload: { symbol, config: updated },
+            });
+          }
+        }
+
         fetchData(true);
       }
     } catch (err) {
@@ -1749,6 +1762,15 @@ export default function ScreenerDashboard() {
 
   // ── Trigger refetch on RSI Period change (debounced) ──
   useEffect(() => {
+    // Gap 4b: Immediately push the new period to the worker so custom RSI
+    // alert evaluations use the correct period without waiting for a data refresh
+    if (typeof window !== 'undefined') {
+      const eng = (window as any).__priceEngine;
+      if (eng?.postToWorker) {
+        eng.postToWorker({ type: 'UPDATE_PERIOD', payload: { period: rsiPeriod } });
+      }
+    }
+
     const timer = setTimeout(() => {
       fetchData();
     }, 400); // 400ms debounce to avoid spamming while dragging slider
@@ -2363,7 +2385,7 @@ export default function ScreenerDashboard() {
               onClick={() => setSelectedCoinForConfig(e.symbol)}
             >
               <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white">{e.symbol.replace('USDT', '')}</span>
+                <span className="text-[10px] font-black text-white">{getSymbolAlias(e.symbol)}</span>
                 <span className="text-[8px] font-bold text-slate-500">${formatPrice(e.price)}</span>
               </div>
               <div className="flex items-center gap-1">
@@ -2381,7 +2403,7 @@ export default function ScreenerDashboard() {
               onClick={() => setSelectedCoinForConfig(e.symbol)}
             >
               <div className="flex flex-col">
-                <span className="text-[10px] font-black text-white">{e.symbol.replace('USDT', '')}</span>
+                <span className="text-[10px] font-black text-white">{getSymbolAlias(e.symbol)}</span>
                 <span className="text-[8px] font-bold text-slate-500">${formatPrice(e.price)}</span>
               </div>
               <div className="flex items-center gap-1">
@@ -2570,7 +2592,7 @@ export default function ScreenerDashboard() {
                   const updated = await res.json();
                   setCoinConfigs(prev => ({ ...prev, [selectedCoinForConfig]: updated }));
 
-                  toast.success(`${selectedCoinForConfig.replace('USDT', '')} Configuration applied.`, {
+                  toast.success(`${getSymbolAlias(selectedCoinForConfig)} Configuration applied.`, {
                     description: "Filters and alerts have been updated in real-time.",
                     duration: 3000
                   });
@@ -2700,65 +2722,61 @@ function CoinSettingsModal({
         className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+        <div className="p-4 sm:p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
           <div>
             <h2 className="text-xl font-black text-white flex items-center gap-2">
-              <Settings size={20} className="text-[#39FF14]" />
-              {symbol.replace('USDT', '')} <span className="text-slate-500 font-bold text-sm">Settings</span>
+              <Settings size={18} className="text-[#39FF14]" />
+              {getSymbolAlias(symbol)} <span className="text-slate-500 font-bold text-sm">Settings</span>
             </h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Customize RSI periods and thresholds</p>
+            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Customize RSI periods and thresholds</p>
           </div>
-          <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
-            <LogOut size={20} className="rotate-180" />
+          <button onClick={onClose} className="p-2 text-slate-500 hover:text-white transition-colors">
+            <LogOut size={18} className="rotate-180" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto max-h-[72vh] custom-scrollbar">
-          <div className="p-6 sm:p-8 space-y-5">
-            {/* RSI Periods Grid 1 */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 whitespace-nowrap">RSI 1m Period</label>
+          <div className="p-4 sm:p-6 space-y-4">
+            {/* RSI Periods Grid - Consolidated for Vertical Efficiency */}
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 1m Period</label>
                 <input
                   type="number"
                   min={2} max={50}
                   value={config.rsi1mPeriod}
                   onChange={(e) => setConfig({ ...config, rsi1mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
+                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 whitespace-nowrap">RSI 5m Period</label>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 5m Period</label>
                 <input
                   type="number"
                   min={2} max={50}
                   value={config.rsi5mPeriod}
                   onChange={(e) => setConfig({ ...config, rsi5mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
+                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
-            </div>
-
-            {/* RSI Periods Grid 2 */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 whitespace-nowrap">RSI 15m Period</label>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 15m Period</label>
                 <input
                   type="number"
                   min={2} max={50}
                   value={config.rsi15mPeriod}
                   onChange={(e) => setConfig({ ...config, rsi15mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
+                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-slate-500 ml-1 whitespace-nowrap">RSI 1h Period</label>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 1h Period</label>
                 <input
                   type="number"
                   min={2} max={50}
                   value={config.rsi1hPeriod}
                   onChange={(e) => setConfig({ ...config, rsi1hPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-3 py-2.5 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
+                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
             </div>
@@ -2766,34 +2784,42 @@ function CoinSettingsModal({
             <div className="h-px bg-white/5" />
 
             {/* Thresholds Grid */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#FF4B5C] ml-1">Overbought</label>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4">
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-[#FF4B5C] ml-0.5">Overbought</label>
                 <input
                   type="number"
-                  min={50} max={95}
+                  min={1} max={99}
                   value={config.overboughtThreshold}
                   onChange={(e) => setConfig({ ...config, overboughtThreshold: parseInt(e.target.value) || 70 })}
-                  className="w-full bg-[#722f37]/5 border border-[#722f37]/20 rounded-xl px-3 py-2.5 text-[#FF4B5C] font-bold focus:outline-none focus:ring-1 focus:ring-[#FF4B5C]/30 transition-all text-sm"
+                  className="w-full bg-[#722f37]/5 border border-[#722f37]/20 rounded-xl px-2.5 py-2 text-[#FF4B5C] font-bold focus:outline-none focus:ring-1 focus:ring-[#FF4B5C]/30 transition-all text-sm"
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-widest text-[#39FF14] ml-1">Oversold</label>
+              <div className="space-y-1">
+                <label className="text-[8px] font-black uppercase tracking-widest text-[#39FF14] ml-0.5">Oversold</label>
                 <input
                   type="number"
-                  min={5} max={50}
+                  min={1} max={99}
                   value={config.oversoldThreshold}
                   onChange={(e) => setConfig({ ...config, oversoldThreshold: parseInt(e.target.value) || 30 })}
-                  className="w-full bg-[#39FF14]/5 border border-[#39FF14]/20 rounded-xl px-3 py-2.5 text-[#39FF14] font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
+                  className="w-full bg-[#39FF14]/5 border border-[#39FF14]/20 rounded-xl px-2.5 py-2 text-[#39FF14] font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
                 />
               </div>
             </div>
 
-            {config.overboughtThreshold <= config.oversoldThreshold + 5 && (
-              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-[10px] text-amber-400 font-bold leading-tight flex items-center gap-2">
-                  <Info size={14} className="shrink-0" />
-                  <span>Tight thresholds detected. This may cause frequent alert transitions.</span>
+            {Math.abs(config.overboughtThreshold - config.oversoldThreshold) <= 5 && (
+              <div className="p-2.5 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-[9px] text-amber-400 font-bold leading-tight flex items-center gap-2">
+                  <Info size={12} className="shrink-0" />
+                  <span>Tight thresholds may cause frequent alert transitions.</span>
+                </p>
+              </div>
+            )}
+            {config.overboughtThreshold < config.oversoldThreshold && (
+              <div className="p-2.5 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                <p className="text-[9px] text-blue-400 font-bold leading-tight flex items-center gap-2">
+                  <Info size={12} className="shrink-0" />
+                  <span>Contrarian: alert fires on crossovers of inverted levels.</span>
                 </p>
               </div>
             )}
@@ -2801,9 +2827,9 @@ function CoinSettingsModal({
             <div className="h-px bg-white/5" />
 
             {/* Alert Toggles */}
-            <div className="space-y-3">
-              <label className="text-[9px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1.5"><Bell size={10} className="text-[#39FF14]" /> Active Alerts</label>
-              <div className="flex flex-wrap gap-2">
+            <div className="space-y-2.5">
+              <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-0.5 flex items-center gap-1.5"><Bell size={10} className="text-[#39FF14]" /> Active Alerts</label>
+              <div className="flex flex-wrap gap-1.5">
                 {[
                   { key: 'alertOn1m', label: '1m' },
                   { key: 'alertOn5m', label: '5m' },
@@ -2816,7 +2842,7 @@ function CoinSettingsModal({
                     disabled={loading}
                     onClick={() => setConfig({ ...config, [tf.key]: !(config as any)[tf.key] })}
                     className={cn(
-                      "px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all tracking-wider border shrink-0",
+                      "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase transition-all tracking-wider border shrink-0",
                       (config as any)[tf.key]
                         ? "bg-[#39FF14]/20 border-[#39FF14]/50 text-[#39FF14]"
                         : "bg-slate-950/50 border-white/5 text-slate-500 hover:text-white"
@@ -2827,10 +2853,10 @@ function CoinSettingsModal({
                 ))}
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-xl bg-orange-500/5 border border-orange-500/20 group">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-orange-500/5 border border-orange-500/20 group">
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <ShieldCheck size={12} />
+                  <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <ShieldCheck size={11} />
                     Confluence
                   </span>
                   <span className="text-[7px] text-slate-500 font-bold uppercase mt-0.5 leading-tight pr-4">
@@ -2840,22 +2866,22 @@ function CoinSettingsModal({
                 <button
                   onClick={() => setConfig({ ...config, alertConfluence: !config.alertConfluence })}
                   className={cn(
-                    "w-10 h-5 rounded-full p-0.5 transition-all flex items-center",
+                    "w-9 h-4.5 rounded-full p-0.5 transition-all flex items-center",
                     config.alertConfluence ? "bg-orange-500" : "bg-slate-800"
                   )}
                 >
                   <div className={cn(
-                    "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
-                    config.alertConfluence ? "translate-x-5" : "translate-x-0"
+                    "w-3.5 h-3.5 rounded-full bg-white transition-all shadow-sm",
+                    config.alertConfluence ? "translate-x-4.5" : "translate-x-0"
                   )} />
                 </button>
               </div>
 
               {/* Strategy Shift Alert Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl bg-blue-500/5 border border-blue-500/20 group">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-blue-500/5 border border-blue-500/20 group">
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
-                    <BrainCircuit size={12} />
+                  <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <BrainCircuit size={11} />
                     Strategy Shift
                   </span>
                   <span className="text-[7px] text-slate-500 font-bold uppercase mt-0.5 leading-tight pr-4">
@@ -2865,13 +2891,13 @@ function CoinSettingsModal({
                 <button
                   onClick={() => setConfig({ ...config, alertOnStrategyShift: !config.alertOnStrategyShift })}
                   className={cn(
-                    "w-10 h-5 rounded-full p-0.5 transition-all flex items-center",
+                    "w-9 h-4.5 rounded-full p-0.5 transition-all flex items-center",
                     config.alertOnStrategyShift ? "bg-blue-500" : "bg-slate-800"
                   )}
                 >
                   <div className={cn(
-                    "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
-                    config.alertOnStrategyShift ? "translate-x-5" : "translate-x-0"
+                    "w-3.5 h-3.5 rounded-full bg-white transition-all shadow-sm",
+                    config.alertOnStrategyShift ? "translate-x-4.5" : "translate-x-0"
                   )} />
                 </button>
               </div>
@@ -2879,11 +2905,11 @@ function CoinSettingsModal({
           </div>
         </div>
 
-        <div className="p-6 border-t border-white/5 bg-white/[0.02]">
+        <div className="p-4 sm:p-5 border-t border-white/5 bg-white/[0.02]">
           <button
             disabled={loading}
             onClick={handleSave}
-            className="w-full bg-[#39FF14] text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-[#39FF14]/90 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#39FF14]/10"
+            className="w-full bg-[#39FF14] text-black font-black uppercase tracking-widest py-3.5 rounded-xl hover:bg-[#39FF14]/90 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-[#39FF14]/10 text-sm"
           >
             {loading ? 'SAVING...' : 'APPLY CONFIGURATION'}
           </button>
@@ -2952,6 +2978,22 @@ function MiniStatCard({ label, value, color }: { label: string; value: number; c
 
 // ─── Alert History Panel ───────────────────────────────────────
 
+// Gap 6: Human-readable labels for alert types
+function formatAlertType(type: string): { label: string; isBullish: boolean } {
+  switch (type) {
+    case 'OVERSOLD':             return { label: 'Oversold',    isBullish: true };
+    case 'OVERBOUGHT':           return { label: 'Overbought',  isBullish: false };
+    case 'STRATEGY_STRONG_BUY':  return { label: 'Strong Buy',  isBullish: true };
+    case 'STRATEGY_STRONG_SELL': return { label: 'Strong Sell', isBullish: false };
+    default: return { label: type, isBullish: true };
+  }
+}
+
+function formatAlertDetail(timeframe: string, value: number, type: string): string {
+  if (timeframe === 'STRAT') return `Strategy score: ${value.toFixed(0)}`;
+  return `${timeframe} RSI: ${value.toFixed(1)}`;
+}
+
 function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClose: () => void; onClear: () => void }) {
   return (
     <motion.div
@@ -2987,40 +3029,48 @@ function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClos
               No alerts triggered yet
             </div>
           ) : (
-            alerts.map((alert) => (
-              <motion.div
-                key={alert.id}
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                className={cn(
-                  "p-4 rounded-xl border border-white/5 bg-white/[0.03] relative overflow-hidden group",
-                  alert.type === 'OVERSOLD' ? "hover:border-[#39FF14]/30" : "hover:border-[#FF4B5C]/30"
-                )}
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-white">{alert.symbol.replace('USDT', '')}</span>
-                    {Date.now() - (typeof alert.createdAt === 'string' ? new Date(alert.createdAt).getTime() : alert.createdAt) < 60000 && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-[#39FF14]/20 text-[#39FF14] text-[7px] font-black uppercase animate-pulse">NEW</span>
-                    )}
+            alerts.map((alert) => {
+              const { label, isBullish } = formatAlertType(alert.type);
+              const detail = formatAlertDetail(alert.timeframe, alert.value, alert.type);
+              const createdAt = typeof alert.createdAt === 'string'
+                ? new Date(alert.createdAt).getTime()
+                : alert.createdAt;
+              const isNew = Date.now() - createdAt < 60000;
+              return (
+                <motion.div
+                  key={alert.id}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className={cn(
+                    "p-4 rounded-xl border border-white/5 bg-white/[0.03] relative overflow-hidden group",
+                    isBullish ? "hover:border-[#39FF14]/30" : "hover:border-[#FF4B5C]/30"
+                  )}
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-white">{getSymbolAlias(alert.symbol)}</span>
+                      {isNew && (
+                        <span className="px-1.5 py-0.5 rounded-full bg-[#39FF14]/20 text-[#39FF14] text-[7px] font-black uppercase animate-pulse">NEW</span>
+                      )}
+                    </div>
+                    <span className="text-[8px] font-bold text-slate-500">{formatTimeAgo(createdAt)}</span>
                   </div>
-                  <span className="text-[8px] font-bold text-slate-500">{formatTimeAgo(typeof alert.createdAt === 'string' ? new Date(alert.createdAt).getTime() : alert.createdAt)}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={cn(
-                    "text-[8px] font-black uppercase px-1.5 py-0.5 rounded",
-                    alert.type === 'OVERSOLD' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#FF4B5C]/20 text-[#FF4B5C]"
-                  )}>
-                    {alert.type}
-                  </span>
-                  <span className="text-[10px] font-bold text-slate-300">{alert.timeframe} RSI: {alert.value.toFixed(1)}</span>
-                </div>
-                <div className={cn(
-                  "absolute top-0 right-0 w-1 h-full",
-                  alert.type === 'OVERSOLD' ? "bg-[#39FF14]/30" : "bg-[#FF4B5C]/30"
-                )} />
-              </motion.div>
-            ))
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      "text-[8px] font-black uppercase px-1.5 py-0.5 rounded",
+                      isBullish ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#FF4B5C]/20 text-[#FF4B5C]"
+                    )}>
+                      {label}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-300">{detail}</span>
+                  </div>
+                  <div className={cn(
+                    "absolute top-0 right-0 w-1 h-full",
+                    isBullish ? "bg-[#39FF14]/30" : "bg-[#FF4B5C]/30"
+                  )} />
+                </motion.div>
+              );
+            })
           )}
         </AnimatePresence>
       </div>

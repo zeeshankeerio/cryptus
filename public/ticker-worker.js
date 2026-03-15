@@ -1,7 +1,11 @@
 /**
- * RSIQ PRO Ticker Worker
- * Offloads Binance WebSocket parsing and buffering from the main thread.
- * Ensures 60fps UI even with 600+ coins updating rapidly.
+ * RSIQ PRO Ticker Worker — v2 (Alert-Hardened)
+ * Offloads Binance WebSocket parsing, buffering, and real-time alert evaluation.
+ *
+ * Fixes in v2:
+ *  - Gap 2: Strategy cooldown key unified to `${sym}-STRAT` (was `STRAT-WATCH`)
+ *  - Gap 4: Handles UPDATE_PERIOD message for accurate custom RSI alerts
+ *  - Gap 8: Zone state starts as `undefined` — alert never fires on very first tick
  */
 
 let socket = null;
@@ -16,11 +20,14 @@ let currentSymbols = new Set();
 let volatilityBuffer = new Map(); // symbol -> { startPrice, startTime }
 
 // Real-time Intelligence State
-let rsiStates = new Map(); // symbol -> { indicator states: rsi, ema, macd, etc. }
+let rsiStates = new Map();   // symbol -> { indicator states: rsi, ema, macd, etc. }
 let coinConfigs = new Map(); // symbol -> config
-let zoneStates = new Map(); // symbol-timeframe -> zone
+let zoneStates = new Map();  // symbol-timeframe -> zone (undefined = uninitialized)
 let lastTriggered = new Map(); // alertKey -> timestamp
 const COOLDOWN_MS = 3 * 60 * 1000;
+
+// Gap 4: track global custom RSI period separate from per-coin creation period
+let globalRsiPeriod = 14;
 
 self.onmessage = (e) => {
   const { type, payload } = e.data;
@@ -43,9 +50,42 @@ self.onmessage = (e) => {
       }
       if (payload.rsiStates) {
         Object.keys(payload.rsiStates).forEach(s => {
-            const prevState = rsiStates.get(s) || {};
-            rsiStates.set(s, { ...prevState, ...payload.rsiStates[s] });
+          const prevState = rsiStates.get(s) || {};
+          rsiStates.set(s, { ...prevState, ...payload.rsiStates[s] });
         });
+      }
+      break;
+
+    // Gap 4: Accept instant config updates for a single symbol without full re-sync
+    case 'SYNC_CONFIG_FAST':
+      // payload: { symbol, config }
+      if (payload.symbol && payload.config) {
+        coinConfigs.set(payload.symbol, payload.config);
+        // Reset zone state for this symbol so new thresholds apply cleanly
+        for (const [key] of zoneStates) {
+          if (key.startsWith(`${payload.symbol}-`)) {
+            zoneStates.delete(key);
+          }
+        }
+        // Also reset cooldown so user can see immediate effect of new config
+        for (const [key] of lastTriggered) {
+          if (key.startsWith(`${payload.symbol}-`)) {
+            lastTriggered.delete(key);
+          }
+        }
+      }
+      break;
+
+    // Gap 4: Update global custom RSI period immediately
+    case 'UPDATE_PERIOD':
+      if (typeof payload.period === 'number' && payload.period >= 2) {
+        globalRsiPeriod = payload.period;
+        // Reset custom RSI zone states so new period applies without old state
+        for (const [key] of zoneStates) {
+          if (key.endsWith('-Custom')) {
+            zoneStates.delete(key);
+          }
+        }
       }
       break;
 
@@ -53,17 +93,17 @@ self.onmessage = (e) => {
       stopSocket();
       stopFlushing();
       break;
-    
+
     case 'VIRTUAL_TICKET':
       processTicker(payload);
       break;
 
     case 'UPDATE_CONFIG':
-        if (payload.flushInterval) {
-            stopFlushing();
-            startFlushing(payload.flushInterval);
-        }
-        break;
+      if (payload.flushInterval) {
+        stopFlushing();
+        startFlushing(payload.flushInterval);
+      }
+      break;
   }
 };
 
@@ -158,7 +198,7 @@ function processTicker(t) {
   // ── Real-time Indicator Shadowing ──
   const state = rsiStates.get(t.s);
   const config = coinConfigs.get(t.s);
-  
+
   let liveIndicators = {};
 
   if (state && config) {
@@ -166,9 +206,11 @@ function processTicker(t) {
     const r5mP = config.rsi5mPeriod || 14;
     const r15mP = config.rsi15mPeriod || 14;
     const r1hP = config.rsi1hPeriod || 14;
-    const rCP = state.rsiPeriodAtCreation || 14;
-    const obT = config.overboughtThreshold || 70;
-    const osT = config.oversoldThreshold || 30;
+    // Gap 4: Use the global rsiPeriod for custom RSI calculation (keeps it in sync with UI)
+    const rCP = globalRsiPeriod;
+
+    const obT = config.overboughtThreshold != null ? config.overboughtThreshold : 70;
+    const osT = config.oversoldThreshold != null ? config.oversoldThreshold : 30;
     const hysteresis = computeHysteresis(obT, osT);
 
     // Live RSI shadowing
@@ -176,6 +218,7 @@ function processTicker(t) {
     const rsi5m = approximateRsi(state.rsiState5m, close, r5mP);
     const rsi15m = approximateRsi(state.rsiState15m, close, r15mP);
     const rsi1h = approximateRsi(state.rsiState1h, close, r1hP);
+    // Gap 4: use the correct period (global) not stale creation-time period
     const rsiCustom = approximateRsi(state.rsiStateCustom, close, rCP);
 
     // Live EMA shadowing
@@ -221,17 +264,18 @@ function processTicker(t) {
 
     // ── Alert Evaluation ──
     const tfs = [
-      { label: '1m', rsi: rsi1m, cfgKey: 'alertOn1m' },
-      { label: '5m', rsi: rsi5m, cfgKey: 'alertOn5m' },
-      { label: '15m', rsi: rsi15m, cfgKey: 'alertOn15m' },
-      { label: '1h', rsi: rsi1h, cfgKey: 'alertOn1h' },
+      { label: '1m',     rsi: rsi1m,     cfgKey: 'alertOn1m'     },
+      { label: '5m',     rsi: rsi5m,     cfgKey: 'alertOn5m'     },
+      { label: '15m',    rsi: rsi15m,    cfgKey: 'alertOn15m'    },
+      { label: '1h',     rsi: rsi1h,     cfgKey: 'alertOn1h'     },
       { label: 'Custom', rsi: rsiCustom, cfgKey: 'alertOnCustom' }
     ];
 
     tfs.forEach(tf => {
-      if (!config[tf.cfgKey] || tf.rsi === null) return;
+      if (!config[tf.cfgKey] || tf.rsi === null || tf.rsi === undefined) return;
+
       const stateKey = `${t.s}-${tf.label}`;
-      const previousZone = zoneStates.get(stateKey) || 'NEUTRAL';
+      const previousZone = zoneStates.get(stateKey); // undefined = uninitialized (Gap 8)
       let zone = 'NEUTRAL';
 
       if (previousZone === 'OVERSOLD') {
@@ -239,22 +283,26 @@ function processTicker(t) {
       } else if (previousZone === 'OVERBOUGHT') {
         zone = tf.rsi < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT';
       } else {
+        // NEUTRAL or uninitialized: determine zone from current RSI
         if (tf.rsi <= osT) zone = 'OVERSOLD';
         else if (tf.rsi >= obT) zone = 'OVERBOUGHT';
       }
 
-      if (previousZone !== zone && zone !== 'NEUTRAL') {
+      // Gap 8: Only fire if previousZone is a known state (not undefined/uninitialized)
+      // This prevents spurious alerts on first tick after app load or config save
+      if (previousZone !== undefined && previousZone !== zone && zone !== 'NEUTRAL') {
         // Confluence check
-        let hasConfluence = !config.alertConfluence || tfs.some(other => 
-           other.label !== tf.label && config[other.cfgKey] && other.rsi !== null && 
-           (zone === 'OVERSOLD' ? other.rsi <= osT : other.rsi >= obT)
+        let hasConfluence = !config.alertConfluence || tfs.some(other =>
+          other.label !== tf.label && config[other.cfgKey] && other.rsi !== null &&
+          (zone === 'OVERSOLD' ? other.rsi <= osT : other.rsi >= obT)
         );
 
         if (hasConfluence) {
+          // Gap 2: Unified key `${sym}-${label}` — no separate STRAT-WATCH key
           const alertKey = `${t.s}-${tf.label}`;
-          const now = Date.now();
-          if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
-            lastTriggered.set(alertKey, now);
+          const nowTs = Date.now();
+          if (nowTs - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
+            lastTriggered.set(alertKey, nowTs);
             self.postMessage({
               type: 'ALERT_TRIGGERED',
               payload: { symbol: t.s, timeframe: tf.label, value: tf.rsi, type: zone }
@@ -267,15 +315,18 @@ function processTicker(t) {
 
     // Strategy Shift Alerts
     if (config.alertOnStrategyShift) {
+      // Gap 8: Use undefined to represent "uninitialized" for strategy as well
       const stratKey = `${t.s}-STRAT`;
-      const prevStrat = zoneStates.get(stratKey) || 'neutral';
+      const prevStrat = zoneStates.get(stratKey); // undefined on first tick
       const currentStrat = currentStrategy.signal;
 
-      if (prevStrat !== currentStrat && (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
-        const alertKey = `${t.s}-STRAT-WATCH`;
-        const now = Date.now();
-        if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
-          lastTriggered.set(alertKey, now);
+      if (prevStrat !== undefined && prevStrat !== currentStrat &&
+          (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
+        // Gap 2: Strategy alert cooldown key is now unified as `${sym}-STRAT`
+        const alertKey = `${t.s}-STRAT`;
+        const nowTs = Date.now();
+        if (nowTs - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
+          lastTriggered.set(alertKey, nowTs);
           self.postMessage({
             type: 'ALERT_TRIGGERED',
             payload: {
@@ -301,64 +352,64 @@ function processTicker(t) {
 }
 
 function computeWorkerStrategyScore(params) {
-    let score = 0;
-    let factors = 0;
+  let score = 0;
+  let factors = 0;
 
-    const rsiScore = (val, weight) => {
-        if (val === null || val === undefined) return;
-        factors += weight;
-        if (val <= 20) score += 100 * weight;
-        else if (val <= 30) score += 70 * weight;
-        else if (val <= 40) score += 30 * weight;
-        else if (val <= 60) score += 0;
-        else if (val <= 70) score -= 30 * weight;
-        else if (val <= 80) score -= 70 * weight;
-        else score -= 100 * weight;
-    };
+  const rsiScore = (val, weight) => {
+    if (val === null || val === undefined) return;
+    factors += weight;
+    if (val <= 20) score += 100 * weight;
+    else if (val <= 30) score += 70 * weight;
+    else if (val <= 40) score += 30 * weight;
+    else if (val <= 60) score += 0;
+    else if (val <= 70) score -= 30 * weight;
+    else if (val <= 80) score -= 70 * weight;
+    else score -= 100 * weight;
+  };
 
-    rsiScore(params.rsi1m, 0.5);
-    rsiScore(params.rsi5m, 1);
-    rsiScore(params.rsi15m, 1.5);
-    rsiScore(params.rsi1h, 2);
+  rsiScore(params.rsi1m, 0.5);
+  rsiScore(params.rsi5m, 1);
+  rsiScore(params.rsi15m, 1.5);
+  rsiScore(params.rsi1h, 2);
 
-    if (params.macdHistogram !== null && params.price > 0) {
-        factors += 1.5;
-        const hPct = (params.macdHistogram / params.price) * 100;
-        if (hPct > 0) score += Math.min(hPct * 200, 100) * 1.5;
-        else score += Math.max(hPct * 200, -100) * 1.5;
-    }
+  if (params.macdHistogram !== null && params.price > 0) {
+    factors += 1.5;
+    const hPct = (params.macdHistogram / params.price) * 100;
+    if (hPct > 0) score += Math.min(hPct * 200, 100) * 1.5;
+    else score += Math.max(hPct * 200, -100) * 1.5;
+  }
 
-    if (params.bbPosition !== null) {
-        factors += 1;
-        const bp = params.bbPosition;
-        if (bp <= 0.1) score += 80 * 1;
-        else if (bp <= 0.25) score += 40 * 1;
-        else if (bp >= 0.9) score -= 80 * 1;
-        else if (bp >= 0.75) score -= 40 * 1;
-    }
+  if (params.bbPosition !== null) {
+    factors += 1;
+    const bp = params.bbPosition;
+    if (bp <= 0.1) score += 80 * 1;
+    else if (bp <= 0.25) score += 40 * 1;
+    else if (bp >= 0.9) score -= 80 * 1;
+    else if (bp >= 0.75) score -= 40 * 1;
+  }
 
-    if (params.emaCross) {
-        factors += 1.5;
-        score += (params.emaCross === 'bullish' ? 60 : -60) * 1.5;
-    }
+  if (params.emaCross) {
+    factors += 1.5;
+    score += (params.emaCross === 'bullish' ? 60 : -60) * 1.5;
+  }
 
-    if (params.confluence !== undefined) {
-        factors += 2;
-        score += params.confluence * 2;
-    }
+  if (params.confluence !== undefined) {
+    factors += 2;
+    score += params.confluence * 2;
+  }
 
-    let normalized = factors > 0 ? score / factors : 0;
-    // Dampen low-confidence signals (fewer factors)
-    if (factors < 3 && Math.abs(normalized) > 50) normalized *= 0.7;
-    normalized = Math.round(Math.max(-100, Math.min(100, normalized)));
+  let normalized = factors > 0 ? score / factors : 0;
+  // Dampen low-confidence signals (fewer factors)
+  if (factors < 3 && Math.abs(normalized) > 50) normalized *= 0.7;
+  normalized = Math.round(Math.max(-100, Math.min(100, normalized)));
 
-    let signal = 'neutral';
-    if (normalized >= 50) signal = 'strong-buy';
-    else if (normalized >= 20) signal = 'buy';
-    else if (normalized <= -50) signal = 'strong-sell';
-    else if (normalized <= -20) signal = 'sell';
+  let signal = 'neutral';
+  if (normalized >= 50) signal = 'strong-buy';
+  else if (normalized >= 20) signal = 'buy';
+  else if (normalized <= -50) signal = 'strong-sell';
+  else if (normalized <= -20) signal = 'sell';
 
-    return { score: normalized, signal };
+  return { score: normalized, signal };
 }
 
 function startFlushing(interval) {
@@ -374,6 +425,7 @@ function startFlushing(interval) {
 }
 
 function stopFlushing() { if (flushInterval) clearInterval(flushInterval); }
+
 function startHeartbeat() {
   heartbeatInterval = setInterval(() => {
     if (socket && socket.readyState === WebSocket.OPEN) {
@@ -381,7 +433,9 @@ function startHeartbeat() {
     }
   }, HEARTBEAT_MS);
 }
+
 function stopHeartbeat() { if (heartbeatInterval) clearInterval(heartbeatInterval); }
+
 function stopSocket() {
   if (socket) { socket.close(); socket = null; }
   stopHeartbeat();

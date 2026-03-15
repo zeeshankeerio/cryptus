@@ -38,7 +38,7 @@ export default function LoginPage() {
         {
           email: values.email,
           password: values.password,
-          callbackURL: "/",
+          callbackURL: "/terminal",
         },
         {
           onError: (ctx) => {

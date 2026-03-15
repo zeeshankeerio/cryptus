@@ -4,8 +4,9 @@
   "description": "Crypto RSI Market Screener — real-time multi-pair RSI monitoring",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node scripts/sync-assets.js",
+    "build:sync": "node scripts/sync-assets.js",
+    "start": "node .next/standalone/server.js",
     "lint": "next lint",
     "postinstall": "prisma generate"
   },

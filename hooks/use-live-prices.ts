@@ -119,6 +119,13 @@ class PriceTickEngine extends EventTarget {
     }
   }
 
+  /** Post any typed message directly to the worker (for fast-path updates like SYNC_CONFIG_FAST, UPDATE_PERIOD) */
+  postToWorker(message: { type: string; payload?: any }) {
+    if (this.worker) {
+      this.worker.postMessage(message);
+    }
+  }
+
   stop() {
     if (this.virtualPollInterval) {
       clearInterval(this.virtualPollInterval);

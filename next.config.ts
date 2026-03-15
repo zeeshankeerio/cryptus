@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
   // Standalone output creates a self-contained build — ideal for Render, Railway, etc.
   // Includes only necessary node_modules, so the deploy is smaller and faster.
   output: "standalone",
+  images: { unoptimized: true },
 
   // Ensure native Node.js modules are not bundled by webpack
   serverExternalPackages: ["pg"],

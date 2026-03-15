@@ -46,7 +46,7 @@ const FETCH_HEADERS: HeadersInit = {
   'Accept': 'application/json',
 };
 const RSI_PERIOD = 14;
-const KLINE_LIMIT = 1000; // 1000 candles ensures enough 15m data for divergence (1000/15 = 66)
+const KLINE_LIMIT = 499; // 499 candles (Weight=1 on Binance, saves 50% API limit vs 1000) - enough for 15m divergence (499/15 = 33)
 const KLINE_LIMIT_1H = 40; // 40 1h candles: Perfect for 1h RSI (needs > 28 for Wilder stability)
 const BATCH_SIZE = 16;
 const FETCH_RETRY_COUNT = 4; // increased for 600-coin robustness
@@ -616,11 +616,8 @@ async function fetchAllKlinesBatched(
   symbols: string[]
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
-  const concurrency = symbols.length >= 500 ? 40 // Lowered for stability on Render
-    : symbols.length >= 400 ? 32
-    : symbols.length >= 250 ? 24
-    : symbols.length >= 120 ? 16
-    : BATCH_SIZE;
+  // Greatly reduced concurrency for stability on Vercel/Cloud functions to avoid 429 Too Many Requests
+  const concurrency = Math.min(15, Math.max(4, Math.floor(symbols.length / 10)));
 
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, async () => {
@@ -635,9 +632,10 @@ async function fetchAllKlinesBatched(
         fetchKlines1h(sym)
       ]);
 
-      // Tiny stagger to avoid slamming all API end-points at exactly the same microsecond
-      if (symbols.length > 200) {
-        await new Promise(r => setTimeout(r, Math.random() * 50));
+      // Adaptive stagger to avoid slamming all API end-points at exactly the same microsecond
+      if (symbols.length > 100) {
+        // More aggressive stagger for larger sets to smooth out the request curve
+        await new Promise(r => setTimeout(r, Math.random() * 100));
       }
 
       results[idx] = { sym, res1m, res1h };
@@ -1044,8 +1042,8 @@ function runRefresh(
         const res1m = klineResultBySymbol1m.get(sym);
         const res1h = klineResultBySymbol1h.get(sym);
         if (res1m?.status === 'rejected' && res1h?.status === 'rejected' && logged < 3) {
-          debugWarn(`[screener] ${sym} 1m failed:`, res1m.reason instanceof Error ? res1m.reason.message : String(res1m.reason));
-          debugWarn(`[screener] ${sym} 1h failed:`, res1h.reason instanceof Error ? res1h.reason.message : String(res1h.reason));
+          console.error(`[screener] ${sym} 1m failed:`, res1m.reason instanceof Error ? res1m.reason.message : String(res1m.reason));
+          console.error(`[screener] ${sym} 1h failed:`, res1h.reason instanceof Error ? res1h.reason.message : String(res1h.reason));
           logged++;
         }
       }
