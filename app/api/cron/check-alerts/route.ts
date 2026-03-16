@@ -24,7 +24,9 @@ export async function POST(request: Request) {
           { alertOn5m: true },
           { alertOn15m: true },
           { alertOn1h: true },
+          { alertOnCustom: true },
           { alertConfluence: true },
+          { alertOnStrategyShift: true },
         ],
       },
     });
@@ -36,7 +38,6 @@ export async function POST(request: Request) {
     const alertSymbols = configs.map(c => c.symbol);
     
     // 3. Fetch current market data for these symbols
-    // Using prioritySymbols to ensure full indicator calculation for these alert symbols
     const screenerResponse = await getScreenerData(alertSymbols.length, { 
       smartMode: false, 
       prioritySymbols: alertSymbols 
@@ -47,7 +48,7 @@ export async function POST(request: Request) {
 
     const triggeredAlerts: any[] = [];
 
-    // 4. Evaluate Alert Logic (Matches logic in use-alert-engine.ts)
+    // 4. Evaluate Alert Logic (Matches logic in use-alert-engine.ts & worker/index.ts)
     for (const config of configs) {
       const entry = dataMap.get(config.symbol);
       if (!entry) continue;
@@ -58,27 +59,32 @@ export async function POST(request: Request) {
 
       const checkTrigger = (val: number | null, tf: string) => {
         if (val === null) return null;
-        if (val >= ob) return { type: 'Overbought', timeframe: tf, value: val };
-        if (val <= os) return { type: 'Oversold', timeframe: tf, value: val };
+        if (val >= ob) return { type: 'OVERBOUGHT', timeframe: tf, value: val };
+        if (val <= os) return { type: 'OVERSOLD', timeframe: tf, value: val };
         return null;
       };
 
       const alerts: any[] = [];
-      if (config.alertOn1m) {
-        const t = checkTrigger(entry.rsi1m, '1M');
+      
+      // Standard Timeframes
+      if (config.alertOn1m) { const t = checkTrigger(entry.rsi1m, '1M'); if (t) alerts.push(t); }
+      if (config.alertOn5m) { const t = checkTrigger(entry.rsi5m, '5M'); if (t) alerts.push(t); }
+      if (config.alertOn15m) { const t = checkTrigger(entry.rsi15m, '15M'); if (t) alerts.push(t); }
+      if (config.alertOn1h) { const t = checkTrigger(entry.rsi1h, '1H'); if (t) alerts.push(t); }
+      
+      // Custom RSI evaluation
+      if (config.alertOnCustom) {
+        const t = checkTrigger(entry.rsiCustom, 'CUST');
         if (t) alerts.push(t);
       }
-      if (config.alertOn5m) {
-        const t = checkTrigger(entry.rsi5m, '5M');
-        if (t) alerts.push(t);
-      }
-      if (config.alertOn15m) {
-        const t = checkTrigger(entry.rsi15m, '15M');
-        if (t) alerts.push(t);
-      }
-      if (config.alertOn1h) {
-        const t = checkTrigger(entry.rsi1h, '1H');
-        if (t) alerts.push(t);
+
+      // Strategy Shift evaluation
+      if (config.alertOnStrategyShift && (entry.strategySignal === 'strong-buy' || entry.strategySignal === 'strong-sell')) {
+        alerts.push({
+          type: entry.strategySignal === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
+          timeframe: 'STRATEGY',
+          value: entry.strategyScore
+        });
       }
 
       if (alerts.length > 0) {
@@ -99,10 +105,14 @@ export async function POST(request: Request) {
     
     for (const alertInfo of triggeredAlerts) {
       for (const alert of alertInfo.alerts) {
+        const isBuy = alert.type === 'OVERSOLD' || alert.type === 'STRATEGY_STRONG_BUY';
+        const typeLabel = isBuy ? 'BUY' : 'SELL';
         const payload = {
-          title: `${alertInfo.alias} ${alert.type} (${alert.timeframe})`,
-          body: `RSI is currently ${alert.value.toFixed(1)}. Trade opportunity identified on RSIQ PRO.`,
-          exchange: 'Multi', // Or detect from config if stored
+          title: `${alertInfo.alias} ${typeLabel} (${alert.timeframe})`,
+          body: alert.timeframe === 'STRATEGY' 
+            ? `Strategy score reached ${alert.value.toFixed(0)}. Opportunity identified!`
+            : `RSI is currently ${alert.value.toFixed(1)}. Opportunity identified!`,
+          exchange: 'Multi-Scan',
           symbol: alertInfo.symbol,
         };
 

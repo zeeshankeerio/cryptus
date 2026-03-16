@@ -2752,12 +2752,19 @@ export default function ScreenerDashboard() {
                   });
 
                   setSelectedCoinForConfig(null);
-                  // Refresh data to reflect changes immediately
                   fetchData(true);
+                } else {
+                  toast.error(`Failed to apply configuration for ${getSymbolAlias(selectedCoinForConfig)}`, {
+                    description: "The server encountered an error while saving your settings."
+                  });
+                  throw new Error("Failed to save config");
                 }
               } catch (err) {
                 console.error('Failed to save config:', err);
-                toast.error("Failed to apply configuration.");
+                if (!(err instanceof Error && err.message === "Failed to save config")) {
+                  toast.error("Network error: Could not connect to settings service.");
+                }
+                throw err; // Propagate to handleSave so it stops loading and keeps modal open
               }
             }}
           />

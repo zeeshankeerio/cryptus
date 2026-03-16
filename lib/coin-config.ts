@@ -44,24 +44,29 @@ export async function getCoinConfig(symbol: string): Promise<CoinConfig | null> 
 
 export async function updateCoinConfig(config: Partial<CoinConfig> & { symbol: string }) {
   try {
+    // 2026 Resilience: Explicitly map fields to prevent crashes from UI-only state (like alertPush247)
+    const data = {
+      rsi1mPeriod: config.rsi1mPeriod,
+      rsi5mPeriod: config.rsi5mPeriod,
+      rsi15mPeriod: config.rsi15mPeriod,
+      rsi1hPeriod: config.rsi1hPeriod,
+      overboughtThreshold: config.overboughtThreshold,
+      oversoldThreshold: config.oversoldThreshold,
+      alertOn1m: config.alertOn1m,
+      alertOn5m: config.alertOn5m,
+      alertOn15m: config.alertOn15m,
+      alertOn1h: config.alertOn1h,
+      alertOnCustom: config.alertOnCustom,
+      alertConfluence: config.alertConfluence,
+      alertOnStrategyShift: config.alertOnStrategyShift,
+    };
+
     return await prisma.coinConfig.upsert({
       where: { symbol: config.symbol },
-      update: config,
+      update: data,
       create: {
         symbol: config.symbol,
-        rsi1mPeriod: config.rsi1mPeriod ?? 14,
-        rsi5mPeriod: config.rsi5mPeriod ?? 14,
-        rsi15mPeriod: config.rsi15mPeriod ?? 14,
-        rsi1hPeriod: config.rsi1hPeriod ?? 14,
-        overboughtThreshold: config.overboughtThreshold ?? 70,
-        oversoldThreshold: config.oversoldThreshold ?? 30,
-        alertOn1m: config.alertOn1m ?? false,
-        alertOn5m: config.alertOn5m ?? false,
-        alertOn15m: config.alertOn15m ?? false,
-        alertOn1h: config.alertOn1h ?? false,
-        alertOnCustom: config.alertOnCustom ?? false,
-        alertConfluence: config.alertConfluence ?? false,
-        alertOnStrategyShift: config.alertOnStrategyShift ?? false,
+        ...data,
       },
     });
   } catch (err) {
