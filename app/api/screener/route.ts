@@ -4,6 +4,7 @@ import { getScreenerData } from '@/lib/screener-service';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60s for 500-coin fetches on Vercel
+export const preferredRegion = ['fra1', 'hnd1', 'sin1']; // Non-US regions to avoid Binance/Bybit IP blocks
 
 export async function GET(request: Request) {
   try {

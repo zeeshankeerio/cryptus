@@ -1,4 +1,5 @@
 {
+  "regions": ["fra1", "sin1", "hnd1"],
   "functions": {
     "app/api/screener/route.ts": {
       "maxDuration": 60

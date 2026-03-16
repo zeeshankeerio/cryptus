@@ -408,16 +408,54 @@ interface BybitTickerResponse {
   };
 }
 
+async function fetchBybitApiWithRetry<T>(
+  url: string,
+  label: string,
+  retries = FETCH_RETRY_COUNT,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
+        headers: FETCH_HEADERS,
+        cache: 'no-store' as RequestCache,
+      });
+      if (res.status === 429 || res.status === 403 || res.status === 451) {
+        if (res.status !== 429) {
+          debugWarn(`[bybit] ${label} blocked by region (${res.status}). Ensure Vercel is not in US region.`);
+        }
+        const wait = Math.min(2000 * (attempt + 1), 8000);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      
+      // Bybit specific rate limit headers
+      const ratelimitRemain = res.headers.get('X-Bapi-Limit-Status');
+      if (ratelimitRemain && parseInt(ratelimitRemain, 10) < 10) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
+
+      if (!res.ok) throw new Error(`${label}: HTTP ${res.status}`);
+      return res.json();
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries) {
+        debugWarn(`[bybit] ${label}: all ${retries + 1} attempts failed:`, err instanceof Error ? err.message : String(err));
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  throw lastError ?? new Error(`${label}: exhausted retries`);
+}
+
 async function fetchBybitTickers(exchange: string): Promise<Map<string, BinanceTicker>> {
   // 'bybit' = spot, 'bybit-linear' = linear (perpetual)
   const category = exchange === 'bybit-linear' ? 'linear' : 'spot';
-  const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=${category}`, {
-    signal: AbortSignal.timeout(12000),
-    cache: 'no-store' as RequestCache,
-  });
-  if (!res.ok) throw new Error(`Bybit ticker API ${res.status}`);
+  const url = `https://api.bybit.com/v5/market/tickers?category=${category}`;
+  const payload = await fetchBybitApiWithRetry<BybitTickerResponse>(url, `tickers for ${category}`);
 
-  const payload = await res.json() as BybitTickerResponse;
   const rows = payload.result?.list ?? [];
   const map = new Map<string, BinanceTicker>();
 
@@ -688,12 +726,8 @@ async function fetchBybitKlines(symbol: string, interval: string, exchange: stri
     const limit = interval === '60' ? KLINE_LIMIT_1H : KLINE_LIMIT;
     // 'bybit' = spot, 'bybit-linear' = linear (perpetual)
     const category = exchange === 'bybit-linear' ? 'linear' : 'spot';
-    const res = await fetch(`https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`, {
-      signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
-      cache: 'no-store' as RequestCache,
-    });
-    if (!res.ok) throw new Error(`Bybit kline API ${res.status}`);
-    const payload = await res.json() as BybitKlineResponse;
+    const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const payload = await fetchBybitApiWithRetry<BybitKlineResponse>(url, `klines for ${symbol}`);
     const rows = payload.result?.list ?? [];
 
     // Bybit returns newest first, reverse to match Binance (oldest first)
