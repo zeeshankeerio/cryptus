@@ -94,6 +94,7 @@ self.addEventListener('message', (event) => {
         badge: '/logo/rsiq-pro-icon.png',
         silent: false,
         requireInteraction: false,
+        renotify: true,
         tag,
         vibrate: [200, 100, 200, 100, 200], // Strong 3-pulse for trade urgency
         data: { exchange, url: '/terminal' }

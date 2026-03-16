@@ -122,25 +122,32 @@ export function useAlertEngine(
     }
   }, []);
 
-  // Use global interaction listener to ensure context is always resumed
+  // Use level interactions and focus gain to ensure context is always resumed
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const handleGesture = () => {
       resumeAudioContext();
-      window.removeEventListener('click', handleGesture);
-      window.removeEventListener('touchstart', handleGesture);
-      window.removeEventListener('mousedown', handleGesture);
-      window.removeEventListener('keydown', handleGesture);
     };
+
     window.addEventListener('click', handleGesture);
     window.addEventListener('touchstart', handleGesture);
     window.addEventListener('mousedown', handleGesture);
     window.addEventListener('keydown', handleGesture);
+    window.addEventListener('focus', handleGesture);
+
+    // Audio Keep-Alive: OS/Mobile browsers often suspend AudioContext after a few minutes of silence.
+    // We play a near-silent pulse every 4 minutes to keep the context "warm".
+    const keepAliveInterval = setInterval(() => {
+      resumeAudioContext();
+    }, 4 * 60 * 1000);
+
     return () => {
       window.removeEventListener('click', handleGesture);
       window.removeEventListener('touchstart', handleGesture);
       window.removeEventListener('mousedown', handleGesture);
       window.removeEventListener('keydown', handleGesture);
+      window.removeEventListener('focus', handleGesture);
+      clearInterval(keepAliveInterval);
     };
   }, [resumeAudioContext]);
 
@@ -234,6 +241,7 @@ export function useAlertEngine(
         icon: '/logo/mindscape-analytics.png',
         badge: '/logo/rsiq-pro-icon.png',
         silent: false, // system sound for background mobile
+        renotify: true, // Allow repeating alerts to chime/vibrate again
         vibrate: [200, 100, 200], // Vibration to prompt OS for sound
         requireInteraction: false,
         tag: `rsiq-${title.replace(/\s+/g, '-').toLowerCase()}`,
