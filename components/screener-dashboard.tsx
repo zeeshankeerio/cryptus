@@ -25,9 +25,11 @@ import { toast } from 'sonner';
 // ─── Formatting helpers ────────────────────────────────────────
 
 function formatPrice(p: number): string {
-  if (p >= 1) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (p >= 0.01) return p.toFixed(4);
-  return p.toFixed(6);
+  if (p >= 100) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 1) return p.toFixed(4);
+  if (p >= 0.1) return p.toFixed(5);
+  if (p >= 0.01) return p.toFixed(6);
+  return p.toFixed(8);
 }
 
 function formatVolume(v: number): string {
@@ -1105,13 +1107,21 @@ const ScreenerCard = memo(function ScreenerCard({
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
                     ${typeof val === 'number' ? formatPrice(val) : '—'}
                   </span>
+                ) : col.id === 'momentum' ? (
+                  <span className={cn("text-[9px] font-bold tabular-nums", (val as number) > 0 ? "text-emerald-300" : (val as number) < 0 ? "text-red-300" : "text-slate-500")}>
+                    {formatPct(val as number)}
+                  </span>
+                ) : col.id === 'atr' ? (
+                  <span className="text-[9px] font-bold text-amber-300/80 tabular-nums">
+                    {typeof val === 'number' ? val.toFixed(val < 1 ? 6 : 2) : '—'}
+                  </span>
                 ) : (
                   <span className={cn(
                     "text-[9px] font-bold tabular-nums transition-colors duration-300",
                     display.isLiveRsi ? "text-[#39FF14]" : "text-slate-300"
                   )}>
                     {typeof val === 'number'
-                      ? val.toFixed(col.id === 'macdHistogram' ? 4 : 1)
+                      ? val.toFixed(col.id === 'macdHistogram' ? 4 : 2)
                       : typeof val === 'string'
                         ? val
                         : '—'}
