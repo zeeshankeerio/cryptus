@@ -235,29 +235,32 @@ export function useAlertEngine(
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     if (Notification.permission !== 'granted') return;
 
+    const currentExchange = (window as any).__priceEngine?.getExchange?.() ?? 'unknown';
+    // Use exchange-aware tag to match Service Worker logic and prevent duplicates
+    const tag = `rsiq-${currentExchange}-${title.replace(/\s+/g, '-').toLowerCase()}`;
+
     try {
+      // Local notification (Foreground optimization)
       const notification = new Notification(title, {
         body,
-        icon: '/logo/mindscape-analytics.png',
+        icon: '/logo/rsiq-pro-icon.png',
         badge: '/logo/rsiq-pro-icon.png',
-        silent: false, // system sound for background mobile
-        renotify: true, // Allow repeating alerts to chime/vibrate again
-        vibrate: [200, 100, 200], // Vibration to prompt OS for sound
+        silent: false,
+        renotify: true,
+        tag,
+        vibrate: [200, 100, 200, 100, 200], // Strong 5-pulse for trade urgency
         requireInteraction: false,
-        tag: `rsiq-${title.replace(/\s+/g, '-').toLowerCase()}`,
       } as any);
       setTimeout(() => notification.close(), 8000);
     } catch {
-      // Notification constructor can fail in some environments
+      // Notification constructor can fail on some mobile platforms (rely on SW)
     }
 
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
       try {
-        // Include exchange context for exchange-aware notification tags
-        const currentExchange = (window as any).__priceEngine?.getExchange?.() ?? 'unknown';
         navigator.serviceWorker.controller.postMessage({
           type: 'ALERT_NOTIFICATION',
-          payload: { title, body, icon: '/logo/mindscape-analytics.png', exchange: currentExchange },
+          payload: { title, body, icon: '/logo/rsiq-pro-icon.png', exchange: currentExchange },
         });
       } catch {
         // SW communication not available
@@ -439,6 +442,8 @@ export function useAlertEngine(
               if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
                 lastTriggered.current.set(alertKey, now);
                 const val = timeframes.find(t => t.label === label)?.val ?? 0;
+                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
+                const zoneLabel = currentZone === 'OVERSOLD' ? 'BUY' : 'SELL';
 
                 toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
                   `${getSymbolAlias(symbol)} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
@@ -446,9 +451,10 @@ export function useAlertEngine(
                 );
                 playAlertSoundRef.current();
                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
+                
                 triggerNativeRef.current(
-                  `${getSymbolAlias(symbol)} ${currentZone}`,
-                  `[${getExchange().charAt(0).toUpperCase() + getExchange().slice(1)}] ${label} RSI reached ${(val as number).toFixed(1)}`
+                  `${getSymbolAlias(symbol)} ${zoneLabel}`,
+                  `[${formattedExchange}] ${label} RSI reached ${(val as number).toFixed(1)}`
                 );
               }
             }
@@ -491,10 +497,20 @@ export function useAlertEngine(
                   { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
                 );
                 playAlertSoundRef.current();
-                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRAT', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
+                logAlertRef.current({
+                  symbol,
+                  exchange: getExchange(),
+                  timeframe: 'STRATEGY',
+                  value: liveStrategy.score,
+                  type: liveStrategy.signal === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
+                });
+
+                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
+                // isBuy is already defined above, using the existing one.
+                
                 triggerNativeRef.current(
                   `${getSymbolAlias(symbol)} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                  `[${getExchange().charAt(0).toUpperCase() + getExchange().slice(1)}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
+                  `[${formattedExchange}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
                 );
               }
             }

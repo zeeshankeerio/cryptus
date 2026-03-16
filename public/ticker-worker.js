@@ -38,6 +38,35 @@ let lastTriggered = new Map();
 let configLastUpdated = new Map(); // Track manual updates for cold-start alerts
 const COOLDOWN_MS = 3 * 60 * 1000;
 let globalRsiPeriod = 14;
+let globalAlertsEnabled = false;
+
+// ── Direct Alert Channel (Worker -> Service Worker) ─────────────
+// Bypasses the Main Thread for background reliability when minimized.
+const alertChannel = typeof BroadcastChannel !== 'undefined' 
+  ? new BroadcastChannel('rsiq-alerts') 
+  : null;
+
+// ── Shared Utility Logic ──────────────────────────────────────────
+
+function getSymbolAlias(symbol) {
+  if (symbol === 'PAXGUSDT' || symbol === 'XAUUSDT') return 'GOLD (XAU)';
+  if (symbol === 'SILVER' || symbol === 'XAGUSDT') return 'SILVER (XAG)';
+  if (symbol === 'SPX') return 'S&P 500';
+  if (symbol === 'NDAQ') return 'NASDAQ 100';
+  if (symbol === 'DOW') return 'DOW JONES';
+  if (symbol === 'FTSE') return 'FTSE 100';
+  if (symbol === 'DAX') return 'DAX 40';
+  if (symbol === 'NKY') return 'NIKKEI 225';
+  if (symbol === 'EURUSDT') return 'EUR/USD';
+  if (symbol === 'GBPUSDT') return 'GBP/USD';
+  if (symbol === 'AUDUSDT') return 'AUD/USD';
+  if (symbol === 'JPYUSDT') return 'USD/JPY';
+  
+  let clean = symbol.replace('USDT', '');
+  if (clean.endsWith('USD') && clean.length > 3) clean = clean.replace('USD', '');
+  clean = clean.replace('.P', '');
+  return clean;
+}
 
 // ── Exchange Adapters ──────────────────────────────────────────
 
@@ -309,7 +338,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     ? 0
     : Math.round(((t.c - t.o) / t.o) * 10000) / 100;
 
-  const trackingKey = `${exchangeName}:${t.s}`;
+    const alias = getSymbolAlias(t.s);
+    const trackingKey = `${exchangeName}:${t.s}`;
 
   // ── Volatility Monitor ──
   const now = Date.now();
@@ -467,6 +497,19 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
                 type: zone
               }
             });
+
+            // Direct broadcast to Service Worker for background reliability
+            if (alertChannel && globalAlertsEnabled) {
+              const zoneLabel = zone === 'OVERSOLD' ? 'BUY' : 'SELL';
+              alertChannel.postMessage({
+                type: 'ALERT_NOTIFICATION',
+                payload: {
+                  title: `${alias} ${zoneLabel}`,
+                  body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] ${tf.label} RSI reached ${tf.rsi.toFixed(1)}`,
+                  exchange: exchangeName
+                }
+              });
+            }
           }
         }
       }
@@ -495,6 +538,19 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
               type: currentStrat === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
             }
           });
+
+          // Direct broadcast to Service Worker for background reliability
+          if (alertChannel && globalAlertsEnabled) {
+            const isBuy = currentStrat === 'strong-buy';
+            alertChannel.postMessage({
+              type: 'ALERT_NOTIFICATION',
+              payload: {
+                title: `${alias} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
+                body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Strategy shift detected. Score: ${currentStrategy.score.toFixed(0)}`,
+                exchange: exchangeName
+              }
+            });
+          }
         }
       }
       zoneStates.set(stratZoneKey, currentStrat);
@@ -581,6 +637,9 @@ self.onmessage = (e) => {
       break;
 
     case 'SYNC_STATES':
+      if (payload.alertsEnabled !== undefined) {
+        globalAlertsEnabled = payload.alertsEnabled;
+      }
       if (payload.configs) {
         const now = Date.now();
         const isInitialSync = coinConfigs.size === 0;

@@ -77,29 +77,43 @@ declare const _ts_generator: any;
 // To disable all workbox logging during development
 self.__WB_DISABLE_DEV_LOGS = true;
 
-// Listen for messages from the main thread
+// Helper to show native background notification through Service Worker Registration
+// This is explicitly required by Android Chrome for installed PWAs
+const showNativeNotification = (payload: any) => {
+  const { title, body, icon, exchange } = payload;
+
+  // Use exchange-aware tag to prevent notification collision across exchanges
+  const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
+
+  return self.registration.showNotification(title, {
+    body,
+    icon: icon || '/logo/rsiq-pro-icon.png',
+    badge: '/logo/rsiq-pro-icon.png',
+    silent: false,
+    requireInteraction: false,
+    renotify: true,
+    tag,
+    vibrate: [200, 100, 200, 100, 200], // Strong 3-pulse for trade urgency
+    data: { exchange, url: '/terminal' }
+  });
+};
+
+// ── Direct Alert Channel (Worker -> Service Worker) ─────────────
+// Listens for alerts broadcasted directly from the Ticker Worker.
+// This ensures reliability even if the main thread is throttled.
+if (typeof BroadcastChannel !== 'undefined') {
+  const alertChannel = new BroadcastChannel('rsiq-alerts');
+  alertChannel.onmessage = (event) => {
+    if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
+      showNativeNotification(event.data.payload);
+    }
+  };
+}
+
+// Listen for messages from the main thread (Foreground/UI fallback)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
-    const { title, body, icon, exchange } = event.data.payload;
-
-    // Use exchange-aware tag to prevent notification collision across exchanges
-    const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
-
-    // Show native background notification through Service Worker Registration
-    // This is explicitly required by Android Chrome for installed PWAs
-    event.waitUntil(
-      self.registration.showNotification(title, {
-        body,
-        icon: icon || '/logo/rsiq-pro-icon.png',
-        badge: '/logo/rsiq-pro-icon.png',
-        silent: false,
-        requireInteraction: false,
-        renotify: true,
-        tag,
-        vibrate: [200, 100, 200, 100, 200], // Strong 3-pulse for trade urgency
-        data: { exchange, url: '/terminal' }
-      })
-    );
+    event.waitUntil(showNativeNotification(event.data.payload));
   }
 });
 

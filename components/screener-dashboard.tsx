@@ -8,7 +8,7 @@ import {
   RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
-  LogOut, User as UserIcon
+  LogOut, User as UserIcon, Minus, Plus
 } from 'lucide-react';
 import { useSession, signOut } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
@@ -1436,7 +1436,7 @@ export default function ScreenerDashboard() {
           confluence: entry.confluence
         };
       });
-      syncStates({ configs: coinConfigs, rsiStates: states });
+      syncStates({ configs: coinConfigs, rsiStates: states, alertsEnabled });
 
       // (Worker exchange connection is managed exclusively by use-live-prices.ts when exchange prop changes)
     }, 800);
@@ -2735,6 +2735,17 @@ export default function ScreenerDashboard() {
                   const updated = await res.json();
                   setCoinConfigs(prev => ({ ...prev, [selectedCoinForConfig]: updated }));
 
+                  // Instant worker sync to ensure new thresholds/periods take effect immediately
+                  if (typeof window !== 'undefined') {
+                    const eng = (window as any).__priceEngine;
+                    if (eng?.postToWorker) {
+                      eng.postToWorker({
+                        type: 'SYNC_CONFIG_FAST',
+                        payload: { symbol: selectedCoinForConfig, config: updated },
+                      });
+                    }
+                  }
+
                   toast.success(`${getSymbolAlias(selectedCoinForConfig)} Configuration applied.`, {
                     description: "Filters and alerts have been updated in real-time.",
                     duration: 3000
@@ -2850,6 +2861,52 @@ function CoinSettingsModal({
     setLoading(false);
   };
 
+  const NumericAdjuster = ({
+    label, value, onChange, min = 1, max = 99,
+    colorClass = "text-white", bgClass = "bg-slate-950/50", borderClass = "border-white/5",
+    description = ""
+  }: any) => (
+    <div className="space-y-1.5 pointer-events-auto">
+      <div className="flex items-center justify-between px-0.5">
+        <label className={cn("text-[8px] font-black uppercase tracking-[0.15em]", colorClass)}>{label}</label>
+        {description && <span className="text-[7px] font-bold text-slate-600 uppercase tracking-tighter">{description}</span>}
+      </div>
+      <div className={cn(
+        "flex items-center gap-1 p-1 rounded-2xl border transition-all duration-300 group/adjuster",
+        bgClass, borderClass,
+        "hover:border-white/10 shadow-sm"
+      )}>
+        <button
+          disabled={loading || value <= min}
+          onClick={() => onChange(Math.max(min, value - 1))}
+          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+        >
+          <Minus size={14} />
+        </button>
+        <input
+          type="number"
+          min={min} max={max}
+          value={value}
+          onChange={(e) => {
+            const val = parseInt(e.target.value);
+            if (!isNaN(val)) onChange(Math.min(max, Math.max(min, val)));
+          }}
+          className={cn(
+            "w-full bg-transparent text-center font-black focus:outline-none transition-all text-sm appearance-none tabular-nums",
+            colorClass
+          )}
+        />
+        <button
+          disabled={loading || value >= max}
+          onClick={() => onChange(Math.min(max, value + 1))}
+          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -2882,72 +2939,54 @@ function CoinSettingsModal({
           <div className="p-4 sm:p-6 space-y-4">
             {/* RSI Periods Grid - Consolidated for Vertical Efficiency */}
             <div className="grid grid-cols-2 gap-2 sm:gap-4">
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 1m Period</label>
-                <input
-                  type="number"
-                  min={2} max={50}
-                  value={config.rsi1mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi1mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 5m Period</label>
-                <input
-                  type="number"
-                  min={2} max={50}
-                  value={config.rsi5mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi5mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 15m Period</label>
-                <input
-                  type="number"
-                  min={2} max={50}
-                  value={config.rsi15mPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi15mPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-slate-500 ml-0.5">RSI 1h Period</label>
-                <input
-                  type="number"
-                  min={2} max={50}
-                  value={config.rsi1hPeriod}
-                  onChange={(e) => setConfig({ ...config, rsi1hPeriod: parseInt(e.target.value) || 14 })}
-                  className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-2.5 py-2 text-white font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
-                />
-              </div>
+              <NumericAdjuster 
+                label="RSI 1m Period" 
+                value={config.rsi1mPeriod} 
+                onChange={(v: number) => setConfig({ ...config, rsi1mPeriod: v })} 
+                min={2} max={50} 
+              />
+              <NumericAdjuster 
+                label="RSI 5m Period" 
+                value={config.rsi5mPeriod} 
+                onChange={(v: number) => setConfig({ ...config, rsi5mPeriod: v })} 
+                min={2} max={50} 
+              />
+              <NumericAdjuster 
+                label="RSI 15m Period" 
+                value={config.rsi15mPeriod} 
+                onChange={(v: number) => setConfig({ ...config, rsi15mPeriod: v })} 
+                min={2} max={50} 
+              />
+              <NumericAdjuster 
+                label="RSI 1h Period" 
+                value={config.rsi1hPeriod} 
+                onChange={(v: number) => setConfig({ ...config, rsi1hPeriod: v })} 
+                min={2} max={50} 
+              />
             </div>
 
             <div className="h-px bg-white/5" />
 
             {/* Thresholds Grid */}
             <div className="grid grid-cols-2 gap-2 sm:gap-4">
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-[#FF4B5C] ml-0.5">Overbought</label>
-                <input
-                  type="number"
-                  min={1} max={99}
-                  value={config.overboughtThreshold}
-                  onChange={(e) => setConfig({ ...config, overboughtThreshold: parseInt(e.target.value) || 70 })}
-                  className="w-full bg-[#722f37]/5 border border-[#722f37]/20 rounded-xl px-2.5 py-2 text-[#FF4B5C] font-bold focus:outline-none focus:ring-1 focus:ring-[#FF4B5C]/30 transition-all text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[8px] font-black uppercase tracking-widest text-[#39FF14] ml-0.5">Oversold</label>
-                <input
-                  type="number"
-                  min={1} max={99}
-                  value={config.oversoldThreshold}
-                  onChange={(e) => setConfig({ ...config, oversoldThreshold: parseInt(e.target.value) || 30 })}
-                  className="w-full bg-[#39FF14]/5 border border-[#39FF14]/20 rounded-xl px-2.5 py-2 text-[#39FF14] font-bold focus:outline-none focus:ring-1 focus:ring-[#39FF14]/30 transition-all text-sm"
-                />
-              </div>
+              <NumericAdjuster 
+                label="Overbought" 
+                value={config.overboughtThreshold} 
+                onChange={(v: number) => setConfig({ ...config, overboughtThreshold: v })} 
+                colorClass="text-[#FF4B5C]" 
+                bgClass="bg-[#722f37]/10" 
+                borderClass="border-[#722f37]/30" 
+                description="Sell Zone"
+              />
+              <NumericAdjuster 
+                label="Oversold" 
+                value={config.oversoldThreshold} 
+                onChange={(v: number) => setConfig({ ...config, oversoldThreshold: v })} 
+                colorClass="text-[#39FF14]" 
+                bgClass="bg-[#39FF14]/10" 
+                borderClass="border-[#39FF14]/30" 
+                description="Buy Zone"
+              />
             </div>
 
             {Math.abs(config.overboughtThreshold - config.oversoldThreshold) <= 5 && (
