@@ -13,17 +13,30 @@ jobs:
     steps:
       - name: Professional Scanner Loop
         run: |
-          # We loop 5 times (1 minute apart) during each 5-minute GitHub run
-          # This achieves true 1-minute resolution for free on Vercel Hobby
-          echo "Starting Professional RSI Scan Cycle..."
+          # Support both Secrets and Repository Variables for APP_URL
+          RAW_URL="${{ secrets.APP_URL }}"
+          if [ -z "$RAW_URL" ]; then RAW_URL="${{ vars.APP_URL }}"; fi
+
+          # Strip any trailing slash from URL for clean concatenation
+          BASE_URL=$(echo "$RAW_URL" | sed 's/\/$//')
+          
+          if [ -z "$BASE_URL" ]; then
+            echo "::error::APP_URL is missing! Please add it to GitHub Secrets or Variables."
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.CRON_SECRET }}" ]; then
+            echo "::error::CRON_SECRET is missing! Please add it to GitHub Secrets."
+            exit 1
+          fi
+
+          echo "Starting Professional RSI Scan Cycle for $BASE_URL..."
           
           for i in {1..5}
           do
             echo "Scan #$i starting at $(date)"
             
-            # Use APP_URL from GitHub Secrets (e.g. https://rsiqpro.vercel.app)
-            # Use CRON_SECRET from GitHub Secrets
-            curl -X POST "${{ secrets.APP_URL }}/api/cron/check-alerts" \
+            curl -X POST "$BASE_URL/api/cron/check-alerts" \
                  -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
                  -H "Content-Type: application/json" \
                  --fail --silent --show-error
