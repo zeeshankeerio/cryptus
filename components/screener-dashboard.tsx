@@ -2858,54 +2858,8 @@ function CoinSettingsModal({
   const handleSave = async () => {
     setLoading(true);
     await onSave(config);
-    setLoading(false);
+  setLoading(false);
   };
-
-  const NumericAdjuster = ({
-    label, value, onChange, min = 1, max = 99,
-    colorClass = "text-white", bgClass = "bg-slate-950/50", borderClass = "border-white/5",
-    description = ""
-  }: any) => (
-    <div className="space-y-1.5 pointer-events-auto">
-      <div className="flex items-center justify-between px-0.5">
-        <label className={cn("text-[8px] font-black uppercase tracking-[0.15em]", colorClass)}>{label}</label>
-        {description && <span className="text-[7px] font-bold text-slate-600 uppercase tracking-tighter">{description}</span>}
-      </div>
-      <div className={cn(
-        "flex items-center gap-1 p-1 rounded-2xl border transition-all duration-300 group/adjuster",
-        bgClass, borderClass,
-        "hover:border-white/10 shadow-sm"
-      )}>
-        <button
-          disabled={loading || value <= min}
-          onClick={() => onChange(Math.max(min, value - 1))}
-          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
-        >
-          <Minus size={14} />
-        </button>
-        <input
-          type="number"
-          min={min} max={max}
-          value={value}
-          onChange={(e) => {
-            const val = parseInt(e.target.value);
-            if (!isNaN(val)) onChange(Math.min(max, Math.max(min, val)));
-          }}
-          className={cn(
-            "w-full bg-transparent text-center font-black focus:outline-none transition-all text-sm appearance-none tabular-nums",
-            colorClass
-          )}
-        />
-        <button
-          disabled={loading || value >= max}
-          onClick={() => onChange(Math.min(max, value + 1))}
-          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
-        >
-          <Plus size={14} />
-        </button>
-      </div>
-    </div>
-  );
 
   return (
     <motion.div
@@ -2944,24 +2898,28 @@ function CoinSettingsModal({
                 value={config.rsi1mPeriod} 
                 onChange={(v: number) => setConfig({ ...config, rsi1mPeriod: v })} 
                 min={2} max={50} 
+                loading={loading}
               />
               <NumericAdjuster 
                 label="RSI 5m Period" 
                 value={config.rsi5mPeriod} 
                 onChange={(v: number) => setConfig({ ...config, rsi5mPeriod: v })} 
                 min={2} max={50} 
+                loading={loading}
               />
               <NumericAdjuster 
                 label="RSI 15m Period" 
                 value={config.rsi15mPeriod} 
                 onChange={(v: number) => setConfig({ ...config, rsi15mPeriod: v })} 
                 min={2} max={50} 
+                loading={loading}
               />
               <NumericAdjuster 
                 label="RSI 1h Period" 
                 value={config.rsi1hPeriod} 
                 onChange={(v: number) => setConfig({ ...config, rsi1hPeriod: v })} 
                 min={2} max={50} 
+                loading={loading}
               />
             </div>
 
@@ -2977,6 +2935,7 @@ function CoinSettingsModal({
                 bgClass="bg-[#722f37]/10" 
                 borderClass="border-[#722f37]/30" 
                 description="Sell Zone"
+                loading={loading}
               />
               <NumericAdjuster 
                 label="Oversold" 
@@ -2986,6 +2945,7 @@ function CoinSettingsModal({
                 bgClass="bg-[#39FF14]/10" 
                 borderClass="border-[#39FF14]/30" 
                 description="Buy Zone"
+                loading={loading}
               />
             </div>
 
@@ -3100,6 +3060,59 @@ function CoinSettingsModal({
     </motion.div>
   );
 }
+
+// ─── Sub-Components ──────────────────────────────────────────
+
+const NumericAdjuster = memo(({
+  label, value, onChange, min = 1, max = 99,
+  colorClass = "text-white", bgClass = "bg-slate-950/50", borderClass = "border-white/5",
+  description = "", loading = false
+}: any) => (
+  <div className="space-y-1.5 pointer-events-auto">
+    <div className="flex items-center justify-between px-0.5">
+      <label className={cn("text-[8px] font-black uppercase tracking-[0.15em]", colorClass)}>{label}</label>
+      {description && <span className="text-[7px] font-bold text-slate-600 uppercase tracking-tighter">{description}</span>}
+    </div>
+    <div className={cn(
+      "flex items-center gap-1 p-1 rounded-2xl border transition-all duration-300 group/adjuster",
+      bgClass, borderClass,
+      "hover:border-white/10 shadow-sm"
+    )}>
+      <button
+        type="button"
+        disabled={loading || value <= min}
+        onClick={() => onChange(Math.max(min, value - 1))}
+        className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+      >
+        <Minus size={14} />
+      </button>
+      <input
+        type="number"
+        inputMode="numeric"
+        min={min} max={max}
+        value={value}
+        onChange={(e) => {
+          const val = parseInt(e.target.value);
+          if (!isNaN(val)) onChange(Math.min(max, Math.max(min, val)));
+        }}
+        className={cn(
+          "w-full bg-transparent text-center font-black focus:outline-none transition-all text-sm appearance-none tabular-nums",
+          colorClass
+        )}
+      />
+      <button
+        type="button"
+        disabled={loading || value >= max}
+        onClick={() => onChange(Math.min(max, value + 1))}
+        className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  </div>
+));
+
+NumericAdjuster.displayName = 'NumericAdjuster';
 
 // ─── Stat Card ─────────────────────────────────────────────────
 
