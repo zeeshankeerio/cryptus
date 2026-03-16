@@ -585,32 +585,68 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
 
 // ── Workers Global Handlers ────────────────────────────────────
 
-self.onmessage = (e) => {
+// ── Unified Communication Layer (Hybrid Worker/SharedWorker) ──────
+let connectedPorts = new Set();
+const isSharedWorker = typeof SharedWorkerGlobalScope !== 'undefined' && self instanceof SharedWorkerGlobalScope;
+
+function broadcast(msg) {
+  if (isSharedWorker) {
+    connectedPorts.forEach(port => {
+      try {
+        port.postMessage(msg);
+      } catch (e) {
+        connectedPorts.delete(port);
+      }
+    });
+  } else {
+    self.postMessage(msg);
+  }
+}
+
+function handleMessage(e, port = null) {
   const { type, payload } = e.data;
 
   switch (type) {
     case 'START':
-      currentSymbols = new Set(payload.symbols);
-      currentExchangeName = payload.exchange || 'binance';
-      ensureExchange(currentExchangeName);
+      // Deduplication: Only start if symbols or exchange actually changed or not yet started
+      const newSymbols = new Set(payload.symbols);
+      const newExchange = payload.exchange || 'binance';
+      
+      const symbolsChanged = !setsEqual(currentSymbols, newSymbols);
+      const exchangeChanged = newExchange !== currentExchangeName;
+
+      if (symbolsChanged || exchangeChanged || activeAdapters.size === 0) {
+        currentSymbols = newSymbols;
+        currentExchangeName = newExchange;
+        ensureExchange(currentExchangeName);
+        console.log(`[worker] Data stream started/updated: ${currentExchangeName} (${currentSymbols.size} symbols)`);
+      }
+      
+      // Hydration: Send stored ticks immediately to the starting port
+      getStoredTicks().then(stored => {
+        if (stored.length > 0) {
+          const msg = { type: 'TICKS', payload: stored };
+          if (port) port.postMessage(msg);
+          else self.postMessage(msg);
+        }
+      });
+
       startFlushing(payload.flushInterval || 300);
       startZombieWatchdog();
       break;
 
     case 'RESUME': {
-      // Background Recovery: If app was suspended, force-check all connections
       const now = Date.now();
       const silenceMs = now - lastDataReceived;
-      if (silenceMs > 10000) { // If away for > 10s, verify stream health
-        console.log(`[worker] Resuming from background (Away for ${Math.round(silenceMs/1000)}s) — force-verifying connections`);
+      if (silenceMs > 10000) {
+        console.log(`[worker] Checking health (Away for ${Math.round(silenceMs/1000)}s)`);
         activeAdapters.forEach((adapter, name) => {
           if (!adapter.socket || adapter.socket.readyState !== WebSocket.OPEN) {
-            console.log(`[worker] Forcing instant reconnect for ${name}`);
             adapter.disconnect();
             ensureExchange(name);
           }
         });
-        lastDataReceived = now; // Prevent immediate zombie re-trigger
+        lastDataReceived = now;
       }
       break;
     }
@@ -620,47 +656,41 @@ self.onmessage = (e) => {
       const prevExchange = currentExchangeName;
       currentExchangeName = payload.exchange;
 
-      // ── Tear down old adapter to stop stale data flow ──
       const oldAdapter = activeAdapters.get(prevExchange);
       if (oldAdapter) {
         oldAdapter.disconnect();
         activeAdapters.delete(prevExchange);
-        console.log(`[worker] Disconnected old adapter: ${prevExchange}`);
       }
 
-      // ── Clear all cross-exchange state for clean isolation ──
       tickerBuffer.clear();
       zoneStates.clear();
       lastTriggered.clear();
       rsiStates.clear();
       volatilityBuffer.clear();
-      lastDataReceived = Date.now(); // Reset zombie watchdog
+      lastDataReceived = Date.now();
 
-      // Connect the new exchange
       ensureExchange(currentExchangeName);
-      console.log(`[worker] Exchange switched: ${prevExchange} → ${currentExchangeName}`);
+      console.log(`[worker] Multi-tab exchange switch: ${prevExchange} → ${currentExchangeName}`);
       break;
     }
 
     case 'UPDATE_SYMBOLS':
-      currentSymbols = new Set(payload.symbols);
-      // Memory Hygiene: Clean up state for symbols no longer being tracked
+      const updateSyms = new Set(payload.symbols);
+      if (setsEqual(currentSymbols, updateSyms)) break;
+      
+      currentSymbols = updateSyms;
+      // Memory Hygiene
       for (const [s] of rsiStates) { if (!currentSymbols.has(s)) rsiStates.delete(s); }
       for (const [s] of coinConfigs) { if (!currentSymbols.has(s)) coinConfigs.delete(s); }
-      // Zone keys: "exchange:SYMBOL-timeframe" → extract bare symbol
       for (const [k] of zoneStates) {
-        const bareSymbol = extractBareSymbol(k);
-        if (!currentSymbols.has(bareSymbol)) zoneStates.delete(k);
+        if (!currentSymbols.has(extractBareSymbol(k))) zoneStates.delete(k);
       }
-      // Alert cooldown keys: "SYMBOL-timeframe" (bare) → extract bare symbol
       for (const [k] of lastTriggered) {
-        const bareSymbol = extractBareSymbol(k);
-        if (!currentSymbols.has(bareSymbol)) lastTriggered.delete(k);
+        if (!currentSymbols.has(extractBareSymbol(k))) lastTriggered.delete(k);
       }
-      // Volatility keys: "exchange:SYMBOL" → extract bare symbol
       for (const [s] of volatilityBuffer) {
-        const bareSymbol = s.includes(':') ? s.split(':').pop() : s;
-        if (!currentSymbols.has(bareSymbol)) volatilityBuffer.delete(s);
+        const bare = s.includes(':') ? s.split(':').pop() : s;
+        if (!currentSymbols.has(bare)) volatilityBuffer.delete(s);
       }
       for (const [s] of tickerBuffer) { if (!currentSymbols.has(s)) tickerBuffer.delete(s); }
 
@@ -675,7 +705,6 @@ self.onmessage = (e) => {
         const now = Date.now();
         const isInitialSync = coinConfigs.size === 0;
         Object.keys(payload.configs).forEach(s => {
-          // Avoid boot storm: only mark as updated if we already had configs
           if (!isInitialSync) configLastUpdated.set(s, now);
           coinConfigs.set(s, payload.configs[s]);
         });
@@ -692,12 +721,9 @@ self.onmessage = (e) => {
       if (payload.symbol && payload.config) {
         coinConfigs.set(payload.symbol, payload.config);
         configLastUpdated.set(payload.symbol, Date.now());
-        // Clear zone states: keys may be "exchange:SYMBOL-tf" or "SYMBOL-tf"
         for (const [key] of zoneStates) {
-          const bare = extractBareSymbol(key);
-          if (bare === payload.symbol) zoneStates.delete(key);
+          if (extractBareSymbol(key) === payload.symbol) zoneStates.delete(key);
         }
-        // Clear cooldown: keys are "SYMBOL-tf" (bare)
         for (const [key] of lastTriggered) {
           if (key.startsWith(`${payload.symbol}-`)) lastTriggered.delete(key);
         }
@@ -714,10 +740,14 @@ self.onmessage = (e) => {
       break;
 
     case 'STOP':
-      activeAdapters.forEach(adapter => adapter.disconnect());
-      activeAdapters.clear();
-      stopFlushing();
-      stopZombieWatchdog();
+      if (isSharedWorker) {
+        if (port) connectedPorts.delete(port);
+        if (connectedPorts.size === 0) {
+          teardown();
+        }
+      } else {
+        teardown();
+      }
       break;
 
     case 'VIRTUAL_TICKET':
@@ -736,29 +766,107 @@ self.onmessage = (e) => {
       }
       break;
   }
-};
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (let x of a) if (!b.has(x)) return false;
+  return true;
+}
+
+function teardown() {
+  activeAdapters.forEach(adapter => adapter.disconnect());
+  activeAdapters.clear();
+  stopFlushing();
+  stopZombieWatchdog();
+  console.log('[worker] Stream fully terminated');
+}
+
+// ── IndexedDB Mirroring (Instant-Start) ───────────────────────
+const DB_NAME = 'rsiq-storage';
+const STORE_NAME = 'prices';
+let db = null;
+
+async function initDB() {
+  if (db) return db;
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 3);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+    request.onsuccess = (e) => {
+      db = e.target.result;
+      resolve(db);
+    };
+    request.onerror = (e) => reject(e.target.error);
+  });
+}
+
+/** 
+ * Persist ticks to IndexedDB.
+ * Throttled to avoid IO-heavy churn during high volatility.
+ */
+async function persistToDB(ticks) {
+  try {
+    const database = await initDB();
+    const tx = database.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    
+    ticks.forEach(([sym, tick]) => {
+      store.put(tick, sym);
+    });
+
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = (e) => reject(e.target.error);
+    });
+  } catch (e) {
+    // Silent fail on persistence errors
+  }
+}
+
+async function getStoredTicks() {
+  try {
+    const database = await initDB();
+    const tx = database.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAll();
+    const keysRequest = store.getAllKeys();
+
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        const results = request.result;
+        const keys = keysRequest.result;
+        const map = results.map((v, i) => [keys[i], v]);
+        resolve(map);
+      };
+      request.onerror = () => resolve([]);
+    });
+  } catch (e) {
+    return [];
+  }
+}
+
+// ── Entry Points ──────────────────────────────────────────────
+
+if (isSharedWorker) {
+  self.onconnect = (e) => {
+    const port = e.ports[0];
+    connectedPorts.add(port);
+    port.onmessage = (msg) => handleMessage(msg, port);
+    port.start();
+    console.log(`[worker] Shared tab connected (Total: ${connectedPorts.size})`);
+  };
+} else {
+  self.onmessage = (e) => handleMessage(e);
+}
 
 // ── Utility Helpers ────────────────────────────────────────────
 
-/**
- * Extract bare symbol from composite keys.
- * Handles multiple formats:
- *   "exchange:SYMBOL-timeframe" → "SYMBOL"
- *   "SYMBOL-timeframe"         → "SYMBOL"
- *   "exchange:SYMBOL"          → "SYMBOL"
- *   "SYMBOL"                   → "SYMBOL"
- */
-function extractBareSymbol(key) {
-  // Remove exchange prefix (e.g., "binance:BTCUSDT-1m" → "BTCUSDT-1m")
-  let bare = key.includes(':') ? key.split(':').pop() : key;
-  // Remove timeframe suffix (e.g., "BTCUSDT-1m" → "BTCUSDT")
-  const dashIdx = bare.indexOf('-');
-  if (dashIdx > 0) bare = bare.substring(0, dashIdx);
-  return bare;
-}
-
 function approximateRsi(state, livePrice, period = 14) {
-  // Fix: use == null instead of ! to allow avgGain=0 (flat market edge case)
   if (!state || state.avgGain == null || state.avgLoss == null) return null;
   const change = livePrice - (state.lastClose || 0);
   let avgGain, avgLoss;
@@ -880,13 +988,16 @@ function computeWorkerStrategyScore(params) {
 }
 
 function startFlushing(interval) {
+  if (flushInterval) clearInterval(flushInterval);
   flushInterval = setInterval(() => {
     if (tickerBuffer.size > 0) {
-      // Small optimization: only send if we have fresh data
-      self.postMessage({
+      const payload = Array.from(tickerBuffer.entries());
+      broadcast({
         type: 'TICKS',
-        payload: Array.from(tickerBuffer.entries())
+        payload
       });
+      // Mirror to IndexedDB (Instant Start Persistence)
+      persistToDB(payload);
       tickerBuffer.clear();
     }
   }, interval || 300);

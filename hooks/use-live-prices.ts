@@ -31,13 +31,45 @@ export interface LiveTick {
  */
 class PriceTickEngine extends EventTarget {
   private prices = new Map<string, LiveTick>();
-  private worker: Worker | null = null;
+  private worker: Worker | SharedWorker | null = null;
+  private port: MessagePort | null = null;
   private symbols = new Set<string>();
   private virtualPollInterval: any = null;
   private exchange: string = 'binance';
+  private isMasterTab: boolean = false;
 
   constructor() {
     super();
+    this.electMaster();
+  }
+
+  // ── Master Election (Web Locks API) ──────────────────────────
+  // Ensures only one tab handles "UI side effects" like sounds/toasts.
+  private async electMaster() {
+    if (typeof navigator === 'undefined' || !navigator.locks) {
+      this.isMasterTab = true; // Fallback
+      return;
+    }
+
+    try {
+      while (true) {
+        await navigator.locks.request('rsiq_ui_master', async (lock) => {
+          this.isMasterTab = true;
+          console.log('[PriceEngine] Elected as UI MASTER');
+          this.dispatchEvent(new CustomEvent('master-status', { detail: true }));
+          
+          // Keep the lock as long as the tab is alive
+          await new Promise((resolve) => {
+             window.addEventListener('unload', resolve, { once: true });
+          });
+          this.isMasterTab = false;
+        });
+        // If we lose the lock, wait a bit and try to re-acquire
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    } catch (e) {
+      this.isMasterTab = true; // Safe fallback
+    }
   }
 
   // Hydrate from localStorage on client side only
@@ -56,9 +88,29 @@ class PriceTickEngine extends EventTarget {
     if (typeof window === 'undefined' || this.worker) return;
     this.symbols = initialSymbols;
 
-    this.worker = new Worker('/ticker-worker.js');
+    // ── SharedWorker Migration ──
+    const workerUrl = '/ticker-worker.js';
+    try {
+      if (typeof SharedWorker !== 'undefined') {
+        const sw = new SharedWorker(workerUrl, 'rsiq-ticker-v4');
+        this.worker = sw;
+        this.port = sw.port;
+        this.port.start();
+        console.log('[PriceEngine] Connected via SharedWorker');
+      } else {
+        const w = new Worker(workerUrl);
+        this.worker = w;
+        this.port = w as unknown as MessagePort; // Polyfill-like behavior for dedicated worker
+        console.log('[PriceEngine] Connected via Dedicated Worker (SharedWorker not supported)');
+      }
+    } catch (e) {
+      console.error('[PriceEngine] Worker initialization failed', e);
+      return;
+    }
 
-    this.worker.onmessage = (e) => {
+    if (!this.port) return;
+
+    this.port.onmessage = (e) => {
       const { type, payload } = e.data;
       if (type === 'TICKS') {
         const batch = new Map<string, LiveTick>();
@@ -69,13 +121,16 @@ class PriceTickEngine extends EventTarget {
         });
         this.dispatchEvent(new CustomEvent('ticks', { detail: batch }));
       } else if (type === 'ALERT_TRIGGERED') {
-        this.dispatchEvent(new CustomEvent('alert', { detail: payload }));
+        // Only broadcast to UI if we are the Master Tab to avoid double sounds
+        if (this.isMasterTab) {
+          this.dispatchEvent(new CustomEvent('alert', { detail: payload }));
+        }
       } else if (type === 'PRIORITY_SYNC') {
         this.dispatchEvent(new CustomEvent('priority-sync', { detail: payload }));
       }
     };
 
-    this.worker.postMessage({
+    this.postToWorker({
       type: 'START',
       payload: { 
         symbols: Array.from(this.symbols), 
@@ -85,18 +140,15 @@ class PriceTickEngine extends EventTarget {
     });
 
     // ── Visibility Wake-up Logic ──
-    // When the app is resumed from background/minimized state, force the worker to reconnect immediately
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && this.worker) {
+        if (document.visibilityState === 'visible') {
           console.log('[PriceEngine] App visible, signaling worker to resume...');
-          this.worker.postMessage({ type: 'RESUME' });
+          this.postToWorker({ type: 'RESUME' });
         }
       });
     }
 
-    // ── Virtual Market Emulation (Indices/CFDs) ──
-    // Pull fresh data for assets not in Binance WebSocket (Yahook symbols)
     this.startVirtualPolling();
   }
 
@@ -136,18 +188,16 @@ class PriceTickEngine extends EventTarget {
             const staleMs = existing ? Date.now() - existing.updatedAt : Infinity;
             if (staleMs < 3000) continue; // Skip if WS data is fresh
             
-            if (this.worker) {
-              this.worker.postMessage({
-                type: 'VIRTUAL_TICKET',
-                payload: {
-                  s: row.symbol,
-                  c: price,
-                  o: parseFloat(row.prevPrice24h) || price,
-                  q: parseFloat(row.turnover24h) || 0,
-                  exchange: 'bybit'
-                }
-              });
-            }
+            this.postToWorker({
+              type: 'VIRTUAL_TICKET',
+              payload: {
+                s: row.symbol,
+                c: price,
+                o: parseFloat(row.prevPrice24h) || price,
+                q: parseFloat(row.turnover24h) || 0,
+                exchange: 'bybit'
+              }
+            });
           }
         } catch (e) {
           console.warn('[price-engine] Bybit Spot REST poll failed', e);
@@ -166,8 +216,8 @@ class PriceTickEngine extends EventTarget {
 
       symbols.forEach(sym => {
         const entry = data.find((e: any) => e.symbol === sym);
-        if (entry && this.worker) {
-          this.worker.postMessage({
+        if (entry) {
+          this.postToWorker({
             type: 'VIRTUAL_TICKET',
             payload: {
               s: sym,
@@ -186,12 +236,10 @@ class PriceTickEngine extends EventTarget {
 
   updateSymbols(newSymbols: Set<string>) {
     this.symbols = newSymbols;
-    if (this.worker) {
-      this.worker.postMessage({
-        type: 'UPDATE_SYMBOLS',
-        payload: { symbols: Array.from(this.symbols) }
-      });
-    }
+    this.postToWorker({
+      type: 'UPDATE_SYMBOLS',
+      payload: { symbols: Array.from(this.symbols) }
+    });
   }
 
   setExchange(exchange: string) {
@@ -203,12 +251,10 @@ class PriceTickEngine extends EventTarget {
     this.prices.clear();
     
     localStorage.setItem('crypto-rsi-exchange', exchange);
-    if (this.worker) {
-      this.worker.postMessage({
-        type: 'SET_EXCHANGE',
-        payload: { exchange }
-      });
-    }
+    this.postToWorker({
+      type: 'SET_EXCHANGE',
+      payload: { exchange }
+    });
 
     // Notify alert engine to reset zone states for clean exchange isolation
     this.dispatchEvent(new CustomEvent('exchange-changed', {
@@ -220,20 +266,22 @@ class PriceTickEngine extends EventTarget {
     return this.exchange;
   }
 
+  getIsMaster() {
+    return this.isMasterTab;
+  }
+
   getLatest(symbol: string): LiveTick | undefined {
     return this.prices.get(symbol);
   }
 
   syncStates(data: { configs?: Record<string, any>, rsiStates?: Record<string, any> }) {
-    if (this.worker) {
-      this.worker.postMessage({ type: 'SYNC_STATES', payload: data });
-    }
+    this.postToWorker({ type: 'SYNC_STATES', payload: data });
   }
 
   /** Post any typed message directly to the worker (for fast-path updates like SYNC_CONFIG_FAST, UPDATE_PERIOD) */
   postToWorker(message: { type: string; payload?: any }) {
-    if (this.worker) {
-      this.worker.postMessage(message);
+    if (this.port) {
+      this.port.postMessage(message);
     }
   }
 
@@ -243,9 +291,14 @@ class PriceTickEngine extends EventTarget {
       this.virtualPollInterval = null;
     }
     if (this.worker) {
-      this.worker.postMessage({ type: 'STOP' });
-      this.worker.terminate();
+      this.postToWorker({ type: 'STOP' });
+      if (this.worker instanceof Worker) {
+        this.worker.terminate();
+      } else if (this.port) {
+        this.port.close();
+      }
       this.worker = null;
+      this.port = null;
     }
   }
 }
@@ -335,8 +388,17 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     engine.updateSymbols(symbols);
   }, [symbols]);
 
+  const [isMaster, setIsMaster] = useState(engine.getIsMaster());
+
+  useEffect(() => {
+    const handleMaster = (e: Event) => setIsMaster((e as CustomEvent).detail);
+    engine.addEventListener('master-status', handleMaster);
+    return () => engine.removeEventListener('master-status', handleMaster);
+  }, []);
+
   return { 
     isConnected, 
+    isMaster,
     livePrices, 
     syncStates: (d: any) => engine.syncStates(d),
     exchange,

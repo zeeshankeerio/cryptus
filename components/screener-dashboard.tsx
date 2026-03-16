@@ -1340,7 +1340,7 @@ export default function ScreenerDashboard() {
     // Pre-flight sharding: warm up sockets with majors while waiting for API
     return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
   }, [data]);
-  const { livePrices, isConnected, syncStates, exchange, setExchange, updateSymbols, postToWorker } = useLivePrices(symbolSet, 300);
+  const { livePrices, isConnected, isMaster, syncStates, exchange, setExchange, updateSymbols, postToWorker } = useLivePrices(symbolSet, 300);
 
   // ─── Hybrid Atomic Data ───
   // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
@@ -2164,6 +2164,18 @@ export default function ScreenerDashboard() {
                   />
                   <span className="font-black tracking-widest uppercase text-[9px]">{isConnected ? 'LIVE' : 'OFFLINE'}</span>
                 </div>
+
+                {isMaster && (
+                   <motion.div 
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/30 bg-gradient-to-r from-[#39FF14]/20 to-transparent px-3 py-2 shadow-[0_0_20px_rgba(57,255,20,0.1)] backdrop-blur-md"
+                   >
+                     <ShieldCheck size={12} className="text-[#39FF14] animate-pulse" />
+                     <span className="font-black tracking-widest uppercase text-[9px] text-white">Master Hub</span>
+                   </motion.div>
+                )}
+
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-slate-400">
                   <LayoutGrid size={12} className="text-slate-600" />
                   <span className="font-black tracking-tight text-[9px] tabular-nums">{data.length}</span>
@@ -2222,6 +2234,14 @@ export default function ScreenerDashboard() {
                       className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14]" : "bg-slate-700")}
                     />
                     <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "LIVE" : "OFFLINE"}</span>
+                    {isMaster && (
+                      <>
+                        <div className="w-1 h-1 rounded-full bg-[#39FF14]/40" />
+                        <span className="text-[8px] font-black text-[#39FF14] uppercase tracking-widest flex items-center gap-1">
+                          <ShieldCheck size={8} /> MASTER
+                        </span>
+                      </>
+                    )}
                     <div className="w-1 h-1 rounded-full bg-slate-800" />
                     <span className="text-[8px] font-black text-[#39FF14] tabular-nums">{data.length} PAIRS</span>
                   </div>

@@ -133,6 +133,60 @@ self.addEventListener('push', (event) => {
   }
 });
 
+// ── Periodic Background Sync (2026 Freshness) ───────────────────
+// Wakes up the worker to fetch fresh data even if app is closed.
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'rsiq-freshness-sync') {
+    event.waitUntil(refreshDataInBackground());
+  }
+});
+
+async function refreshDataInBackground() {
+  try {
+    // 1. Fetch top 100 pairs from the API
+    const res = await fetch('/api/screener?count=100&exchange=binance');
+    if (!res.ok) return;
+    const json = await res.json();
+    const data = json.data as any[];
+
+    // 2. Open IndexedDB and update mirrored prices
+    const DB_NAME = 'rsiq-storage';
+    const STORE_NAME = 'prices';
+    
+    const dbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open(DB_NAME, 3);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+
+    const db: any = await dbPromise;
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+
+    data.forEach(entry => {
+      // Map ScreenerEntry to LiveTick
+      const tick = {
+        price: entry.price,
+        change24h: entry.change24h,
+        volume24h: entry.volume24h,
+        updatedAt: Date.now(),
+        // indicators
+        rsi1m: entry.rsi1m,
+        rsi5m: entry.rsi5m,
+        rsi15m: entry.rsi15m,
+        rsi1h: entry.rsi1h,
+        strategyScore: entry.strategyScore,
+        strategySignal: entry.strategySignal
+      };
+      store.put(tick, entry.symbol);
+    });
+
+    console.log(`[sw] Periodic sync updated ${data.length} symbols`);
+  } catch (err) {
+    console.error('[sw] Periodic sync failed:', err);
+  }
+}
+
 // Handle notification clicks — open /terminal directly for trade decisions
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();

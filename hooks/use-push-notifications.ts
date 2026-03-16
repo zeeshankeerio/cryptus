@@ -42,6 +42,22 @@ export function usePushNotifications() {
 
   useEffect(() => {
     checkSubscription();
+    
+    // ── Periodic Background Sync Registration (2026) ──
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(async (registration: any) => {
+        if ('periodicSync' in registration) {
+          try {
+            await registration.periodicSync.register('rsiq-freshness-sync', {
+              minInterval: 60 * 60 * 1000, // 1 hour
+            });
+            console.log('[usePush] Periodic Sync registered: rsiq-freshness-sync');
+          } catch (e) {
+            console.warn('[usePush] Periodic Sync regi failed:', e);
+          }
+        }
+      });
+    }
   }, []);
 
   const subscribe = async () => {
