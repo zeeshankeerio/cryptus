@@ -3067,50 +3067,88 @@ const NumericAdjuster = memo(({
   label, value, onChange, min = 1, max = 99,
   colorClass = "text-white", bgClass = "bg-slate-950/50", borderClass = "border-white/5",
   description = "", loading = false
-}: any) => (
-  <div className="space-y-1.5 pointer-events-auto">
-    <div className="flex items-center justify-between px-0.5">
-      <label className={cn("text-[8px] font-black uppercase tracking-[0.15em]", colorClass)}>{label}</label>
-      {description && <span className="text-[7px] font-bold text-slate-600 uppercase tracking-tighter">{description}</span>}
+}: any) => {
+  const [localValue, setLocalValue] = useState(value.toString());
+
+  useEffect(() => {
+    // Sync local state if parent value changes (e.g. from buttons or initial load)
+    if (value.toString() !== localValue && document.activeElement !== document.getElementById(`input-${label}`)) {
+      setLocalValue(value.toString());
+    }
+  }, [value, label]);
+
+  const handleManualChange = (val: string) => {
+    // Only allow digits
+    const cleaned = val.replace(/[^0-9]/g, '');
+    setLocalValue(cleaned);
+    
+    // Auto-commit if it's a valid number within bounds
+    const parsed = parseInt(cleaned);
+    if (!isNaN(parsed) && parsed >= min && parsed <= max) {
+      onChange(parsed);
+    }
+  };
+
+  const commitValue = () => {
+    let parsed = parseInt(localValue);
+    if (isNaN(parsed)) parsed = min;
+    const clamped = Math.min(max, Math.max(min, parsed));
+    onChange(clamped);
+    setLocalValue(clamped.toString());
+  };
+
+  return (
+    <div className="space-y-1.5 pointer-events-auto">
+      <div className="flex items-center justify-between px-0.5">
+        <label className={cn("text-[8px] font-black uppercase tracking-[0.15em]", colorClass)}>{label}</label>
+        {description && <span className="text-[7px] font-bold text-slate-600 uppercase tracking-tighter">{description}</span>}
+      </div>
+      <div className={cn(
+        "flex items-center gap-1 p-1 rounded-2xl border transition-all duration-300 group/adjuster",
+        bgClass, borderClass,
+        "hover:border-white/10 shadow-sm"
+      )}>
+        <button
+          type="button"
+          disabled={loading || value <= min}
+          onClick={() => {
+            const next = Math.max(min, value - 1);
+            onChange(next);
+            setLocalValue(next.toString());
+          }}
+          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+        >
+          <Minus size={14} />
+        </button>
+        <input
+          id={`input-${label}`}
+          type="text"
+          inputMode="numeric"
+          value={localValue}
+          onChange={(e) => handleManualChange(e.target.value)}
+          onBlur={commitValue}
+          onKeyDown={(e) => e.key === 'Enter' && commitValue()}
+          className={cn(
+            "w-full bg-transparent text-center font-black focus:outline-none transition-all text-sm appearance-none tabular-nums",
+            colorClass
+          )}
+        />
+        <button
+          type="button"
+          disabled={loading || value >= max}
+          onClick={() => {
+            const next = Math.min(max, value + 1);
+            onChange(next);
+            setLocalValue(next.toString());
+          }}
+          className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
+        >
+          <Plus size={14} />
+        </button>
+      </div>
     </div>
-    <div className={cn(
-      "flex items-center gap-1 p-1 rounded-2xl border transition-all duration-300 group/adjuster",
-      bgClass, borderClass,
-      "hover:border-white/10 shadow-sm"
-    )}>
-      <button
-        type="button"
-        disabled={loading || value <= min}
-        onClick={() => onChange(Math.max(min, value - 1))}
-        className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
-      >
-        <Minus size={14} />
-      </button>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={min} max={max}
-        value={value}
-        onChange={(e) => {
-          const val = parseInt(e.target.value);
-          if (!isNaN(val)) onChange(Math.min(max, Math.max(min, val)));
-        }}
-        className={cn(
-          "w-full bg-transparent text-center font-black focus:outline-none transition-all text-sm appearance-none tabular-nums",
-          colorClass
-        )}
-      />
-      <button
-        type="button"
-        disabled={loading || value >= max}
-        onClick={() => onChange(Math.min(max, value + 1))}
-        className="p-2 rounded-xl hover:bg-white/5 text-slate-500 hover:text-white disabled:opacity-10 transition-all focus:outline-none flex items-center justify-center"
-      >
-        <Plus size={14} />
-      </button>
-    </div>
-  </div>
-));
+  );
+});
 
 NumericAdjuster.displayName = 'NumericAdjuster';
 
