@@ -256,7 +256,8 @@ class BybitAdapter extends ExchangeAdapter {
     const majors = majorPairs.filter(s => currentSymbols.has(s));
 
     const remaining = allSymbols.filter(s => !alertSymbols.includes(s) && !majors.includes(s));
-    const prioritised = [...new Set([...alertSymbols, ...majors, ...remaining])].slice(0, 30);
+    // GAP-B3 FIX: Increased subscription limit for Bybit Spot (v5 supports up to 500, we'll use 200 for stability)
+    const prioritised = [...new Set([...alertSymbols, ...majors, ...remaining])].slice(0, 200);
     const topicSet = prioritised.map(s => `tickers.${s}`);
     this.subscribedTopics = topicSet;
 
@@ -409,7 +410,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       if (ema12 && ema26) {
         const macdLine = ema12 - ema26;
         const macdSignal = approximateEma(state.macdSignalState, macdLine, 9);
-        macdHistogram = macdLine - macdSignal;
+        // Precision parity with main thread lib/indicators.ts
+        macdHistogram = Math.round((macdLine - macdSignal) * 1e8) / 1e8;
       }
     }
 
@@ -513,7 +515,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
                 exchange: exchangeName,
                 timeframe: tf.label,
                 value: tf.rsi,
-                type: zone
+                type: zone,
+                price: t.c // GAP-A2 FIX: Include price in payload
               }
             });
 
@@ -557,6 +560,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
               timeframe: 'STRATEGY',
               value: currentStrategy.score,
               type: currentStrat === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
+              price: t.c // GAP-A2 FIX: Include price in payload
             }
           });
 

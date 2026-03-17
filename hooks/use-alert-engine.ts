@@ -4,6 +4,7 @@ import type { ScreenerEntry } from '@/lib/types';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
 import { computeStrategyScore } from '@/lib/indicators';
 import { getSymbolAlias } from '@/lib/symbol-utils';
+import { formatPrice } from '@/lib/utils';
 
 // ── Wake Lock for mobile alert reliability (GAP-E4) ──
 let wakeLock: WakeLockSentinel | null = null;
@@ -497,11 +498,12 @@ export function useAlertEngine(
                 const val = timeframes.find(t => t.label === label)?.val ?? 0;
                 const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
                 const zoneLabel = currentZone === 'OVERSOLD' ? 'BUY' : 'SELL';
+                const priceStr = formatPrice(live.price);
 
                 if (document.visibilityState === 'visible') {
                   toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
-                    `${getSymbolAlias(symbol)} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
-                    { duration: 6000 }
+                    `${getSymbolAlias(symbol)} ${label} RSI ${currentZone}`,
+                    { duration: 8000, description: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]` }
                   );
                 }
                 playAlertSoundRef.current();
@@ -509,7 +511,7 @@ export function useAlertEngine(
                 
                 triggerNativeRef.current(
                   `${getSymbolAlias(symbol)} ${zoneLabel}`,
-                  `[${formattedExchange}] ${label} RSI reached ${(val as number).toFixed(1)}`
+                  `[${formattedExchange}] ${label} RSI reached ${(val as number).toFixed(1)} @ $${priceStr}`
                 );
               }
             }
@@ -547,10 +549,11 @@ export function useAlertEngine(
               if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
                 lastTriggered.current.set(alertKey, now);
                 const isBuy = currentStrat === 'strong-buy';
+                const priceStr = formatPrice(live.price);
                 if (document.visibilityState === 'visible') {
                   toast[isBuy ? 'success' : 'error'](
                     `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
-                    { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
+                    { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}` }
                   );
                 }
                 playAlertSoundRef.current();
@@ -563,11 +566,11 @@ export function useAlertEngine(
                 });
 
                 const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
-                // isBuy is already defined above, using the existing one.
+                // isBuy and priceStr are already defined above
                 
                 triggerNativeRef.current(
                   `${getSymbolAlias(symbol)} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                  `[${formattedExchange}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)}`
+                  `[${formattedExchange}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}`
                 );
               }
             }
@@ -582,7 +585,8 @@ export function useAlertEngine(
       // the worker's key format and prevent the batch evaluator from re-firing.
       const handleWorkerAlert = (e: Event) => {
         if (!enabledRef.current) return;
-        const { symbol, exchange, timeframe, value, type } = (e as CustomEvent).detail;
+        const payload = (e as CustomEvent).detail;
+        const { symbol, exchange, timeframe, value, type } = payload;
 
         const config = coinConfigsRef.current[symbol];
         if (!config) return;
@@ -597,13 +601,13 @@ export function useAlertEngine(
           const isStrat = timeframe === 'STRATEGY';
           const alias = getSymbolAlias(symbol);
           const exchangeLabel = exchange ? ` [${exchange.charAt(0).toUpperCase() + exchange.slice(1)}]` : '';
-
+          const priceStr = payload.price ? formatPrice(payload.price) : '';
           const title = isStrat
             ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
             : `${alias}${exchangeLabel} ${timeframe} RSI ${type}`;
           const desc = isStrat
-            ? `Strategy Score: ${value.toFixed(0)}`
-            : `RSI: ${value.toFixed(1)}`;
+            ? `Strategy Score: ${value.toFixed(0)} ${priceStr ? `@ $${priceStr}` : ''}`
+            : `RSI: ${value.toFixed(1)} ${priceStr ? `@ $${priceStr}` : ''}`;
 
           if (document.visibilityState === 'visible') {
             toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' ? 'success' : 'error'](
