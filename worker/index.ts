@@ -98,24 +98,34 @@ const showNativeNotification = (payload: any) => {
   });
 };
 
-// ── Direct Alert Channel (Worker -> Service Worker) ─────────────
-// Listens for alerts broadcasted directly from the Ticker Worker.
-// This ensures reliability even if the main thread is throttled.
+// Listen for messages from the main thread (Foreground/UI fallback)
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        // If any tab is focused/visible, the UI is already handling this alert.
+        const isAppVisible = clients.some((c: any) => c.visibilityState === 'visible');
+        if (isAppVisible) return;
+        
+        return showNativeNotification(event.data.payload);
+      })
+    );
+  }
+});
+
+// Direct Alert Channel handler with visibility check
 if (typeof BroadcastChannel !== 'undefined') {
   const alertChannel = new BroadcastChannel('rsiq-alerts');
   alertChannel.onmessage = (event) => {
     if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
-      showNativeNotification(event.data.payload);
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        const isAppVisible = clients.some((c: any) => c.visibilityState === 'visible');
+        if (isAppVisible) return;
+        showNativeNotification(event.data.payload);
+      });
     }
   };
 }
-
-// Listen for messages from the main thread (Foreground/UI fallback)
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
-    event.waitUntil(showNativeNotification(event.data.payload));
-  }
-});
 
 // ── Web Push API (24/7 Background Support) ───────────────────────
 // Listens for push events from the backend (VAPID).

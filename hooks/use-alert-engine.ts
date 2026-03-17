@@ -445,10 +445,12 @@ export function useAlertEngine(
                 const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
                 const zoneLabel = currentZone === 'OVERSOLD' ? 'BUY' : 'SELL';
 
-                toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
-                  `${getSymbolAlias(symbol)} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
-                  { duration: 6000 }
-                );
+                if (document.visibilityState === 'visible') {
+                  toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
+                    `${getSymbolAlias(symbol)} ${label} RSI ${currentZone} [${(val as number).toFixed(1)}]`,
+                    { duration: 6000 }
+                  );
+                }
                 playAlertSoundRef.current();
                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
                 
@@ -492,10 +494,12 @@ export function useAlertEngine(
               if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
                 lastTriggered.current.set(alertKey, now);
                 const isBuy = currentStrat === 'strong-buy';
-                toast[isBuy ? 'success' : 'error'](
-                  `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
-                  { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
-                );
+                if (document.visibilityState === 'visible') {
+                  toast[isBuy ? 'success' : 'error'](
+                    `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
+                    { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)}` }
+                  );
+                }
                 playAlertSoundRef.current();
                 logAlertRef.current({
                   symbol,
@@ -548,10 +552,12 @@ export function useAlertEngine(
             ? `Strategy Score: ${value.toFixed(0)}`
             : `RSI: ${value.toFixed(1)}`;
 
-          toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' ? 'success' : 'error'](
-            title,
-            { duration: 8000, description: desc }
-          );
+          if (document.visibilityState === 'visible') {
+            toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' ? 'success' : 'error'](
+              title,
+              { duration: 8000, description: desc }
+            );
+          }
 
           playAlertSoundRef.current();
           logAlertRef.current({ symbol, exchange, timeframe, value, type: type as Alert['type'] });

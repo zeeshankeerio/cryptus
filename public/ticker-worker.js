@@ -39,6 +39,11 @@ let configLastUpdated = new Map(); // Track manual updates for cold-start alerts
 const COOLDOWN_MS = 3 * 60 * 1000;
 let globalRsiPeriod = 14;
 let globalAlertsEnabled = false;
+let portVisibility = new Map(); // Track visibility per port
+function isAnyTabVisible() {
+  for (const v of portVisibility.values()) if (v) return true;
+  return false;
+}
 
 // ── Direct Alert Channel (Worker -> Service Worker) ─────────────
 // Bypasses the Main Thread for background reliability when minimized.
@@ -512,7 +517,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
             });
 
             // Direct broadcast to Service Worker for background reliability
-            if (alertChannel && globalAlertsEnabled) {
+            // SILENCE THIS if any tab is visible (UI handles it) 
+            // OR if strictly backgrounding to prevent queuing.
+            if (alertChannel && globalAlertsEnabled && !isAnyTabVisible()) {
               const zoneLabel = zone === 'OVERSOLD' ? 'BUY' : 'SELL';
               alertChannel.postMessage({
                 type: 'ALERT_NOTIFICATION',
@@ -553,7 +560,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
           });
 
           // Direct broadcast to Service Worker for background reliability
-          if (alertChannel && globalAlertsEnabled) {
+          if (alertChannel && globalAlertsEnabled && !isAnyTabVisible()) {
             const isBuy = currentStrat === 'strong-buy';
             alertChannel.postMessage({
               type: 'ALERT_NOTIFICATION',
@@ -748,7 +755,10 @@ function handleMessage(e, port = null) {
 
     case 'STOP':
       if (isSharedWorker) {
-        if (port) connectedPorts.delete(port);
+        if (port) {
+          connectedPorts.delete(port);
+          portVisibility.delete(port);
+        }
         if (connectedPorts.size === 0) {
           teardown();
         }
@@ -771,6 +781,10 @@ function handleMessage(e, port = null) {
         stopFlushing();
         startFlushing(payload.flushInterval);
       }
+      break;
+
+    case 'VISIBILITY_CHANGE':
+      if (port) portVisibility.set(port, payload.visible);
       break;
   }
 }

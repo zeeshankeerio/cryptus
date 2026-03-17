@@ -141,12 +141,18 @@ class PriceTickEngine extends EventTarget {
 
     // ── Visibility Wake-up Logic ──
     if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
+      const handleVisibility = () => {
+        const visible = document.visibilityState === 'visible';
+        if (visible) {
           console.log('[PriceEngine] App visible, signaling worker to resume...');
           this.postToWorker({ type: 'RESUME' });
         }
-      });
+        this.postToWorker({ type: 'VISIBILITY_CHANGE', payload: { visible } });
+      };
+
+      document.addEventListener('visibilitychange', handleVisibility);
+      // Send initial state
+      handleVisibility();
     }
 
     this.startVirtualPolling();
