@@ -1269,6 +1269,7 @@ export default function ScreenerDashboard() {
   const [globalThresholdsEnabled, setGlobalThresholdsEnabled] = useState(false);
   const [globalOverbought, setGlobalOverbought] = useState(90);
   const [globalOversold, setGlobalOversold] = useState(15);
+  const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
@@ -1324,6 +1325,13 @@ export default function ScreenerDashboard() {
 
     const globalOS = localStorage.getItem('crypto-rsi-global-oversold');
     if (globalOS) setGlobalOversold(Number(globalOS));
+
+    const globalTFs = localStorage.getItem('crypto-rsi-global-timeframes');
+    if (globalTFs) {
+      try {
+        setGlobalThresholdTimeframes(JSON.parse(globalTFs));
+      } catch { }
+    }
   }, []);
 
   const reportVisibility = useCallback((symbol: string, isVisible: boolean) => {
@@ -1466,7 +1474,8 @@ export default function ScreenerDashboard() {
     soundEnabled,
     globalThresholdsEnabled,
     globalOverbought,
-    globalOversold
+    globalOversold,
+    globalThresholdTimeframes
   );
 
   // Keep coinConfigsRef in sync for stable callbacks (fetchData)
@@ -1492,6 +1501,10 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-global-oversold', globalOversold.toString());
   }, [globalOversold]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-timeframes', JSON.stringify(globalThresholdTimeframes));
+  }, [globalThresholdTimeframes]);
 
   useEffect(() => {
     localStorage.setItem('crypto-rsi-pairs', pairCount.toString());
@@ -2881,6 +2894,8 @@ export default function ScreenerDashboard() {
             setGlobalOverbought={setGlobalOverbought}
             globalOversold={globalOversold}
             setGlobalOversold={setGlobalOversold}
+            globalThresholdTimeframes={globalThresholdTimeframes}
+            setGlobalThresholdTimeframes={setGlobalThresholdTimeframes}
           />
         )}
       </AnimatePresence>
@@ -3537,7 +3552,9 @@ function GlobalSettingsModal({
   globalOverbought,
   setGlobalOverbought,
   globalOversold,
-  setGlobalOversold
+  setGlobalOversold,
+  globalThresholdTimeframes,
+  setGlobalThresholdTimeframes
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
@@ -3560,6 +3577,8 @@ function GlobalSettingsModal({
   setGlobalOverbought: (v: number) => void;
   globalOversold: number;
   setGlobalOversold: (v: number) => void;
+  globalThresholdTimeframes: string[];
+  setGlobalThresholdTimeframes: (v: string[]) => void;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -3819,6 +3838,36 @@ function GlobalSettingsModal({
                     description="Trigger @ Lower"
                     loading={!globalThresholdsEnabled}
                   />
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mt-5">
+                  <label className="text-[7px] font-black uppercase tracking-widest text-slate-500 w-full mb-1 ml-0.5">Active Timeframes</label>
+                  {[
+                    { key: '1m', label: '1m' },
+                    { key: '5m', label: '5m' },
+                    { key: '15m', label: '15M' },
+                    { key: '1h', label: '1H' },
+                    { key: 'Custom', label: 'CUST' }
+                  ].map(tf => (
+                    <button
+                      key={tf.key}
+                      disabled={!globalThresholdsEnabled}
+                      onClick={() => {
+                        const next = globalThresholdTimeframes.includes(tf.key)
+                          ? globalThresholdTimeframes.filter(t => t !== tf.key)
+                          : [...globalThresholdTimeframes, tf.key];
+                        setGlobalThresholdTimeframes(next);
+                      }}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg text-[8px] font-black uppercase transition-all tracking-wider border shrink-0",
+                        globalThresholdTimeframes.includes(tf.key)
+                          ? "bg-purple-500/20 border-purple-500/50 text-purple-400"
+                          : "bg-slate-950/50 border-white/5 text-slate-600 hover:text-slate-400"
+                      )}
+                    >
+                      {tf.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

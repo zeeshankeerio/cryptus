@@ -63,7 +63,8 @@ export function useAlertEngine(
   soundEnabled: boolean,
   globalThresholdsEnabled: boolean = false,
   globalOverbought: number = 90,
-  globalOversold: number = 15
+  globalOversold: number = 15,
+  globalThresholdTimeframes: string[] = ['1m', '5m', '15m', '1h']
 ) {
   // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
   useEffect(() => {
@@ -295,6 +296,9 @@ export function useAlertEngine(
 
   const globalOversoldRef = useRef(globalOversold);
   useEffect(() => { globalOversoldRef.current = globalOversold; }, [globalOversold]);
+
+  const globalThresholdTimeframesRef = useRef(globalThresholdTimeframes);
+  useEffect(() => { globalThresholdTimeframesRef.current = globalThresholdTimeframes; }, [globalThresholdTimeframes]);
 
   // ── Native notification ──
   const triggerNativeNotification = useCallback((title: string, body: string) => {
@@ -531,7 +535,7 @@ export function useAlertEngine(
 
             // Determine if this specific TF-Symbol hit a global threshold
             let isGlobalHit = false;
-            if (globalEnabled) {
+            if (globalEnabled && globalThresholdTimeframesRef.current.includes(label)) {
               if (currentZone === 'OVERSOLD') {
                 isGlobalHit = (globalOverboughtRef.current < globalOversoldRef.current) ? (val as number) >= globalOsT : (val as number) <= globalOsT;
               } else {
