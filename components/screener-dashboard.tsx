@@ -2907,9 +2907,9 @@ function CoinSettingsModal({
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.9, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.9, y: 20 }}
+        initial={{ scale: 0.95, y: -10 }}
+        animate={{ scale: 1, y: -10 }}
+        exit={{ scale: 0.95, y: -10 }}
         className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >

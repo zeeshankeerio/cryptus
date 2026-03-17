@@ -150,11 +150,11 @@ export function useAlertEngine(
       }
 
       // iOS/Mobile Magic: Play a silent buffer to "unlock" audio output
-      // Without this, even a 'running' context might stay silent on many mobile browsers.
       if (ctx.state === 'running') {
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0001, ctx.currentTime); // Near silent
+        // Slightly higher volume than 0.0001 for better Android "wake"
+        gain.gain.setValueAtTime(0.0005, ctx.currentTime); 
         oscillator.connect(gain);
         gain.connect(ctx.destination);
         oscillator.start(0);
@@ -187,8 +187,9 @@ export function useAlertEngine(
     // Audio Keep-Alive: OS/Mobile browsers often suspend AudioContext after a few minutes of silence.
     // We play a near-silent pulse every 4 minutes to keep the context "warm".
     const keepAliveInterval = setInterval(() => {
+      // 2026 Android Optimization: Shorter pulse interval (2.5 min) to prevent CPU sleep
       resumeAudioContext();
-    }, 4 * 60 * 1000);
+    }, 2.5 * 60 * 1000);
 
     return () => {
       window.removeEventListener('click', handleGesture);
@@ -209,13 +210,16 @@ export function useAlertEngine(
       }
       const ctx = audioCtxRef.current;
 
-      if (ctx.state === 'suspended') {
+      if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
         await ctx.resume().catch(() => { });
       }
 
       if (ctx.state !== 'running') {
-        console.warn('[alerts] AudioContext not running, relying on notification sound');
-        return;
+        // One final attempt for Android Chrome stability
+        await ctx.resume().catch(() => {});
+        console.warn('[alerts] AudioContext not running, relying on notification sound fallback');
+        // Type assertion to 'any' to bypass TS narrowing which doesn't account for state change after await
+        if ((ctx.state as any) !== 'running') return;
       }
 
       const playTone = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => {

@@ -114,13 +114,10 @@ const showNativeNotification = (payload: any) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'ALERT_NOTIFICATION') {
     event.waitUntil(
-      self.clients.matchAll({ type: 'window' }).then((clients) => {
-        // If any tab is focused/visible, the UI is already handling this alert.
-        const isAppVisible = clients.some((c: any) => c.visibilityState === 'visible');
-        if (isAppVisible) return;
-        
-        return showNativeNotification(event.data.payload);
-      })
+      // 2026 Android Chrome Fix: Always show notification if explicitly requested via postMessage.
+      // This serves as a bulletproof fallback for the synthesized AudioContext which
+      // frequently suspends on mobile after long periods of inactivity.
+      showNativeNotification(event.data.payload)
     );
   }
 });
