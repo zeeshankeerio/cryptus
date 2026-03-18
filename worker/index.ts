@@ -100,9 +100,9 @@ const showNativeNotification = (payload: any) => {
     badge: '/logo/rsiq-pro-icon.png',
     silent: false,
     requireInteraction: true, // Keep on screen for trade urgency on mobile
-    renotify: true,
+    renotify: true, // Ensure sound/vibration fires for every alert even if one is active
     tag,
-    vibrate: [300, 100, 300, 100, 400], // Stronger pattern for mobile awareness
+    vibrate: [200, 100, 200, 100, 300, 100, 400], // More distinct 2026 urgency pattern
     data: { exchange, url: '/terminal' },
     actions: [
       { action: 'open', title: 'Open Terminal' }

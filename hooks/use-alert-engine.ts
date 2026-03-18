@@ -33,6 +33,10 @@ declare global {
   }
 }
 
+// ── 2026 Resilient Audio Anchor (Media Session) ──
+// A 1-second silent WAV to anchor the Media Session and prevent background throttling
+const SILENT_WAV_BASE64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
 export interface Alert {
   id: string;
   symbol: string;
@@ -141,11 +145,48 @@ export function useAlertEngine(
   }, [coinConfigs]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioAnchorRef = useRef<HTMLAudioElement | null>(null);
+
+  // ── Audio: setup media session and anchor ──
+  const setupMediaSession = useCallback(() => {
+    if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'RSIQ Pro Monitor',
+      artist: 'Mindscape Analytics',
+      album: 'Real-time Alert Engine',
+      artwork: [
+        { src: '/logo/rsiq-pro-icon.png', sizes: '512x512', type: 'image/png' }
+      ]
+    });
+
+    // Set playback state to playing to signal "Active Engine" to the OS
+    navigator.mediaSession.playbackState = 'playing';
+
+    // Dummy handlers to keep the session alive
+    const noop = () => {};
+    navigator.mediaSession.setActionHandler('play', noop);
+    navigator.mediaSession.setActionHandler('pause', noop);
+  }, []);
 
   // ── Audio: resume context (called on user gesture from dashboard) ──
   const resumeAudioContext = useCallback(async () => {
     if (typeof window === 'undefined') return;
     try {
+      // Initialize Audio Anchor if not existing
+      if (!audioAnchorRef.current) {
+        const audio = new Audio(SILENT_WAV_BASE64);
+        audio.loop = true;
+        audio.muted = true; // Still counts as "Media Session" for most 2026 browsers
+        audioAnchorRef.current = audio;
+      }
+
+      // Try to play the anchor (must be triggered by user gesture)
+      if (audioAnchorRef.current.paused) {
+        await audioAnchorRef.current.play().catch(() => {});
+        setupMediaSession();
+      }
+
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
@@ -158,7 +199,6 @@ export function useAlertEngine(
       if (ctx.state === 'running') {
         const oscillator = ctx.createOscillator();
         const gain = ctx.createGain();
-        // Slightly higher volume than 0.0001 for better Android "wake"
         gain.gain.setValueAtTime(0.0005, ctx.currentTime); 
         oscillator.connect(gain);
         gain.connect(ctx.destination);
@@ -170,11 +210,11 @@ export function useAlertEngine(
         }, 200);
       }
 
-      console.log("[alerts] AudioContext unlocked & active:", ctx.state);
+      console.log("[alerts] Resilient Audio Engine active (MediaSession anchored)");
     } catch (e) {
-      console.error("[alerts] Failed to resume audio:", e);
+      console.error("[alerts] Failed to resume resilient audio:", e);
     }
-  }, []);
+  }, [setupMediaSession]);
 
   // Use level interactions and focus gain to ensure context is always resumed
   useEffect(() => {
