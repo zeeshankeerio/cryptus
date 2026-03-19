@@ -36,9 +36,13 @@ let coinConfigs = new Map();
 let zoneStates = new Map();
 let lastTriggered = new Map();
 let configLastUpdated = new Map(); // Track manual updates for cold-start alerts
+let liveCandleStates = new Map(); // Track current 1m candle: { lastMin, open, volStart }
 const COOLDOWN_MS = 3 * 60 * 1000;
 let globalRsiPeriod = 14;
 let globalAlertsEnabled = false;
+let globalThresholdsEnabled = false;
+let globalLongCandleThreshold = 10.0;
+let globalVolumeSpikeThreshold = 10.0;
 let portVisibility = new Map(); // Track visibility per port
 function isAnyTabVisible() {
   for (const v of portVisibility.values()) if (v) return true;
@@ -362,6 +366,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
 
   // ── Volatility Monitor ──
   const now = Date.now();
+  const currentMinKey = Math.floor(now / 60000);
   const volEntry = volatilityBuffer.get(trackingKey);
   if (!volEntry) {
     volatilityBuffer.set(trackingKey, { startPrice: t.c, startTime: now });
@@ -374,6 +379,18 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       volatilityBuffer.set(trackingKey, { startPrice: t.c, startTime: now });
     }
   }
+
+  // ── Live Candle & Volume Detector ──
+  const candleState = liveCandleStates.get(trackingKey) || { lastMin: 0, open: t.c, volStart: t.q };
+  if (candleState.lastMin !== currentMinKey) {
+    candleState.lastMin = currentMinKey;
+    candleState.open = t.c;
+    candleState.volStart = t.q;
+    liveCandleStates.set(trackingKey, candleState);
+  }
+
+  const curCandleSize = Math.abs(t.c - candleState.open);
+  const curCandleVol = Math.max(0, t.q - candleState.volStart);
 
   // ── Real-time Indicator Shadowing ──
   const state = rsiStates.get(t.s); // Note: rsiStates is synced from main thread which is symbol-based
@@ -443,8 +460,57 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       macdHistogram,
       bbPosition,
       strategyScore: currentStrategy.score,
-      strategySignal: currentStrategy.signal
+      strategySignal: currentStrategy.signal,
+      curCandleSize,
+      curCandleVol
     };
+
+    // ── Live Volatility Alerts (Long Candle & Volume Spike) ──
+    const candleMult = (config.longCandleThreshold != null && config.longCandleThreshold > 0) 
+      ? config.longCandleThreshold 
+      : (globalThresholdsEnabled ? globalLongCandleThreshold : 10);
+    const volMult = (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0) 
+      ? config.volumeSpikeThreshold 
+      : (globalThresholdsEnabled ? globalVolumeSpikeThreshold : 10);
+
+    const candleAlertEnabled = config.alertOnLongCandle || globalThresholdsEnabled;
+    const volumeAlertEnabled = config.alertOnVolumeSpike || globalThresholdsEnabled;
+
+    if (candleAlertEnabled && state.avgBarSize1m > 0 && curCandleSize > state.avgBarSize1m * candleMult) {
+      const alertKey = `${t.s}-VOLATILITY-CANDLE`;
+      if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
+        lastTriggered.set(alertKey, now);
+        self.postMessage({
+          type: 'ALERT_TRIGGERED',
+          payload: {
+            symbol: t.s,
+            exchange: exchangeName,
+            timeframe: '1m',
+            value: curCandleSize / state.avgBarSize1m,
+            type: 'LONG_CANDLE',
+            price: t.c
+          }
+        });
+      }
+    }
+
+    if (volumeAlertEnabled && state.avgVolume1m > 0 && curCandleVol > state.avgVolume1m * volMult) {
+      const alertKey = `${t.s}-VOLATILITY-VOLUME`;
+      if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
+        lastTriggered.set(alertKey, now);
+        self.postMessage({
+          type: 'ALERT_TRIGGERED',
+          payload: {
+            symbol: t.s,
+            exchange: exchangeName,
+            timeframe: '1m',
+            value: curCandleVol / state.avgVolume1m,
+            type: 'VOLUME_SPIKE',
+            price: t.c
+          }
+        });
+      }
+    }
 
     // ── Alert Evaluation ──
     // NOTE: Zone state keys use exchange:symbol for isolation per-exchange.
@@ -721,6 +787,15 @@ function handleMessage(e, port = null) {
     case 'SYNC_STATES':
       if (payload.alertsEnabled !== undefined) {
         globalAlertsEnabled = payload.alertsEnabled;
+      }
+      if (payload.globalThresholdsEnabled !== undefined) {
+        globalThresholdsEnabled = payload.globalThresholdsEnabled;
+      }
+      if (payload.globalLongCandleThreshold !== undefined) {
+        globalLongCandleThreshold = payload.globalLongCandleThreshold;
+      }
+      if (payload.globalVolumeSpikeThreshold !== undefined) {
+        globalVolumeSpikeThreshold = payload.globalVolumeSpikeThreshold;
       }
       if (payload.configs) {
         const now = Date.now();

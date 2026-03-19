@@ -46,6 +46,11 @@ export interface ScreenerEntry {
   // ── New: ATR & ADX ──
   atr: number | null;
   adx: number | null;
+  // ── New: Candle & Volume Detectors ──
+  avgBarSize1m: number | null;
+  avgVolume1m: number | null;
+  curCandleSize: number | null;
+  curCandleVol: number | null;
   // ── New: Dynamic/Custom RSI ──
   rsiCustom: number | null;
   rsiStateCustom: { avgGain: number; avgLoss: number; lastClose: number } | null;
@@ -109,7 +114,7 @@ export type SortKey =
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'ema9' | 'ema21' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK' | 'vwapDiff' | 'volumeSpike'
   | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
-  | 'confluence' | 'momentum' | 'atr' | 'adx';
+  | 'confluence' | 'momentum' | 'atr' | 'adx' | 'longCandle';
 
 export type SortDir = 'asc' | 'desc';
 export type SignalFilter = 'all' | 'oversold' | 'overbought' | 'neutral'

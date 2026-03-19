@@ -261,6 +261,24 @@ export function detectVolumeSpike(
   return Number.isFinite(avg) && avg > 0 && Number.isFinite(current) && current >= avg * threshold;
 }
 
+/** Average height (High - Low) over N periods */
+export function calculateAvgBarSize(highs: number[], lows: number[], period = 20): number | null {
+  if (highs.length < period || lows.length < period) return null;
+  const hSlice = highs.slice(-period);
+  const lSlice = lows.slice(-period);
+  let sum = 0;
+  for (let i = 0; i < period; i++) sum += (hSlice[i] - lSlice[i]);
+  return round(sum / period);
+}
+
+/** Average volume over N periods */
+export function calculateAvgVolume(volumes: number[], period = 20): number | null {
+  if (volumes.length < period) return null;
+  const slice = volumes.slice(-period);
+  const sum = slice.reduce((a, b) => a + b, 0);
+  return round(sum / period);
+}
+
 // ── RSI Divergence ──────────────────────────────────────────────
 
 function computeRsiSeries(closes: number[], period: number): number[] {

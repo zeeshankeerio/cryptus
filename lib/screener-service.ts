@@ -4,6 +4,7 @@ import {
   calculateBollinger, calculateStochRsi, calculateVwap,
   detectVolumeSpike, computeStrategyScore,
   detectRsiDivergence, calculateROC, calculateConfluence,
+  calculateAvgBarSize, calculateAvgVolume,
   calculateATR, calculateADX,
 } from './indicators';
 import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
@@ -48,8 +49,8 @@ const FETCH_HEADERS: HeadersInit = {
   'Accept': 'application/json',
 };
 const RSI_PERIOD = 14;
-const KLINE_LIMIT = 499; // 499 candles (Weight=1 on Binance, saves 50% API limit vs 1000) - enough for 15m divergence (499/15 = 33)
-const KLINE_LIMIT_1H = 40; // 40 1h candles: Perfect for 1h RSI (needs > 28 for Wilder stability)
+const KLINE_LIMIT = 1000; // 1000 candles (Max API limit) - provides ~66 15m candles for accurate Wilder smoothing
+const KLINE_LIMIT_1H = 200; // 200 1h candles: Excellent Wilder stability for 1h RSI
 const BATCH_SIZE = 16;
 const FETCH_RETRY_COUNT = 4; // increased for 600-coin robustness
 const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
@@ -281,6 +282,10 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     macdSlowState: null, macdSignalState: null,
     rsiCustom: null, rsiStateCustom: null,
     rsiPeriodAtCreation: 14,
+    avgBarSize1m: null,
+    avgVolume1m: null,
+    curCandleSize: null,
+    curCandleVol: null,
     signalStartedAt: nowTs,
     updatedAt: nowTs,
     market: 'Crypto',
@@ -1092,12 +1097,16 @@ function buildEntry(
       momentum,
       atr,
       adx,
+      avgBarSize1m: calculateAvgBarSize(highs1m, lows1m, 20),
+      avgVolume1m: calculateAvgVolume(volumes1m, 20),
+      curCandleSize: null,
+      curCandleVol: null,
       rsiState1m,
       rsiState5m,
       rsiState15m,
       rsiState1h,
-      ema9State: ema9Val !== null ? { ema: ema9Val } : null,
-      ema21State: ema21Val !== null ? { ema: ema21Val } : null,
+      ema9State: closes15m.length > 1 ? { ema: latestEma(closes15m.slice(0, -1), 9) ?? ema9Val! } : null,
+      ema21State: closes15m.length > 1 ? { ema: latestEma(closes15m.slice(0, -1), 21) ?? ema21Val! } : null,
       macdFastState: ema12 !== null ? { ema: ema12 } : null,
       macdSlowState: ema26 !== null ? { ema: ema26 } : null,
       macdSignalState,

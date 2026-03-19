@@ -94,6 +94,10 @@ model CoinConfig {
   alertOnCustom        Boolean  @default(false)
   alertConfluence      Boolean  @default(false)
   alertOnStrategyShift Boolean  @default(false)
+  alertOnLongCandle    Boolean  @default(false)
+  alertOnVolumeSpike   Boolean  @default(false)
+  longCandleThreshold  Float    @default(5.0)
+  volumeSpikeThreshold Float    @default(5.0)
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, symbol])

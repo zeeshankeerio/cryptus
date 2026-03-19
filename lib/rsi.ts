@@ -50,13 +50,16 @@ export interface RsiState {
 /**
  * Calculate RSI and return internal Wilder smoothing state.
  * The state enables client-side real-time RSI approximation via WebSocket prices.
+ * MUST use only fully-closed candles (`closes.slice(0, -1)`) so the live price 
+ * applies correctly as the *current* forming candle rather than a *new* candle.
  */
 export function calculateRsiWithState(closes: number[], period: number = 14): RsiState | null {
-  if (closes.length < period + 1) return null;
+  if (closes.length < period + 2) return null; // Need enough for period + 1 closed candles
 
+  const closedCloses = closes.slice(0, -1);
   const changes: number[] = [];
-  for (let i = 1; i < closes.length; i++) {
-    changes.push(closes[i] - closes[i - 1]);
+  for (let i = 1; i < closedCloses.length; i++) {
+    changes.push(closedCloses[i] - closedCloses[i - 1]);
   }
 
   let avgGain = 0;
@@ -80,7 +83,7 @@ export function calculateRsiWithState(closes: number[], period: number = 14): Rs
     }
   }
 
-  return { avgGain, avgLoss, lastClose: closes[closes.length - 1] };
+  return { avgGain, avgLoss, lastClose: closedCloses[closedCloses.length - 1] };
 }
 
 /**

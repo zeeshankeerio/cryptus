@@ -43,7 +43,7 @@ export interface Alert {
   exchange?: string;
   timeframe: string;
   value: number;
-  type: 'OVERSOLD' | 'OVERBOUGHT' | 'STRATEGY_STRONG_BUY' | 'STRATEGY_STRONG_SELL';
+  type: 'OVERSOLD' | 'OVERBOUGHT' | 'STRATEGY_STRONG_BUY' | 'STRATEGY_STRONG_SELL' | 'LONG_CANDLE' | 'VOLUME_SPIKE';
   createdAt: number;
 }
 
@@ -68,7 +68,9 @@ export function useAlertEngine(
   globalThresholdsEnabled: boolean = false,
   globalOverbought: number = 90,
   globalOversold: number = 15,
-  globalThresholdTimeframes: string[] = ['1m', '5m', '15m', '1h']
+  globalThresholdTimeframes: string[] = ['1m', '5m', '15m', '1h'],
+  globalLongCandleThreshold: number = 10.0,
+  globalVolumeSpikeThreshold: number = 10.0
 ) {
   // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
   useEffect(() => {
@@ -247,7 +249,7 @@ export function useAlertEngine(
   }, [resumeAudioContext]);
 
   // ── Audio: Play enterprise chime (with background fallback) ──
-  const playAlertSound = useCallback(async () => {
+  const playAlertSound = useCallback(async (isVolatility = false) => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
       if (!audioCtxRef.current) {
@@ -309,12 +311,19 @@ export function useAlertEngine(
 
       const now = ctx.currentTime;
 
-      // Elite Enterprise "Harmonic Bloom"
-      playTone(1046.50, now, 0.7, 0.1, 'sine');        // C6 (Primary)
-      playTone(1318.51, now + 0.08, 0.6, 0.07, 'sine'); // E6 (Bright)
-      playTone(1567.98, now + 0.16, 0.5, 0.05, 'sine'); // G6 (High)
-      playTone(523.25, now, 1.0, 0.04, 'sine');         // C5 (Warm Bed)
-      playTone(2093.00, now + 0.24, 0.4, 0.03, 'sine');  // C7 (Airy finish)
+      if (isVolatility) {
+        // High-tension alert for volatility (Rapid staccato)
+        playTone(2093.00, now, 0.1, 0.08, 'square');
+        playTone(2093.00, now + 0.12, 0.1, 0.08, 'square');
+        playTone(2093.00, now + 0.24, 0.3, 0.1, 'sine');
+      } else {
+        // Elite Enterprise "Harmonic Bloom"
+        playTone(1046.50, now, 0.7, 0.1, 'sine');        // C6 (Primary)
+        playTone(1318.51, now + 0.08, 0.6, 0.07, 'sine'); // E6 (Bright)
+        playTone(1567.98, now + 0.16, 0.5, 0.05, 'sine'); // G6 (High)
+        playTone(523.25, now, 1.0, 0.04, 'sine');         // C5 (Warm Bed)
+        playTone(2093.00, now + 0.24, 0.4, 0.03, 'sine');  // C7 (Airy finish)
+      }
 
     } catch (e) {
       console.warn('[alerts] Audio generation failed:', e);
@@ -339,6 +348,12 @@ export function useAlertEngine(
 
   const globalThresholdTimeframesRef = useRef(globalThresholdTimeframes);
   useEffect(() => { globalThresholdTimeframesRef.current = globalThresholdTimeframes; }, [globalThresholdTimeframes]);
+
+  const globalLongCandleThresholdRef = useRef(globalLongCandleThreshold);
+  useEffect(() => { globalLongCandleThresholdRef.current = globalLongCandleThreshold; }, [globalLongCandleThreshold]);
+
+  const globalVolumeSpikeThresholdRef = useRef(globalVolumeSpikeThreshold);
+  useEffect(() => { globalVolumeSpikeThresholdRef.current = globalVolumeSpikeThreshold; }, [globalVolumeSpikeThreshold]);
 
   // ── Native notification ──
   const triggerNativeNotification = useCallback((title: string, body: string) => {
@@ -685,34 +700,49 @@ export function useAlertEngine(
         const { symbol, exchange, timeframe, value, type } = payload;
 
         const config = coinConfigsRef.current[symbol];
-        if (!config) return;
+        const isVolatility = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
+        if (!config && !globalThresholdsEnabledRef.current) return;
 
         // Unified cooldown key: bare symbol-timeframe (matches worker + batch evaluator)
-        const alertKey = `${symbol}-${timeframe === 'STRATEGY' ? 'STRAT' : timeframe}`;
+        // For volatility, we use a specific key to avoid collision with RSI 1m alerts
+        const alertKey = isVolatility 
+          ? `${symbol}-${type}`
+          : `${symbol}-${timeframe === 'STRATEGY' ? 'STRAT' : timeframe}`;
+
         const now = Date.now();
         if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
           // Set cooldown for BOTH this handler AND the batch evaluator
           lastTriggered.current.set(alertKey, now);
 
+          const isVolatility = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
           const isStrat = timeframe === 'STRATEGY';
           const alias = getSymbolAlias(symbol);
           const exchangeLabel = exchange ? ` [${exchange.charAt(0).toUpperCase() + exchange.slice(1)}]` : '';
           const priceStr = payload.price ? formatPrice(payload.price) : '';
-          const title = isStrat
-            ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
-            : `${alias}${exchangeLabel} ${timeframe} RSI ${type}`;
-          const desc = isStrat
-            ? `Strategy Score: ${value.toFixed(0)} ${priceStr ? `@ $${priceStr}` : ''}`
-            : `RSI: ${value.toFixed(1)} ${priceStr ? `@ $${priceStr}` : ''}`;
+          
+          let title = '';
+          let desc = '';
+          
+          if (isVolatility) {
+             title = `${alias}${exchangeLabel} ${type === 'LONG_CANDLE' ? '⚡ VOLATILITY' : '📊 VOLUME SPIKE'}`;
+             desc = `${type === 'LONG_CANDLE' ? 'Long candle' : 'Volume surge'} detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
+          } else {
+             title = isStrat
+               ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
+               : `${alias}${exchangeLabel} ${timeframe} RSI ${type}`;
+             desc = isStrat
+               ? `Strategy Score: ${value.toFixed(0)} ${priceStr ? `@ $${priceStr}` : ''}`
+               : `RSI: ${value.toFixed(1)} ${priceStr ? `@ $${priceStr}` : ''}`;
+          }
 
           if (document.visibilityState === 'visible') {
-            toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' ? 'success' : 'error'](
+            toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || isVolatility ? 'success' : 'error'](
               title,
               { duration: 8000, description: desc }
             );
           }
 
-          playAlertSoundRef.current();
+          playAlertSoundRef.current(isVolatility);
           logAlertRef.current({ symbol, exchange, timeframe, value, type: type as Alert['type'] });
           triggerNativeRef.current(title, desc);
         }

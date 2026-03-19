@@ -279,6 +279,10 @@ const ScreenerRow = memo(function ScreenerRow({
       strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
+      curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
+      curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
+      avgBarSize1m: entry.avgBarSize1m,
+      avgVolume1m: entry.avgVolume1m,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
@@ -320,6 +324,10 @@ const ScreenerRow = memo(function ScreenerRow({
     macdSignal: entry.macdSignal,
     confluenceLabel: entry.confluenceLabel,
     lastPriceChange: 0,
+    curCandleSize: entry.curCandleSize,
+    curCandleVol: entry.curCandleVol,
+    avgBarSize1m: entry.avgBarSize1m,
+    avgVolume1m: entry.avgVolume1m,
     isLiveRsi: entry.isLiveRsi
   };
   // Intelligence: Signal Pulse state
@@ -554,12 +562,20 @@ const ScreenerRow = memo(function ScreenerRow({
           {formatPct(display.vwapDiff)}
         </td>
       )}
+      {visibleCols.has('longCandle') && (
+        <td className={cn(
+          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
+          display.curCandleSize && display.avgBarSize1m && (display.curCandleSize / display.avgBarSize1m) >= 5 ? "text-amber-400" : "text-slate-600"
+        )}>
+          {display.curCandleSize && display.avgBarSize1m ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '—'}
+        </td>
+      )}
       {visibleCols.has('volumeSpike') && (
         <td className={cn(
-          "px-3 py-4 text-right text-[10px] font-black uppercase",
-          display.volumeSpike === true ? "text-[#39FF14]" : "text-slate-600"
+          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
+          display.curCandleVol && display.avgVolume1m && (display.curCandleVol / display.avgVolume1m) >= 5 ? "text-[#39FF14]" : "text-slate-600"
         )}>
-          {display.volumeSpike ? 'SPIKE' : 'Normal'}
+          {display.curCandleVol && display.avgVolume1m ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '—'}
         </td>
       )}
 
@@ -769,7 +785,7 @@ function SkeletonRows({ cols }: { cols: number }) {
 type ColumnId =
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'ema9' | 'ema21' | 'emaCross' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK'
-  | 'vwapDiff' | 'volumeSpike' | 'strategy'
+  | 'vwapDiff' | 'volumeSpike' | 'longCandle' | 'strategy'
   | 'confluence' | 'divergence' | 'momentum'
   | 'atr' | 'adx';
 
@@ -795,12 +811,13 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'bbPosition', label: 'BB Pos', group: 'Volatility', defaultVisible: false },
   { id: 'stochK', label: 'Stoch RSI', group: 'Momentum', defaultVisible: false },
   { id: 'vwapDiff', label: 'VWAP %', group: 'Volume', defaultVisible: false },
-  { id: 'volumeSpike', label: 'Vol Spike', group: 'Volume', defaultVisible: false },
   { id: 'confluence', label: 'Confluence', group: 'Intelligence', defaultVisible: true },
   { id: 'divergence', label: 'Divergence', group: 'Intelligence', defaultVisible: true },
   { id: 'momentum', label: 'Momentum', group: 'Intelligence', defaultVisible: false },
   { id: 'atr', label: 'ATR', group: 'Volatility', defaultVisible: false },
   { id: 'adx', label: 'ADX', group: 'Volatility', defaultVisible: false },
+  { id: 'longCandle', label: 'Long Candle', group: 'Volatility', defaultVisible: true },
+  { id: 'volumeSpike', label: 'Vol Spike', group: 'Volatility', defaultVisible: true },
   { id: 'strategy', label: 'Strategy', group: 'Strategy', defaultVisible: true },
 ];
 
@@ -976,6 +993,10 @@ const ScreenerCard = memo(function ScreenerCard({
       strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
+      curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
+      curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
+      avgBarSize1m: entry.avgBarSize1m,
+      avgVolume1m: entry.avgVolume1m,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
@@ -1017,6 +1038,10 @@ const ScreenerCard = memo(function ScreenerCard({
     macdSignal: entry.macdSignal,
     confluenceLabel: entry.confluenceLabel,
     lastPriceChange: 0,
+    curCandleSize: entry.curCandleSize,
+    curCandleVol: entry.curCandleVol,
+    avgBarSize1m: entry.avgBarSize1m,
+    avgVolume1m: entry.avgVolume1m,
     isLiveRsi: entry.isLiveRsi
   };
   // Intelligence: Signal Pulse state
@@ -1100,9 +1125,13 @@ const ScreenerCard = memo(function ScreenerCard({
                   <span className={cn("text-[10px] font-black tabular-nums font-mono", (val as number) > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
                     {formatPct(val as number)}
                   </span>
+                ) : col.id === 'longCandle' ? (
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleSize && display.avgBarSize1m && (display.curCandleSize / display.avgBarSize1m) >= 5) ? "text-amber-400" : "text-slate-700")}>
+                    {display.curCandleSize && display.avgBarSize1m ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '—'}
+                  </span>
                 ) : col.id === 'volumeSpike' ? (
-                  <span className={cn("text-[10px] font-black uppercase", val === true ? "text-[#39FF14]" : "text-slate-700")}>
-                    {val === true ? 'SPIKE' : 'NORM'}
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleVol && display.avgVolume1m && (display.curCandleVol / display.avgVolume1m) >= 5) ? "text-[#39FF14]" : "text-slate-700")}>
+                    {display.curCandleVol && display.avgVolume1m ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '—'}
                   </span>
                 ) : col.id === 'ema9' || col.id === 'ema21' || col.id === 'bbUpper' || col.id === 'bbLower' ? (
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
@@ -1270,6 +1299,8 @@ export default function ScreenerDashboard() {
   const [globalOverbought, setGlobalOverbought] = useState(90);
   const [globalOversold, setGlobalOversold] = useState(15);
   const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
+  const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(10.0);
+  const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(10.0);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
@@ -1332,6 +1363,12 @@ export default function ScreenerDashboard() {
         setGlobalThresholdTimeframes(JSON.parse(globalTFs));
       } catch { }
     }
+
+    const gLCT = localStorage.getItem('crypto-rsi-global-long-candle-threshold');
+    if (gLCT) setGlobalLongCandleThreshold(Number(gLCT));
+
+    const gVST = localStorage.getItem('crypto-rsi-global-volume-spike-threshold');
+    if (gVST) setGlobalVolumeSpikeThreshold(Number(gVST));
   }, []);
 
   const reportVisibility = useCallback((symbol: string, isVisible: boolean) => {
@@ -1414,7 +1451,7 @@ export default function ScreenerDashboard() {
       // 1. Collect all alertable symbols from configs
       const alertSymbols = new Set<string>();
       Object.entries(coinConfigs).forEach(([sym, cfg]) => {
-        if (cfg.alertOn1m || cfg.alertOn5m || cfg.alertOn15m || cfg.alertOn1h || cfg.alertOnCustom || cfg.alertOnStrategyShift) {
+        if (cfg.alertOn1m || cfg.alertOn5m || cfg.alertOn15m || cfg.alertOn1h || cfg.alertOnCustom || cfg.alertOnStrategyShift || cfg.alertOnLongCandle || cfg.alertOnVolumeSpike) {
           alertSymbols.add(sym);
         }
       });
@@ -1438,6 +1475,8 @@ export default function ScreenerDashboard() {
           rsiState1h: entry.rsiState1h,
           rsiStateCustom: entry.rsiStateCustom,
           rsiPeriodAtCreation: entry.rsiPeriodAtCreation,
+          avgBarSize1m: entry.avgBarSize1m,
+          avgVolume1m: entry.avgVolume1m,
           lastPrice: entry.price,
           macdHistogram: entry.macdHistogram,
           ema9State: entry.ema9State,
@@ -1457,7 +1496,14 @@ export default function ScreenerDashboard() {
           confluence: entry.confluence
         };
       });
-      syncStates({ configs: coinConfigs, rsiStates: states, alertsEnabled });
+      syncStates({ 
+        configs: coinConfigs, 
+        rsiStates: states, 
+        alertsEnabled,
+        globalThresholdsEnabled,
+        globalLongCandleThreshold,
+        globalVolumeSpikeThreshold
+      });
 
       // (Worker exchange connection is managed exclusively by use-live-prices.ts when exchange prop changes)
     }, 800);
@@ -1475,7 +1521,9 @@ export default function ScreenerDashboard() {
     globalThresholdsEnabled,
     globalOverbought,
     globalOversold,
-    globalThresholdTimeframes
+    globalThresholdTimeframes,
+    globalLongCandleThreshold,
+    globalVolumeSpikeThreshold
   );
 
   // Keep coinConfigsRef in sync for stable callbacks (fetchData)
@@ -1505,6 +1553,14 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-global-timeframes', JSON.stringify(globalThresholdTimeframes));
   }, [globalThresholdTimeframes]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-long-candle-threshold', globalLongCandleThreshold.toString());
+  }, [globalLongCandleThreshold]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-volume-spike-threshold', globalVolumeSpikeThreshold.toString());
+  }, [globalVolumeSpikeThreshold]);
 
   useEffect(() => {
     localStorage.setItem('crypto-rsi-pairs', pairCount.toString());
@@ -1719,6 +1775,8 @@ export default function ScreenerDashboard() {
             macdSignalState: e.macdSignalState,
             bbUpper: e.bbUpper,
             bbLower: e.bbLower,
+            avgBarSize1m: e.avgBarSize1m,
+            avgVolume1m: e.avgVolume1m,
             confluence: e.confluence,
             lastClose: e.price
           };
@@ -1933,12 +1991,17 @@ export default function ScreenerDashboard() {
         if (aMissing !== bMissing) return aMissing ? 1 : -1;
       }
 
-      const av = a[sortKey as keyof ScreenerEntry];
-      const bv = b[sortKey as keyof ScreenerEntry];
+      let av = a[sortKey as keyof ScreenerEntry] as any;
+      let bv = b[sortKey as keyof ScreenerEntry] as any;
 
-      if (av === null && bv === null) return 0;
-      if (av === null) return 1;
-      if (bv === null) return -1;
+      if (sortKey === 'longCandle') {
+        av = (a.curCandleSize && a.avgBarSize1m) ? a.curCandleSize / a.avgBarSize1m : 0;
+        bv = (b.curCandleSize && b.avgBarSize1m) ? b.curCandleSize / b.avgBarSize1m : 0;
+      }
+
+      if (av === null || av === undefined) return 1;
+      if (bv === null || bv === undefined) return -1;
+      if (av === bv) return 0;
 
       if (typeof av === 'string' && typeof bv === 'string') {
         return av.localeCompare(bv) * dir;
@@ -2732,6 +2795,7 @@ export default function ScreenerDashboard() {
                   {visibleCols.has('atr') && <SortHeader label="ATR" sortKey="atr" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('adx') && <SortHeader label="ADX" sortKey="adx" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('vwapDiff') && <SortHeader label="VWAP %" sortKey="vwapDiff" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                  {visibleCols.has('longCandle') && <SortHeader label="Long Candle" sortKey="longCandle" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
                   {visibleCols.has('volumeSpike') && <SortHeader label="Vol Spike" sortKey="volumeSpike" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
 
                   <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
@@ -2917,6 +2981,10 @@ export default function ScreenerDashboard() {
             setGlobalOversold={setGlobalOversold}
             globalThresholdTimeframes={globalThresholdTimeframes}
             setGlobalThresholdTimeframes={setGlobalThresholdTimeframes}
+            globalLongCandleThreshold={globalLongCandleThreshold}
+            setGlobalLongCandleThreshold={setGlobalLongCandleThreshold}
+            globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
+            setGlobalVolumeSpikeThreshold={setGlobalVolumeSpikeThreshold}
           />
         )}
       </AnimatePresence>
@@ -2978,7 +3046,11 @@ function CoinSettingsModal({
     alertOnCustom: currentConfig?.alertOnCustom ?? false,
     alertConfluence: currentConfig?.alertConfluence ?? false,
     alertOnStrategyShift: currentConfig?.alertOnStrategyShift ?? false,
-    alertPush247: currentConfig?.alertPush247 ?? false, 
+    alertPush247: currentConfig?.alertPush247 ?? false,
+    alertOnLongCandle: currentConfig?.alertOnLongCandle ?? false,
+    alertOnVolumeSpike: currentConfig?.alertOnVolumeSpike ?? false,
+    longCandleThreshold: currentConfig?.longCandleThreshold ?? 10.0,
+    volumeSpikeThreshold: currentConfig?.volumeSpikeThreshold ?? 10.0,
   });
 
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
@@ -3099,6 +3171,34 @@ function CoinSettingsModal({
                 </p>
               </div>
             )}
+
+            <div className="h-px bg-white/5" />
+
+            {/* Volatility Thresholds */}
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
+              <NumericAdjuster 
+                label="Long Candle" 
+                value={config.longCandleThreshold} 
+                onChange={(v: number) => setConfig({ ...config, longCandleThreshold: v })} 
+                colorClass="text-amber-400" 
+                bgClass="bg-amber-400/10" 
+                borderClass="border-amber-400/30" 
+                description="Size Multiplier"
+                min={2} max={50}
+                loading={loading}
+              />
+              <NumericAdjuster 
+                label="Vol Spike" 
+                value={config.volumeSpikeThreshold} 
+                onChange={(v: number) => setConfig({ ...config, volumeSpikeThreshold: v })} 
+                colorClass="text-[#39FF14]" 
+                bgClass="bg-[#39FF14]/10" 
+                borderClass="border-[#39FF14]/30" 
+                description="Vol Multiplier"
+                min={2} max={50}
+                loading={loading}
+              />
+            </div>
 
             <div className="h-px bg-white/5" />
 
@@ -3575,7 +3675,11 @@ function GlobalSettingsModal({
   globalOversold,
   setGlobalOversold,
   globalThresholdTimeframes,
-  setGlobalThresholdTimeframes
+  setGlobalThresholdTimeframes,
+  globalLongCandleThreshold,
+  setGlobalLongCandleThreshold,
+  globalVolumeSpikeThreshold,
+  setGlobalVolumeSpikeThreshold
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
@@ -3600,6 +3704,10 @@ function GlobalSettingsModal({
   setGlobalOversold: (v: number) => void;
   globalThresholdTimeframes: string[];
   setGlobalThresholdTimeframes: (v: string[]) => void;
+  globalLongCandleThreshold: number;
+  setGlobalLongCandleThreshold: (v: number) => void;
+  globalVolumeSpikeThreshold: number;
+  setGlobalVolumeSpikeThreshold: (v: number) => void;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -3889,6 +3997,33 @@ function GlobalSettingsModal({
                       {tf.label}
                     </button>
                   ))}
+                </div>
+
+                <div className="h-px bg-white/5 my-5" />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <NumericAdjuster
+                    label="Long Candle Multi"
+                    value={globalLongCandleThreshold}
+                    onChange={setGlobalLongCandleThreshold}
+                    min={2} max={50}
+                    colorClass={globalThresholdsEnabled ? "text-amber-400" : "text-slate-500"}
+                    bgClass="bg-black/20"
+                    borderClass="border-white/5"
+                    description="Volatility Surge"
+                    loading={!globalThresholdsEnabled}
+                  />
+                  <NumericAdjuster
+                    label="Vol Spike Multi"
+                    value={globalVolumeSpikeThreshold}
+                    onChange={setGlobalVolumeSpikeThreshold}
+                    min={2} max={50}
+                    colorClass={globalThresholdsEnabled ? "text-[#39FF14]" : "text-slate-500"}
+                    bgClass="bg-black/20"
+                    borderClass="border-white/5"
+                    description="Volume Surge"
+                    loading={!globalThresholdsEnabled}
+                  />
                 </div>
               </div>
             </div>

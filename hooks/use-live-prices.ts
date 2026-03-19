@@ -22,6 +22,8 @@ export interface LiveTick {
   bbPosition?: number;
   strategyScore?: number;
   strategySignal?: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
+  curCandleSize?: number;
+  curCandleVol?: number;
 }
 
 /**
@@ -280,7 +282,14 @@ class PriceTickEngine extends EventTarget {
     return this.prices.get(symbol);
   }
 
-  syncStates(data: { configs?: Record<string, any>, rsiStates?: Record<string, any> }) {
+  syncStates(data: { 
+    configs?: Record<string, any>, 
+    rsiStates?: Record<string, any>, 
+    alertsEnabled?: boolean,
+    globalThresholdsEnabled?: boolean,
+    globalLongCandleThreshold?: number,
+    globalVolumeSpikeThreshold?: number
+  }) {
     this.postToWorker({ type: 'SYNC_STATES', payload: data });
   }
 

@@ -18,6 +18,10 @@ export interface CoinConfig {
   alertOnCustom: boolean;
   alertConfluence: boolean;
   alertOnStrategyShift: boolean;
+  alertOnLongCandle: boolean;
+  alertOnVolumeSpike: boolean;
+  longCandleThreshold: number;
+  volumeSpikeThreshold: number;
 }
 
 /**
@@ -74,6 +78,10 @@ export async function updateCoinConfig(config: Partial<CoinConfig> & { symbol: s
       alertOnCustom: config.alertOnCustom,
       alertConfluence: config.alertConfluence,
       alertOnStrategyShift: config.alertOnStrategyShift,
+      alertOnLongCandle: config.alertOnLongCandle,
+      alertOnVolumeSpike: config.alertOnVolumeSpike,
+      longCandleThreshold: config.longCandleThreshold,
+      volumeSpikeThreshold: config.volumeSpikeThreshold,
     };
 
     return await prisma.coinConfig.upsert({
