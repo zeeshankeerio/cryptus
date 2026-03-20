@@ -202,22 +202,22 @@ const INDICATORS: Indicator[] = [
     icon: '⚡',
     category: 'volatility',
     tagColor: 'text-amber-400',
-    summary: 'Measures the magnitude of the current 1m candle relative to its 20m average. Detects sudden price surges as they happen.',
+    summary: 'Acts like a "Price Speedometer." It measures how fast the current 1-minute candle is growing compared to its recent history. It helps you spot sudden "bursts" of price movement before they become obvious on standard charts.',
     formula: [
-      'Avg Bar Size = mean(High − Low) of last 20 1m candles',
-      'Current Size = abs(Price − Open)',
-      'Ratio = Current Size / Avg Bar Size',
+      'Avg Bar Size = Typical movement over last 20 minutes',
+      'Current Size = How much the price has moved since this minute started',
+      'Ratio = Current Growth / Normal Growth',
     ],
     parameters: [
-      { name: 'Baseline', value: '20 candles', description: 'Smoothing for local volatility' },
-      { name: 'Warning', value: '2.5×', description: 'Shows surge icon (🟢/🔴)' },
-      { name: 'Alert', value: '5.0×', description: 'Full brightness highlight' },
+      { name: 'Baseline', value: '20 candles', description: 'The "Normal" speed of the market' },
+      { name: 'Warning', value: '2.5×', description: 'Price is moving 2.5x faster than normal' },
+      { name: 'Alert', value: '5.0×', description: 'Extreme speed — often indicates a major breakout' },
     ],
     interpretation: [
-      { condition: 'Ratio ≥ 2.5×', meaning: 'Abnormal volatility detected', color: 'text-amber-400' },
-      { condition: 'Ratio ≥ 5.0×', meaning: 'Extreme volatility burst — institutional move', color: 'text-amber-500 font-bold' },
+      { condition: 'Ratio ≥ 2.5×', meaning: 'The market is waking up — price is stretching faster than usual.', color: 'text-amber-400' },
+      { condition: 'Ratio ≥ 5.0×', meaning: 'High Intensity — a major "Power Move" is happening. Great for momentum traders.', color: 'text-amber-500 font-bold' },
     ],
-    usage: 'The Long Candle indicator is updated sub-second via WebSocket. It is your most responsive indicator for detecting "pump and dump" activity before it reaches historical averages.',
+    usage: 'Use this to catch "Pumps" or "Dumps" early. If you see a green flash (🟢) with a high ratio, it means buyers are aggressive. If you see red (🔴), sellers are in control. It is updated every second, giving you an edge over traders using static charts.',
   },
   {
     id: 'vwap',
@@ -245,18 +245,19 @@ const INDICATORS: Indicator[] = [
     icon: '🔥',
     category: 'volume',
     tagColor: 'text-amber-400',
-    summary: 'Compares current 1m volume against its 20m average to find hidden accumulation or distribution.',
+    summary: 'Think of this as "Crowd Intensity." It detects when a massive amount of trading activity suddenly hits a coin. It separates "real moves" from "fakeouts" by showing if big money is participating.',
     formula: [
-      'Avg Vol = mean(last 20 candles)',
-      'Spike = Current Vol ≥ Avg Vol × 2.0',
+      'Normal Activity = Average volume of the last 20 minutes',
+      'Current Activity = Total volume traded in the current minute',
+      'Spike = Current Activity is 2.0x higher than normal',
     ],
     parameters: [
-      { name: 'Threshold', value: '2.0×', description: 'Minimum multiplier for spike' },
+      { name: 'Threshold', value: '2.0×', description: 'Minimum activity to be considered a "Spike"' },
     ],
     interpretation: [
-      { condition: 'Spike Detected', meaning: 'Institutional conviction — amplifies strategy score by 1.15x', color: 'text-amber-400' },
+      { condition: 'Spike (🔥)', meaning: 'Big institutions or "Whales" are active. This validates the current price direction.', color: 'text-amber-400' },
     ],
-    usage: 'A volume spike during an RSI oversold condition confirms "smart money" is entering the trade.',
+    usage: 'A price move means nothing without Volume. If price goes up BUT there is no Volume Spike, it might be a trap. If price goes up AND a Volume Spike (🔥) appears, it confirms that the "Big Players" are buying with you.',
   },
   {
     id: 'confluence',
@@ -564,9 +565,9 @@ export default function IndicatorGuide() {
               </div>
               <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
                 <div className="font-medium text-white text-sm flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Global Volatility Alerts
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Real-Time Pulse Alerts
                 </div>
-                <p className="text-xs text-gray-400 mt-1">Independent engine that triggers notifications for any asset hitting your Long Candle or Volume Spike thresholds, regardless of RSI levels.</p>
+                <p className="text-xs text-gray-400 mt-1">Get notified the instant a coin starts moving abnormally. This alerts you to massive volume surges or extreme price jumps, even if the RSI isn't yet in an overbought or oversold zone.</p>
               </div>
             </div>
           </div>
