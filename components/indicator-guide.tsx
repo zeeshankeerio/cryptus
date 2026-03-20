@@ -138,6 +138,33 @@ const INDICATORS: Indicator[] = [
     usage: 'BB Position is a normalized 0–1 value where 0 = price at the lower band and 1 = at the upper band. This makes it directly comparable across all assets regardless of price or volatility levels. Mean reversion traders look for extreme positions (<0.1 or >0.9).',
   },
   {
+    id: 'long-candle',
+    name: 'Long Candle Indicator',
+    icon: '📏',
+    category: 'volatility',
+    tagColor: 'text-amber-400',
+    summary: 'Measures the magnitude of the current 1-minute candle relative to the average volatility of the last 20 candles. Detects sudden price surges or liquidations in real-time.',
+    formula: [
+      'Average Bar Size = mean(High − Low) of last 20 1m candles',
+      'Current Candle Size = abs(Current Price − Candle Open)',
+      'Volatility Ratio = Current Candle Size / Average Bar Size',
+      'Bullish Surge: Current Price > Candle Open',
+      'Bearish Surge: Current Price < Candle Open',
+    ],
+    parameters: [
+      { name: 'Baseline Period', value: '20', description: 'Smoothing period for minute volatility average' },
+      { name: 'Warning Threshold', value: '2.5×', description: 'Shows 🟢/🔴 icon and amber text' },
+      { name: 'Alert Threshold', value: '5.0×', description: 'Bright amber highlight and system notification' },
+      { name: 'Precision', value: 'Live 1m', description: 'Updates every second as the candle develops' },
+    ],
+    interpretation: [
+      { condition: 'Ratio ≥ 2.5× (🟢)', meaning: 'Significant bullish surge — potential breakout', color: 'text-[#39FF14]' },
+      { condition: 'Ratio ≥ 2.5× (🔴)', meaning: 'Significant bearish surge — potential dump', color: 'text-[#FF4B5C]' },
+      { condition: 'Ratio ≥ 5.0×', meaning: 'Extreme volatility — high probability of continuation or liquidation', color: 'text-amber-400 font-bold' },
+    ],
+    usage: 'The Long Candle indicator is your "early warning system." While RSI and EMA take time to react, this ratio shows you exactly how much pressure is entering the market THIS minute. Look for green bullets (🟢) alongside high ratios to confirm scalp entries.',
+  },
+  {
     id: 'stoch-rsi',
     name: 'Stochastic RSI',
     icon: '🌀',
@@ -211,10 +238,11 @@ const INDICATORS: Indicator[] = [
       { name: 'Amplifier', value: '1.15×', description: 'Strategy score boost when spike detected' },
     ],
     interpretation: [
-      { condition: '🔥 Spike', meaning: 'Volume 2× above recent average — high conviction', color: 'text-amber-400' },
+      { condition: 'Ratio ≥ 3.0×', meaning: 'Notable volume increase — building interest', color: 'text-amber-400/70' },
+      { condition: 'Ratio ≥ 5.0×', meaning: 'Exceptional volume spike — institutional activity confirmed', color: 'text-amber-400 font-bold' },
       { condition: '— No spike', meaning: 'Normal volume levels', color: 'text-gray-500' },
     ],
-    usage: 'Volume spikes indicate institutional activity or significant market events. When combined with other signals (e.g., RSI oversold + volume spike), the conviction is much higher. The 1.15× amplifier boosts the composite score in either direction.',
+    usage: 'Volume spikes indicate high conviction behind a move. A Long Candle ratio above 2.5x combined with a Volume Spike above 5.0x is a "Tier 1" breakout signal. The system now separates volume alerts from RSI alerts for cleaner trade signals.',
   },
   {
     id: 'strategy',
@@ -490,6 +518,73 @@ export default function IndicatorGuide() {
           />
         ))}
       </div>
+
+      {/* Global Settings & Performance */}
+      <section className="mt-12 mb-10 border-t border-dark-700 pt-10">
+        <h2 className="text-xl font-semibold text-white mb-6 flex items-center gap-2">
+          <span className="text-[#39FF14]">⚙️</span> Global Analysis & Settings
+        </h2>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-[#39FF14] uppercase tracking-wider">Alert Modes</h3>
+            <div className="space-y-3">
+              <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
+                <div className="font-medium text-white text-sm flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" /> Extreme RSI Mode
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Filters the entire market to show ONLY assets with RSI &lt; 20 or &gt; 80. Ideal for reversal hunting in high-traffic sessions.</p>
+              </div>
+              <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
+                <div className="font-medium text-white text-sm flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" /> Global Volatility Alerts
+                </div>
+                <p className="text-xs text-gray-400 mt-1">Independent engine that triggers notifications for any asset hitting your Long Candle or Volume Spike thresholds, regardless of RSI levels.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-[#39FF14] uppercase tracking-wider">The "Smart Mode" Engine</h3>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              To handle 600+ assets in real-time without hitting exchange rate limits, RSIQ Pro uses a tiered data pipeline:
+            </p>
+            <ul className="space-y-2">
+              <li className="flex gap-2 text-xs text-gray-300">
+                <span className="text-[#39FF14] font-bold">1.</span>
+                <span><strong>Priority Coins:</strong> Coins in your watchlist or with active signals get a 30s refresh rate.</span>
+              </li>
+              <li className="flex gap-2 text-xs text-gray-300">
+                <span className="text-[#39FF14] font-bold">2.</span>
+                <span><strong>Ticker-Only:</strong> Lower volume coins use a 2-minute refresh for indicators while price/volatility remains sub-second.</span>
+              </li>
+              <li className="flex gap-2 text-xs text-gray-300">
+                <span className="text-[#39FF14] font-bold">3.</span>
+                <span><strong>Baseline Health:</strong> If a coin is in ticker-only mode, the system uses "Baseline Caching" to ensure volatility ratios remain accurate.</span>
+              </li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-5 space-y-4 md:col-span-2">
+            <h3 className="text-sm font-semibold text-[#39FF14] uppercase tracking-wider">Per-Coin Customization</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <p className="text-xs text-gray-400 leading-relaxed">
+                Click the <span className="text-[#39FF14]">⚙️</span> icon on any asset row to open its specific settings. You can override global thresholds for that specific coin:
+              </p>
+              <ul className="space-y-2">
+                <li className="text-xs text-gray-300 flex items-start gap-2">
+                  <span className="text-[#39FF14]">•</span>
+                  <span><strong>RSI Period:</strong> Use 7 for high sensitivity or 21 for trend smoothing on specific assets.</span>
+                </li>
+                <li className="text-xs text-gray-300 flex items-start gap-2">
+                  <span className="text-[#39FF14]">•</span>
+                  <span><strong>Volatility Multipliers:</strong> Tighten thresholds for stable assets (e.g. 2.0x) or loosen for "pump-and-dump" coins (e.g. 10.0x).</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* Signal mapping section */}
       <section className="mt-10 mb-8">

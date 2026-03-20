@@ -51,6 +51,7 @@ export interface ScreenerEntry {
   avgVolume1m: number | null;
   curCandleSize: number | null;
   curCandleVol: number | null;
+  candleDirection: 'bullish' | 'bearish' | null;
   // ── New: Dynamic/Custom RSI ──
   rsiCustom: number | null;
   rsiStateCustom: { avgGain: number; avgLoss: number; lastClose: number } | null;

@@ -24,6 +24,9 @@ export interface LiveTick {
   strategySignal?: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
   curCandleSize?: number;
   curCandleVol?: number;
+  avgBarSize1m?: number;
+  avgVolume1m?: number;
+  candleDirection?: 'bullish' | 'bearish';
 }
 
 /**
@@ -288,7 +291,8 @@ class PriceTickEngine extends EventTarget {
     alertsEnabled?: boolean,
     globalThresholdsEnabled?: boolean,
     globalLongCandleThreshold?: number,
-    globalVolumeSpikeThreshold?: number
+    globalVolumeSpikeThreshold?: number,
+    globalVolatilityEnabled?: boolean
   }) {
     this.postToWorker({ type: 'SYNC_STATES', payload: data });
   }

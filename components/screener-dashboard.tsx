@@ -281,8 +281,9 @@ const ScreenerRow = memo(function ScreenerRow({
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
       curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
-      avgBarSize1m: entry.avgBarSize1m,
-      avgVolume1m: entry.avgVolume1m,
+      avgBarSize1m: tick.avgBarSize1m ?? entry.avgBarSize1m,
+      avgVolume1m: tick.avgVolume1m ?? entry.avgVolume1m,
+      candleDirection: tick.candleDirection,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
@@ -328,6 +329,7 @@ const ScreenerRow = memo(function ScreenerRow({
     curCandleVol: entry.curCandleVol,
     avgBarSize1m: entry.avgBarSize1m,
     avgVolume1m: entry.avgVolume1m,
+    candleDirection: entry.candleDirection,
     isLiveRsi: entry.isLiveRsi
   };
   // Intelligence: Signal Pulse state
@@ -361,7 +363,9 @@ const ScreenerRow = memo(function ScreenerRow({
         containIntrinsicSize: '0 64px'
       } as any}
     >
-      <td className="px-4 py-4 text-[10px] text-slate-700 font-black tabular-nums">{idx + 1}</td>
+      {visibleCols.has('rank') && (
+        <td className="px-4 py-4 text-[10px] text-slate-700 font-black tabular-nums">{idx + 1}</td>
+      )}
       <td className="px-2 py-4 text-center">
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
@@ -565,17 +569,26 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('longCandle') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          display.curCandleSize && display.avgBarSize1m && (display.curCandleSize / display.avgBarSize1m) >= 5 ? "text-amber-400" : "text-slate-600"
+          display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= 5 ? "text-amber-400" : "text-slate-600"
         )}>
-          {display.curCandleSize && display.avgBarSize1m ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '—'}
+          {display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
+            <div className="flex items-center justify-end gap-1">
+              {(display.curCandleSize / display.avgBarSize1m) >= 2.5 && (
+                 <span className={cn("text-[8px]", display.candleDirection === 'bullish' ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                   {display.candleDirection === 'bullish' ? '🟢' : '🔴'}
+                 </span>
+              )}
+              <span>{Number.isFinite(display.curCandleSize / display.avgBarSize1m) ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '0.0x'}</span>
+            </div>
+          ) : '—'}
         </td>
       )}
       {visibleCols.has('volumeSpike') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          display.curCandleVol && display.avgVolume1m && (display.curCandleVol / display.avgVolume1m) >= 5 ? "text-[#39FF14]" : "text-slate-600"
+          display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= 5 ? "text-[#39FF14]" : "text-slate-600"
         )}>
-          {display.curCandleVol && display.avgVolume1m ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '—'}
+          {display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x') : '—'}
         </td>
       )}
 
@@ -783,7 +796,7 @@ function SkeletonRows({ cols }: { cols: number }) {
 // ─── Column definitions ───────────────────────────────────────
 
 type ColumnId =
-  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
+  | 'rank' | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsiCustom'
   | 'ema9' | 'ema21' | 'emaCross' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK'
   | 'vwapDiff' | 'volumeSpike' | 'longCandle' | 'strategy'
   | 'confluence' | 'divergence' | 'momentum'
@@ -797,6 +810,7 @@ interface ColumnDef {
 }
 
 const OPTIONAL_COLUMNS: ColumnDef[] = [
+  { id: 'rank', label: 'Rank #', group: 'Asset', defaultVisible: true },
   { id: 'rsi1m', label: 'RSI 1m', group: 'RSI Std', defaultVisible: false },
   { id: 'rsi5m', label: 'RSI 5m', group: 'RSI Std', defaultVisible: false },
   { id: 'rsi15m', label: 'RSI 15m', group: 'RSI Std', defaultVisible: true },
@@ -995,8 +1009,9 @@ const ScreenerCard = memo(function ScreenerCard({
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
       curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
-      avgBarSize1m: entry.avgBarSize1m,
-      avgVolume1m: entry.avgVolume1m,
+      avgBarSize1m: tick.avgBarSize1m ?? entry.avgBarSize1m,
+      avgVolume1m: tick.avgVolume1m ?? entry.avgVolume1m,
+      candleDirection: tick.candleDirection,
       isLiveRsi: true
     };
   }, [tick, coinConfigs, entry, rsiPeriod]);
@@ -1042,6 +1057,7 @@ const ScreenerCard = memo(function ScreenerCard({
     curCandleVol: entry.curCandleVol,
     avgBarSize1m: entry.avgBarSize1m,
     avgVolume1m: entry.avgVolume1m,
+    candleDirection: entry.candleDirection,
     isLiveRsi: entry.isLiveRsi
   };
   // Intelligence: Signal Pulse state
@@ -1067,7 +1083,7 @@ const ScreenerCard = memo(function ScreenerCard({
     <div
       ref={cardRef}
       className={cn(
-        "relative flex items-center justify-between p-3 border-b border-white/[0.03] active:bg-slate-800/40 transition-colors duration-500",
+        "relative flex items-center justify-between p-2 sm:p-3 border-b border-white/[0.03] active:bg-slate-800/40 transition-colors duration-500",
         !isFlash && getRsiBg(display.rsiCustom ?? display.rsi15m)
       )}
       style={{
@@ -1080,7 +1096,9 @@ const ScreenerCard = memo(function ScreenerCard({
     >
       {/* 1. Asset & Meta */}
       <div className="flex items-center gap-2 w-[110px] shrink-0">
-        <span className="text-[9px] font-black text-slate-700 w-4 tabular-nums">#{idx + 1}</span>
+        {visibleCols?.has('rank') && (
+          <span className="text-[9px] font-black text-slate-700 w-4 tabular-nums">#{idx + 1}</span>
+        )}
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
           className={cn("transition-all shrink-0", isStarred ? "text-yellow-400" : "text-slate-800")}
@@ -1092,8 +1110,15 @@ const ScreenerCard = memo(function ScreenerCard({
             <span className="font-black text-white text-sm tracking-tight">{getSymbolAlias(entry.symbol)}</span>
             <MarketBadge market={entry.market} />
           </div>
-          <div className="text-[7px] font-black text-slate-700 uppercase leading-none mt-0.5">
-            {entry.market === 'Crypto' ? `USDT • ${exchange.startsWith('bybit') ? 'Bybit' : 'Binance'}` : 'Global Market'}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <div className="text-[7px] font-black text-slate-700 uppercase leading-none">
+              {entry.market === 'Crypto' ? `${exchange.startsWith('bybit') ? 'Bybit' : 'Binance'}` : 'Global'}
+            </div>
+            {display.signal !== 'neutral' && (
+              <div className="scale-[0.65] origin-left -ml-1 -my-1">
+                <SignalBadge signal={display.signal} />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1126,12 +1151,19 @@ const ScreenerCard = memo(function ScreenerCard({
                     {formatPct(val as number)}
                   </span>
                 ) : col.id === 'longCandle' ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleSize && display.avgBarSize1m && (display.curCandleSize / display.avgBarSize1m) >= 5) ? "text-amber-400" : "text-slate-700")}>
-                    {display.curCandleSize && display.avgBarSize1m ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '—'}
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono flex items-center gap-1", (display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= 5) ? "text-amber-400" : "text-slate-700")}>
+                    {display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
+                      <>
+                        {(display.curCandleSize / display.avgBarSize1m) >= 2.5 && (
+                          <span className="text-[8px]">{display.candleDirection === 'bullish' ? '🟢' : '🔴'}</span>
+                        )}
+                        {Number.isFinite(display.curCandleSize / display.avgBarSize1m) ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '0.0x'}
+                      </>
+                    ) : '—'}
                   </span>
                 ) : col.id === 'volumeSpike' ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleVol && display.avgVolume1m && (display.curCandleVol / display.avgVolume1m) >= 5) ? "text-[#39FF14]" : "text-slate-700")}>
-                    {display.curCandleVol && display.avgVolume1m ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '—'}
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= 5) ? "text-[#39FF14]" : "text-slate-700")}>
+                    {display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x') : '—'}
                   </span>
                 ) : col.id === 'ema9' || col.id === 'ema21' || col.id === 'bbUpper' || col.id === 'bbLower' ? (
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
@@ -1299,8 +1331,9 @@ export default function ScreenerDashboard() {
   const [globalOverbought, setGlobalOverbought] = useState(90);
   const [globalOversold, setGlobalOversold] = useState(15);
   const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
-  const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(10.0);
-  const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(10.0);
+  const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(3.0);
+  const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(5.0);
+  const [globalVolatilityEnabled, setGlobalVolatilityEnabled] = useState(false);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
@@ -1346,6 +1379,15 @@ export default function ScreenerDashboard() {
       try {
         setVisibleCols(new Set(JSON.parse(cols)));
       } catch { }
+    } else {
+      // If no saved prefs, check if we're on a mobile-ish screen and hide rank by default
+      if (window.innerWidth < 1280) {
+        setVisibleCols(prev => {
+          const next = new Set(prev);
+          next.delete('rank');
+          return next;
+        });
+      }
     }
 
     const globalEnabled = localStorage.getItem('crypto-rsi-global-thresholds-enabled');
@@ -1369,6 +1411,9 @@ export default function ScreenerDashboard() {
 
     const gVST = localStorage.getItem('crypto-rsi-global-volume-spike-threshold');
     if (gVST) setGlobalVolumeSpikeThreshold(Number(gVST));
+
+    const gVE = localStorage.getItem('crypto-rsi-global-volatility-enabled');
+    if (gVE !== null) setGlobalVolatilityEnabled(gVE === '1');
   }, []);
 
   const reportVisibility = useCallback((symbol: string, isVisible: boolean) => {
@@ -1397,7 +1442,23 @@ export default function ScreenerDashboard() {
     // Pre-flight sharding: warm up sockets with majors while waiting for API
     return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
   }, [data]);
-  const { livePrices, isConnected, isMaster, syncStates, exchange, setExchange, updateSymbols, postToWorker } = useLivePrices(symbolSet, 300);
+  const { 
+    livePrices, 
+    isConnected, 
+    isMaster, 
+    syncStates: baseSyncStates, 
+    exchange, 
+    setExchange, 
+    updateSymbols, 
+    postToWorker 
+  } = useLivePrices(symbolSet, 300);
+
+  const syncStates = useCallback((p: any) => {
+    baseSyncStates({
+      ...p,
+      globalVolatilityEnabled
+    });
+  }, [baseSyncStates, globalVolatilityEnabled]);
 
   // ─── Hybrid Atomic Data ───
   // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
@@ -1423,6 +1484,10 @@ export default function ScreenerDashboard() {
         emaCross: (live.emaCross ?? entry.emaCross) as any, // Cast to any then back if needed, or just satisfy the type
         strategyScore: live.strategyScore ?? entry.strategyScore,
         strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
+        curCandleSize: live.curCandleSize ?? entry.curCandleSize,
+        curCandleVol: live.curCandleVol ?? entry.curCandleVol,
+        avgBarSize1m: live.avgBarSize1m ?? entry.avgBarSize1m,
+        avgVolume1m: live.avgVolume1m ?? entry.avgVolume1m,
       } : entry;
 
       // Type safety enforcement for the unions
@@ -1502,7 +1567,8 @@ export default function ScreenerDashboard() {
         alertsEnabled,
         globalThresholdsEnabled,
         globalLongCandleThreshold,
-        globalVolumeSpikeThreshold
+        globalVolumeSpikeThreshold,
+        globalVolatilityEnabled
       });
 
       // (Worker exchange connection is managed exclusively by use-live-prices.ts when exchange prop changes)
@@ -1523,7 +1589,8 @@ export default function ScreenerDashboard() {
     globalOversold,
     globalThresholdTimeframes,
     globalLongCandleThreshold,
-    globalVolumeSpikeThreshold
+    globalVolumeSpikeThreshold,
+    globalVolatilityEnabled
   );
 
   // Keep coinConfigsRef in sync for stable callbacks (fetchData)
@@ -2407,24 +2474,23 @@ export default function ScreenerDashboard() {
             </div>
 
             {/* Controls Row: Alerts, Toggles, Actions */}
-            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-2 shadow-inner">
-              <div className="w-px h-5 bg-white/10 mx-1" />
+            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-1.5 shadow-inner">
               <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-xl border border-white/10 p-1">
                 <button
                   onClick={() => setExchange('binance')}
-                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
                 >BIN</button>
                 <button
                   onClick={() => setExchange('bybit')}
-                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
                 >BYB</button>
                 <button
                   onClick={() => setExchange('bybit-linear')}
-                  className={cn("px-2 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
+                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
                 >PRP</button>
               </div>
-              <div className="w-px h-5 bg-white/10 mx-1" />
-              <div className="flex items-center gap-1.5">
+              <div className="w-px h-6 bg-white/5 mx-1" />
+              <div className="flex items-center gap-1">
                 <motion.button
                   onClick={async () => {
                     const next = !alertsEnabled;
@@ -2769,7 +2835,9 @@ export default function ScreenerDashboard() {
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-20 bg-[#0A0F1B]/95 border-b border-white/5">
                 <tr>
-                  <th className="px-4 py-4 text-[10px] font-black uppercase text-slate-600 text-left w-12 tracking-widest">#</th>
+                  {visibleCols.has('rank') && (
+                    <th className="px-4 py-4 text-[10px] font-black uppercase text-slate-600 text-left w-12 tracking-widest">#</th>
+                  )}
                   <th className="px-2 py-4 text-[10px] font-black text-slate-600 text-center w-8 uppercase tracking-widest">★</th>
                   <SortHeader label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} />
                   <SortHeader label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
@@ -2985,6 +3053,8 @@ export default function ScreenerDashboard() {
             setGlobalLongCandleThreshold={setGlobalLongCandleThreshold}
             globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
             setGlobalVolumeSpikeThreshold={setGlobalVolumeSpikeThreshold}
+            globalVolatilityEnabled={globalVolatilityEnabled}
+            setGlobalVolatilityEnabled={setGlobalVolatilityEnabled}
           />
         )}
       </AnimatePresence>
@@ -3072,14 +3142,15 @@ function CoinSettingsModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      className="fixed inset-0 z-[500] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, y: -10 }}
-        animate={{ scale: 1, y: -10 }}
-        exit={{ scale: 0.95, y: -10 }}
-        className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden"
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="w-full max-w-md bg-slate-900 border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-3 sm:p-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -3095,7 +3166,7 @@ function CoinSettingsModal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto max-h-[75vh] custom-scrollbar">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
             {/* RSI Periods Grid - Consolidated for Vertical Efficiency */}
             <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
@@ -3257,7 +3328,9 @@ function CoinSettingsModal({
                   { key: 'alertOn5m', label: '5m' },
                   { key: 'alertOn15m', label: '15M' },
                   { key: 'alertOn1h', label: '1H' },
-                  { key: 'alertOnCustom', label: 'CUST' }
+                  { key: 'alertOnCustom', label: 'CUST' },
+                  { key: 'alertOnLongCandle', label: 'VOLA' },
+                  { key: 'alertOnVolumeSpike', label: 'SPIKE' }
                 ].map(tf => (
                   <button
                     key={tf.key}
@@ -3679,7 +3752,9 @@ function GlobalSettingsModal({
   globalLongCandleThreshold,
   setGlobalLongCandleThreshold,
   globalVolumeSpikeThreshold,
-  setGlobalVolumeSpikeThreshold
+  setGlobalVolumeSpikeThreshold,
+  globalVolatilityEnabled,
+  setGlobalVolatilityEnabled
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
@@ -3708,6 +3783,8 @@ function GlobalSettingsModal({
   setGlobalLongCandleThreshold: (v: number) => void;
   globalVolumeSpikeThreshold: number;
   setGlobalVolumeSpikeThreshold: (v: number) => void;
+  globalVolatilityEnabled: boolean;
+  setGlobalVolatilityEnabled: (v: boolean) => void;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -3998,31 +4075,77 @@ function GlobalSettingsModal({
                     </button>
                   ))}
                 </div>
+              </div>
 
-                <div className="h-px bg-white/5 my-5" />
+              {/* Global Volatility Activation */}
+              <div className={cn(
+                "p-5 rounded-3xl border transition-all relative overflow-hidden group/vol",
+                globalVolatilityEnabled 
+                  ? "bg-amber-500/[0.08] border-amber-500/30 shadow-[0_0_40px_-10px_#F59E0B33]" 
+                  : "bg-white/[0.02] border-white/5"
+              )}>
+                <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover/vol:opacity-[0.1] transition-opacity duration-700">
+                  <Zap size={48} className="text-amber-500" />
+                </div>
+
+                <div className="flex flex-col mb-5">
+                  <span className={cn(
+                    "text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2",
+                    globalVolatilityEnabled ? "text-amber-400" : "text-slate-500"
+                  )}>
+                    <Zap size={14} className={cn(globalVolatilityEnabled && "animate-pulse")} />
+                    Volatility Surge Mode
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase mt-1.5 leading-relaxed pr-16">
+                    Alert on sudden price or volume spikes compared to the last 20min average.
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => {
+                    const next = !globalVolatilityEnabled;
+                    setGlobalVolatilityEnabled(next);
+                    localStorage.setItem('crypto-rsi-global-volatility-enabled', next ? '1' : '0');
+                  }}
+                  className={cn(
+                    "absolute top-5 right-5 w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 shadow-lg",
+                    globalVolatilityEnabled ? "bg-amber-500" : "bg-slate-800"
+                  )}
+                >
+                  <div className={cn(
+                    "w-4 h-4 rounded-full bg-white transition-all shadow-md",
+                    globalVolatilityEnabled ? "translate-x-6" : "translate-x-0"
+                  )} />
+                </button>
 
                 <div className="grid grid-cols-2 gap-4">
                   <NumericAdjuster
                     label="Long Candle Multi"
                     value={globalLongCandleThreshold}
-                    onChange={setGlobalLongCandleThreshold}
+                    onChange={(v: number) => {
+                      setGlobalLongCandleThreshold(v);
+                      localStorage.setItem('crypto-rsi-global-long-candle-threshold', v.toString());
+                    }}
                     min={2} max={50}
-                    colorClass={globalThresholdsEnabled ? "text-amber-400" : "text-slate-500"}
+                    colorClass={globalVolatilityEnabled ? "text-amber-400" : "text-slate-500"}
                     bgClass="bg-black/20"
                     borderClass="border-white/5"
                     description="Volatility Surge"
-                    loading={!globalThresholdsEnabled}
+                    loading={!globalVolatilityEnabled}
                   />
                   <NumericAdjuster
                     label="Vol Spike Multi"
                     value={globalVolumeSpikeThreshold}
-                    onChange={setGlobalVolumeSpikeThreshold}
+                    onChange={(v: number) => {
+                      setGlobalVolumeSpikeThreshold(v);
+                      localStorage.setItem('crypto-rsi-global-volume-spike-threshold', v.toString());
+                    }}
                     min={2} max={50}
-                    colorClass={globalThresholdsEnabled ? "text-[#39FF14]" : "text-slate-500"}
+                    colorClass={globalVolatilityEnabled ? "text-[#39FF14]" : "text-slate-500"}
                     bgClass="bg-black/20"
                     borderClass="border-white/5"
                     description="Volume Surge"
-                    loading={!globalThresholdsEnabled}
+                    loading={!globalVolatilityEnabled}
                   />
                 </div>
               </div>

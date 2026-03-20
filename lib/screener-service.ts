@@ -95,7 +95,7 @@ const FALLBACK_SYMBOLS = [
 ];
 
 // ── Multi-Market definitions ──
-const BINANCE_NATIVE_SPECIAL = ['PAXGUSDT', 'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT'];
+const BINANCE_NATIVE_SPECIAL = ['PAXGUSDT', 'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'USDJPY'];
 const YAHOO_MARKET_MAP: Record<string, string> = {
   'SPX': '^GSPC',    // S&P 500
   'NDAQ': '^IXIC',   // NASDAQ
@@ -175,6 +175,24 @@ const indicatorCache = new Map<string, { entry: ScreenerEntry; ts: number }>();
 const INDICATOR_CACHE_TTL = 120_000; // 2 min — standard symbols
 const INDICATOR_CACHE_TTL_ALERT = 60_000; // 1 min — alert-active symbols (tighter accuracy)
 const INDICATOR_CACHE_MAX = 5000;
+
+// ── Long-lived volatility baseline cache (average bar size/volume) ──
+const baselineCache = new Map<string, { avgBarSize1m: number; avgVolume1m: number; ts: number }>();
+const BASELINE_CACHE_TTL = 3600_000; // 1 hour — averages over 20 candles are stable enough for this TTL
+
+function updateBaselineCache(symbol: string, avgBarSize1m: number | null, avgVolume1m: number | null) {
+  if (avgBarSize1m != null && avgVolume1m != null) {
+    baselineCache.set(symbol, { avgBarSize1m, avgVolume1m, ts: Date.now() });
+  }
+}
+
+function getBaseline(symbol: string) {
+  const cached = baselineCache.get(symbol);
+  if (cached && Date.now() - cached.ts < BASELINE_CACHE_TTL) {
+    return cached;
+  }
+  return null;
+}
 
 /**
  * Force-evict a specific symbol from all caches.
@@ -282,10 +300,11 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     macdSlowState: null, macdSignalState: null,
     rsiCustom: null, rsiStateCustom: null,
     rsiPeriodAtCreation: 14,
-    avgBarSize1m: null,
-    avgVolume1m: null,
+    avgBarSize1m: getBaseline(sym)?.avgBarSize1m ?? null,
+    avgVolume1m: getBaseline(sym)?.avgVolume1m ?? null,
     curCandleSize: null,
     curCandleVol: null,
+    candleDirection: null,
     signalStartedAt: nowTs,
     updatedAt: nowTs,
     market: 'Crypto',
@@ -1061,7 +1080,7 @@ function buildEntry(
       signalStartedAt = prevEntry.signalStartedAt || prevEntry.updatedAt;
     }
 
-    return {
+    const entry_partial = {
       symbol: sym,
       price,
       change24h: toNum(ticker?.priceChangePercent, 0),
@@ -1099,8 +1118,16 @@ function buildEntry(
       adx,
       avgBarSize1m: calculateAvgBarSize(highs1m, lows1m, 20),
       avgVolume1m: calculateAvgVolume(volumes1m, 20),
+    };
+
+    // Update the long-lived baseline cache for persistent volatility checks
+    updateBaselineCache(sym, entry_partial.avgBarSize1m, entry_partial.avgVolume1m);
+
+    return {
+      ...entry_partial,
       curCandleSize: null,
       curCandleVol: null,
+      candleDirection: null,
       rsiState1m,
       rsiState5m,
       rsiState15m,

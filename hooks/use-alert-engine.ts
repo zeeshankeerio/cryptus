@@ -69,8 +69,9 @@ export function useAlertEngine(
   globalOverbought: number = 90,
   globalOversold: number = 15,
   globalThresholdTimeframes: string[] = ['1m', '5m', '15m', '1h'],
-  globalLongCandleThreshold: number = 10.0,
-  globalVolumeSpikeThreshold: number = 10.0
+  globalLongCandleThreshold: number = 3.0,
+  globalVolumeSpikeThreshold: number = 5.0,
+  globalVolatilityEnabled: boolean = false
 ) {
   // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
   useEffect(() => {
@@ -354,6 +355,9 @@ export function useAlertEngine(
 
   const globalVolumeSpikeThresholdRef = useRef(globalVolumeSpikeThreshold);
   useEffect(() => { globalVolumeSpikeThresholdRef.current = globalVolumeSpikeThreshold; }, [globalVolumeSpikeThreshold]);
+
+  const globalVolatilityEnabledRef = useRef(globalVolatilityEnabled);
+  useEffect(() => { globalVolatilityEnabledRef.current = globalVolatilityEnabled; }, [globalVolatilityEnabled]);
 
   // ── Native notification ──
   const triggerNativeNotification = useCallback((title: string, body: string) => {
@@ -701,7 +705,15 @@ export function useAlertEngine(
 
         const config = coinConfigsRef.current[symbol];
         const isVolatility = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
-        if (!config && !globalThresholdsEnabledRef.current) return;
+        
+        // Block alerts if no manual config AND no relevant global mode is enabled
+        const globalRSIEnabled = globalThresholdsEnabledRef.current;
+        const globalVolEnabled = globalVolatilityEnabledRef.current;
+        
+        if (!config) {
+          if (isVolatility && !globalVolEnabled) return;
+          if (!isVolatility && !globalRSIEnabled) return;
+        }
 
         // Unified cooldown key: bare symbol-timeframe (matches worker + batch evaluator)
         // For volatility, we use a specific key to avoid collision with RSI 1m alerts
@@ -724,8 +736,16 @@ export function useAlertEngine(
           let desc = '';
           
           if (isVolatility) {
-             title = `${alias}${exchangeLabel} ${type === 'LONG_CANDLE' ? '⚡ VOLATILITY' : '📊 VOLUME SPIKE'}`;
-             desc = `${type === 'LONG_CANDLE' ? 'Long candle' : 'Volume surge'} detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
+             const direction = payload.direction;
+             const dirSymbol = direction === 'bullish' ? '🟢 BULLISH' : '🔴 BEARISH';
+             
+             if (type === 'LONG_CANDLE') {
+               title = `${alias}${exchangeLabel} ⚡ ${dirSymbol} VOLATILITY`;
+               desc = `Long candle detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
+             } else {
+               title = `${alias}${exchangeLabel} 📊 ${dirSymbol} VOLUME SPIKE`;
+               desc = `Volume surge detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
+             }
           } else {
              title = isStrat
                ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`

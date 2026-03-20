@@ -37,12 +37,14 @@ let zoneStates = new Map();
 let lastTriggered = new Map();
 let configLastUpdated = new Map(); // Track manual updates for cold-start alerts
 let liveCandleStates = new Map(); // Track current 1m candle: { lastMin, open, volStart }
+let latestTickerState = new Map(); // Track last known valid values for partial updates
 const COOLDOWN_MS = 3 * 60 * 1000;
 let globalRsiPeriod = 14;
 let globalAlertsEnabled = false;
 let globalThresholdsEnabled = false;
-let globalLongCandleThreshold = 10.0;
-let globalVolumeSpikeThreshold = 10.0;
+let globalLongCandleThreshold = 3.0;
+let globalVolumeSpikeThreshold = 5.0;
+let globalVolatilityEnabled = false;
 let portVisibility = new Map(); // Track visibility per port
 function isAnyTabVisible() {
   for (const v of portVisibility.values()) if (v) return true;
@@ -69,7 +71,7 @@ function getSymbolAlias(symbol) {
   if (symbol === 'EURUSDT') return 'EUR/USD';
   if (symbol === 'GBPUSDT') return 'GBP/USD';
   if (symbol === 'AUDUSDT') return 'AUD/USD';
-  if (symbol === 'JPYUSDT') return 'USD/JPY';
+  if (symbol === 'USDJPY') return 'USD/JPY';
   
   let clean = symbol.replace('USDT', '');
   if (clean.endsWith('USD') && clean.length > 3) clean = clean.replace('USD', '');
@@ -161,7 +163,8 @@ class BinanceAdapter extends ExchangeAdapter {
       s: t.s,
       c: parseFloat(t.c),
       o: parseFloat(t.o),
-      q: parseFloat(t.q)
+      q: parseFloat(t.q),
+      v: parseFloat(t.v)
     }, this.exchangeName || 'binance');
   }
 }
@@ -283,7 +286,8 @@ class BybitAdapter extends ExchangeAdapter {
       s: data.symbol,
       c: parseFloat(data.lastPrice),
       o: parseFloat(data.prevPrice24h),
-      q: parseFloat(data.turnover24h)
+      q: parseFloat(data.turnover24h),
+      v: parseFloat(data.volume24h)
     }, this.exchangeName || 'bybit');
   }
 }
@@ -355,48 +359,68 @@ function stopExchange(name) {
 
 function processNormalizedTicker(t, exchangeName = 'binance') {
   if (!currentSymbols.has(t.s)) return;
-  if (isNaN(t.c) || t.c <= 0) return;
+  
+  const trackingKey = `${exchangeName}:${t.s}`;
+  const prevState = latestTickerState.get(trackingKey) || {};
 
-  const change24h = isNaN(t.o) || t.o <= 0
+  // Merge partial updates: use new if finite/valid, else keep existing
+  // We use curC, curO, etc to avoid confusion with the input 't' object
+  const curC = (t.c != null && !isNaN(t.c) && t.c > 0) ? t.c : (prevState.c || 0);
+  const curO = (t.o != null && !isNaN(t.o) && t.o > 0) ? t.o : (prevState.o || 0);
+  const curQ = (t.q != null && !isNaN(t.q)) ? t.q : (prevState.q || 0);
+  const curV = (t.v != null && !isNaN(t.v)) ? t.v : (prevState.v || 0);
+
+  // Store the most recent valid values for next delta update
+  latestTickerState.set(trackingKey, { c: curC, o: curO, q: curQ, v: curV });
+
+  // Guard: price must be valid for any indicator processing
+  if (!curC || curC <= 0) return;
+
+  const change24h = (!curO || curO <= 0)
     ? 0
-    : Math.round(((t.c - t.o) / t.o) * 10000) / 100;
+    : Math.round(((curC - curO) / curO) * 10000) / 100;
 
     const alias = getSymbolAlias(t.s);
-    const trackingKey = `${exchangeName}:${t.s}`;
 
   // ── Volatility Monitor ──
   const now = Date.now();
   const currentMinKey = Math.floor(now / 60000);
   const volEntry = volatilityBuffer.get(trackingKey);
   if (!volEntry) {
-    volatilityBuffer.set(trackingKey, { startPrice: t.c, startTime: now });
+    volatilityBuffer.set(trackingKey, { startPrice: curC, startTime: now });
   } else {
     if (now - volEntry.startTime > 30000) {
-      const movePct = Math.abs(t.c - volEntry.startPrice) / volEntry.startPrice;
+      const movePct = Math.abs(curC - volEntry.startPrice) / volEntry.startPrice;
       if (movePct >= 0.02) {
         self.postMessage({ type: 'PRIORITY_SYNC', payload: t.s });
       }
-      volatilityBuffer.set(trackingKey, { startPrice: t.c, startTime: now });
+      volatilityBuffer.set(trackingKey, { startPrice: curC, startTime: now });
     }
   }
 
   // ── Live Candle & Volume Detector ──
-  const candleState = liveCandleStates.get(trackingKey) || { lastMin: 0, open: t.c, volStart: t.q };
+  const candleState = liveCandleStates.get(trackingKey) || { lastMin: 0, open: curC, volStart: curV || 0 };
   if (candleState.lastMin !== currentMinKey) {
     candleState.lastMin = currentMinKey;
-    candleState.open = t.c;
-    candleState.volStart = t.q;
+    candleState.open = curC;
+    candleState.volStart = curV || 0;
     liveCandleStates.set(trackingKey, candleState);
   }
 
-  const curCandleSize = Math.abs(t.c - candleState.open);
-  const curCandleVol = Math.max(0, t.q - candleState.volStart);
+  const curCandleSize = Math.abs(curC - candleState.open);
+  const curCandleVol = Math.max(0, (curV || 0) - candleState.volStart);
 
   // ── Real-time Indicator Shadowing ──
   const state = rsiStates.get(t.s); // Note: rsiStates is synced from main thread which is symbol-based
   const config = coinConfigs.get(t.s);
 
-  let liveIndicators = {};
+  let liveIndicators = {
+    curCandleSize,
+    curCandleVol,
+    candleDirection: curC >= candleState.open ? 'bullish' : 'bearish',
+    avgBarSize1m: state ? state.avgBarSize1m : null,
+    avgVolume1m: state ? state.avgVolume1m : null
+  };
 
   if (state && config) {
     const r1mP = config.rsi1mPeriod || 14;
@@ -410,20 +434,20 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     const osT = config.oversoldThreshold != null ? config.oversoldThreshold : 30;
     const hysteresis = computeHysteresis(obT, osT);
 
-    const rsi1m = approximateRsi(state.rsiState1m, t.c, r1mP);
-    const rsi5m = approximateRsi(state.rsiState5m, t.c, r5mP);
-    const rsi15m = approximateRsi(state.rsiState15m, t.c, r15mP);
-    const rsi1h = approximateRsi(state.rsiState1h, t.c, r1hP);
-    const rsiCustom = approximateRsi(state.rsiStateCustom, t.c, rCP);
+    const rsi1m = approximateRsi(state.rsiState1m, curC, r1mP);
+    const rsi5m = approximateRsi(state.rsiState5m, curC, r5mP);
+    const rsi15m = approximateRsi(state.rsiState15m, curC, r15mP);
+    const rsi1h = approximateRsi(state.rsiState1h, curC, r1hP);
+    const rsiCustom = approximateRsi(state.rsiStateCustom, curC, rCP);
 
-    const ema9 = approximateEma(state.ema9State, t.c, 9);
-    const ema21 = approximateEma(state.ema21State, t.c, 21);
+    const ema9 = approximateEma(state.ema9State, curC, 9);
+    const ema21 = approximateEma(state.ema21State, curC, 21);
     const emaCross = (ema9 && ema21) ? (ema9 > ema21 ? 'bullish' : 'bearish') : null;
 
     let macdHistogram = null;
     if (state.macdFastState && state.macdSlowState && state.macdSignalState) {
-      const ema12 = approximateEma(state.macdFastState, t.c, 12);
-      const ema26 = approximateEma(state.macdSlowState, t.c, 26);
+      const ema12 = approximateEma(state.macdFastState, curC, 12);
+      const ema26 = approximateEma(state.macdSlowState, curC, 26);
       if (ema12 && ema26) {
         const macdLine = ema12 - ema26;
         const macdSignal = approximateEma(state.macdSignalState, macdLine, 9);
@@ -435,12 +459,12 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     let bbPosition = null;
     if (state.bbUpper && state.bbLower) {
       const range = state.bbUpper - state.bbLower;
-      bbPosition = range > 0 ? (t.c - state.bbLower) / range : 0.5;
+      bbPosition = range > 0 ? (curC - state.bbLower) / range : 0.5;
     }
 
     const currentStrategy = computeWorkerStrategyScore({
       symbol: t.s,
-      price: t.c,
+      price: curC,
       rsi1m, rsi5m, rsi15m, rsi1h,
       macdHistogram,
       bbPosition,
@@ -454,27 +478,27 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       momentum: state.momentum
     });
 
-    liveIndicators = {
+    Object.assign(liveIndicators, {
       rsi1m, rsi5m, rsi15m, rsi1h, rsiCustom,
       ema9, ema21, emaCross,
       macdHistogram,
       bbPosition,
       strategyScore: currentStrategy.score,
       strategySignal: currentStrategy.signal,
-      curCandleSize,
-      curCandleVol
-    };
+      avgBarSize1m: state.avgBarSize1m,
+      avgVolume1m: state.avgVolume1m
+    });
 
     // ── Live Volatility Alerts (Long Candle & Volume Spike) ──
     const candleMult = (config.longCandleThreshold != null && config.longCandleThreshold > 0) 
       ? config.longCandleThreshold 
-      : (globalThresholdsEnabled ? globalLongCandleThreshold : 10);
+      : (globalVolatilityEnabled ? globalLongCandleThreshold : 10);
     const volMult = (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0) 
       ? config.volumeSpikeThreshold 
-      : (globalThresholdsEnabled ? globalVolumeSpikeThreshold : 10);
-
-    const candleAlertEnabled = config.alertOnLongCandle || globalThresholdsEnabled;
-    const volumeAlertEnabled = config.alertOnVolumeSpike || globalThresholdsEnabled;
+      : (globalVolatilityEnabled ? globalVolumeSpikeThreshold : 10);
+    const candleAlertEnabled = config.alertOnLongCandle || globalVolatilityEnabled;
+    const volumeAlertEnabled = config.alertOnVolumeSpike || globalVolatilityEnabled;
+    const candleDirection = curC >= candleState.open ? 'bullish' : 'bearish';
 
     if (candleAlertEnabled && state.avgBarSize1m > 0 && curCandleSize > state.avgBarSize1m * candleMult) {
       const alertKey = `${t.s}-VOLATILITY-CANDLE`;
@@ -488,7 +512,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
             timeframe: '1m',
             value: curCandleSize / state.avgBarSize1m,
             type: 'LONG_CANDLE',
-            price: t.c
+            price: curC,
+            direction: candleDirection
           }
         });
       }
@@ -506,7 +531,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
             timeframe: '1m',
             value: curCandleVol / state.avgVolume1m,
             type: 'VOLUME_SPIKE',
-            price: t.c
+            price: curC,
+            direction: candleDirection // Volume spike typically follows the price action direction
           }
         });
       }
@@ -582,7 +608,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
                 timeframe: tf.label,
                 value: tf.rsi,
                 type: zone,
-                price: t.c // GAP-A2 FIX: Include price in payload
+                price: curC // GAP-A2 FIX: Include price in payload
               }
             });
 
@@ -626,7 +652,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
               timeframe: 'STRATEGY',
               value: currentStrategy.score,
               type: currentStrat === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
-              price: t.c // GAP-A2 FIX: Include price in payload
+              price: curC // GAP-A2 FIX: Include price in payload
             }
           });
 
@@ -651,9 +677,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
   // ── Update UI Buffer (Prioritize Active Exchange) ──
   if (exchangeName === currentExchangeName || !tickerBuffer.has(t.s)) {
     tickerBuffer.set(t.s, {
-      price: t.c,
+      price: curC,
       change24h,
-      volume24h: t.q,
+      volume24h: curQ,
       exchange: exchangeName,
       updatedAt: Date.now(),
       ...liveIndicators
@@ -713,7 +739,8 @@ function handleMessage(e, port = null) {
       getStoredConfig().then(cfg => {
         if (cfg.rsiPeriod) globalRsiPeriod = cfg.rsiPeriod;
         if (cfg.alertsEnabled !== undefined) globalAlertsEnabled = cfg.alertsEnabled;
-        console.log(`[worker] Rehydrated config: rsi=${globalRsiPeriod}, alerts=${globalAlertsEnabled}`);
+        if (cfg.volatilityEnabled !== undefined) globalVolatilityEnabled = cfg.volatilityEnabled;
+        console.log(`[worker] Rehydrated config: rsi=${globalRsiPeriod}, alerts=${globalAlertsEnabled}, vol=${globalVolatilityEnabled}`);
       });
 
       startFlushing(payload.flushInterval || 300);
@@ -796,6 +823,9 @@ function handleMessage(e, port = null) {
       }
       if (payload.globalVolumeSpikeThreshold !== undefined) {
         globalVolumeSpikeThreshold = payload.globalVolumeSpikeThreshold;
+      }
+      if (payload.globalVolatilityEnabled !== undefined) {
+        globalVolatilityEnabled = payload.globalVolatilityEnabled;
       }
       if (payload.configs) {
         const now = Date.now();
