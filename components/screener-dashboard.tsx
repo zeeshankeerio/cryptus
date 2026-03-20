@@ -2528,15 +2528,6 @@ export default function ScreenerDashboard() {
                 >
                   <Clock size={14} />
                 </motion.button>
-                <div className="w-px h-5 bg-white/10 mx-1" />
-                <motion.button
-                  onClick={triggerTestAlert}
-                  whileTap={{ scale: 0.9 }}
-                  className="w-9 h-9 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 text-[#39FF14] flex items-center justify-center shadow-lg active:scale-90 transition-all"
-                  title="Test Sound"
-                >
-                  <ShieldCheck size={14} className="animate-pulse" />
-                </motion.button>
               </div>
               <div className="w-px h-5 bg-white/10 mx-1" />
               <div className="flex items-center gap-1.5">
