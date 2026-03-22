@@ -165,7 +165,8 @@ class BinanceAdapter extends ExchangeAdapter {
       c: parseFloat(t.c),
       o: parseFloat(t.o),
       q: parseFloat(t.q),
-      v: parseFloat(t.v)
+      v: parseFloat(t.v),
+      ts: t.E
     }, this.exchangeName || 'binance');
   }
 }
@@ -199,9 +200,9 @@ class BybitAdapter extends ExchangeAdapter {
         if (data.topic && (data.topic.startsWith('tickers.') || data.topic === 'tickers')) {
           const tickData = data.data;
           if (Array.isArray(tickData)) {
-            tickData.forEach(t => this.process(t));
+            tickData.forEach(t => this.process(t, data.ts));
           } else {
-            this.process(tickData);
+            this.process(tickData, data.ts);
           }
         }
       } catch (e) { }
@@ -279,7 +280,7 @@ class BybitAdapter extends ExchangeAdapter {
     console.log(`[worker] Bybit Spot subscribed to ${topicSet.length} symbols (${alertSymbols.length} alerts, ${majors.length} majors)`);
   }
 
-  process(data) {
+  process(data, ts) {
     if (!data) return;
     // Normalize Bybit V5 ticker to internal schema
     // Bybit payloads vary slightly between linear and spot, but v5 is unified.
@@ -288,7 +289,8 @@ class BybitAdapter extends ExchangeAdapter {
       c: parseFloat(data.lastPrice),
       o: parseFloat(data.prevPrice24h),
       q: parseFloat(data.turnover24h),
-      v: parseFloat(data.volume24h)
+      v: parseFloat(data.volume24h),
+      ts: ts
     }, this.exchangeName || 'bybit');
   }
 }
@@ -384,7 +386,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     const alias = getSymbolAlias(t.s);
 
   // ── Volatility Monitor ──
-  const now = Date.now();
+  const now = t.ts || Date.now();
   const currentMinKey = Math.floor(now / 60000);
   const volEntry = volatilityBuffer.get(trackingKey);
   if (!volEntry) {
