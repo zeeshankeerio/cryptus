@@ -126,7 +126,7 @@ const INDICATORS: Indicator[] = [
       { condition: 'Histogram > 0', meaning: 'Bullish momentum — trend accelerating upwards', color: 'text-[#39FF14]' },
       { condition: 'Histogram < 0', meaning: 'Bearish momentum — trend accelerating downwards', color: 'text-[#FF4B5C]' },
     ],
-    usage: 'Normalization ensures that a $1.0 fluctuation in BTC (0.001%) doesn\'t generate a stronger signal than a $1.0 fluctuation in ETH (0.04%). This is critical for scanning 500+ diverse pairs.',
+    usage: 'Normalization ensures that a $1.0 fluctuation in BTC (0.001%) doesn\'t generate a stronger signal than a $1.0 fluctuation in ETH (0.04%). This is critical for scanning 500+ diverse pairs. If MACD is globally disabled, the "Histogram" column will show "—" and yield 0 weight to the final Strategy Score.',
   },
   {
     id: 'bollinger',
@@ -217,7 +217,7 @@ const INDICATORS: Indicator[] = [
       { condition: 'Ratio ≥ 2.5×', meaning: 'The market is waking up — price is stretching faster than usual.', color: 'text-amber-400' },
       { condition: 'Ratio ≥ 5.0×', meaning: 'High Intensity — a major "Power Move" is happening. Great for momentum traders.', color: 'text-amber-500 font-bold' },
     ],
-    usage: 'Use this to catch "Pumps" or "Dumps" early. If you see a green flash (🟢) with a high ratio, it means buyers are aggressive. If you see red (🔴), sellers are in control. It is updated every second, giving you an edge over traders using static charts.',
+    usage: 'Use this to catch "Pumps" or "Dumps" early. If you see a green flash (🟢) with a high ratio, it means buyers are aggressive. If you see red (🔴), sellers are in control. It is updated every second via "Live Pulse" technology, giving you an edge over traders using static charts. Requires the "Volatility Monitor" feature flag to be active.',
   },
   {
     id: 'vwap',
@@ -260,6 +260,52 @@ const INDICATORS: Indicator[] = [
     usage: 'A price move means nothing without Volume. If price goes up BUT there is no Volume Spike, it might be a trap. If price goes up AND a Volume Spike (🔥) appears, it confirms that the "Big Players" are buying with you.',
   },
   {
+    id: 'stoch-rsi',
+    name: 'Stochastic RSI',
+    icon: '♾️',
+    category: 'momentum',
+    tagColor: 'text-[#39FF14]',
+    summary: 'An indicator of an indicator. It applies the Stochastic oscillator formula to RSI values rather than price, highlighting RSI extremes with high precision.',
+    formula: [
+      'StochRSI = (RSI - Lowest RSI) / (Highest RSI - Lowest RSI)',
+      '%K = 3-period SMA of StochRSI',
+      '%D = 3-period SMA of %K',
+    ],
+    parameters: [
+      { name: 'RSI Period', value: '14', description: 'Standard RSI baseline' },
+      { name: 'Stoch Period', value: '14', description: 'Oscillator lookback' },
+      { name: 'Smooth K/D', value: '3/3', description: 'Smoothing for noise reduction' },
+    ],
+    interpretation: [
+      { condition: 'Stoch K < 20', meaning: 'Oversold RSI momentum — high probability bounce zone', color: 'text-[#39FF14]' },
+      { condition: 'Stoch K > 80', meaning: 'Overbought RSI momentum — high probability pull-back', color: 'text-[#FF4B5C]' },
+      { condition: 'K Cross above D', meaning: 'Bullish momentum shift within the RSI band', color: 'text-[#39FF14]/70' },
+    ],
+    usage: 'Stoch RSI is much more sensitive than standard RSI. It often reaches extreme 0 or 100 values while normal RSI is still at 40 or 60. Use it to time entries within a larger RSI trend.',
+  },
+  {
+    id: 'momentum',
+    name: 'Momentum Scaler',
+    icon: '🏎️',
+    category: 'momentum',
+    tagColor: 'text-blue-300',
+    summary: 'Measures the rate of change of price movements. It identifies the speed at which a trend is accelerating or decelerating.',
+    formula: [
+      'Momentum = Current Price − Price (n periods ago)',
+      'Normalized = (Momentum / Baseline Price) × 100',
+      'Smoothing: Applied over 10-period window',
+    ],
+    parameters: [
+      { name: 'Lookback', value: '10', description: 'Responsive momentum window' },
+      { name: 'Baseline', value: 'Price', description: 'Variable price anchor' },
+    ],
+    interpretation: [
+      { condition: 'Value > 2.0%', meaning: 'Strong upward acceleration', color: 'text-emerald-400' },
+      { condition: 'Value < -2.0%', meaning: 'Strong downward acceleration', color: 'text-red-400' },
+    ],
+    usage: 'Momentum serves as a "Trend Engine" multiplier. When high momentum aligns with an EMA Cross and RSI signal, the Strategy Score receives a significant boost.',
+  },
+  {
     id: 'confluence',
     name: 'Multi-TF Confluence',
     icon: '🎯',
@@ -278,7 +324,7 @@ const INDICATORS: Indicator[] = [
       { condition: 'Score ≥ +25', meaning: 'Bullish Alignment', color: 'text-[#39FF14]' },
       { condition: 'Score ≥ +60', meaning: 'Strong Bullish Alignment — High Conviction', color: 'text-[#39FF14] font-bold' },
     ],
-    usage: 'Confluence filters out "false signals" where one timeframe is bullish but the rest are bearish. It is weighted heavily (2.0x) in the final strategy score.',
+    usage: 'Confluence filters out "false signals" where one timeframe is bullish but the rest are bearish. It is weighted heavily (2.0x) in the final strategy score. If Confluence is globally disabled, the dashboard hides these alignment metrics to reduce UI noise.',
   },
   {
     id: 'strategy',
@@ -303,7 +349,7 @@ const INDICATORS: Indicator[] = [
       { condition: 'Score ≥ +50', meaning: 'Strong Buy — Full System Alignment', color: 'text-[#39FF14]' },
       { condition: 'Score ≤ -50', meaning: 'Strong Sell — Full System Alignment', color: 'text-[#FF4B5C]' },
     ],
-    usage: 'Sort the screener by Strategy Score to find assets where multiple deep technical systems are in agreement. This minimizes risk by avoiding isolated indicators.',
+    usage: 'Sort the screener by Strategy Score to find assets where multiple deep technical systems are in agreement. Note: Disabling global indicator flags (like RSI or EMA) instantly removes them from the Score Calculation, allowing you to build your own custom weighted environment.',
   },
 ];
 
@@ -474,26 +520,25 @@ export default function IndicatorGuide() {
         </div>
       </header>
 
-      {/* Data pipeline overview */}
       <section className="mb-8 rounded-xl border border-dark-700 bg-dark-800/40 p-5">
         <h2 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-          <span className="text-[#39FF14]">⚡</span> Data Pipeline
+          <span className="text-[#39FF14]">⚡</span> Data Pipeline & Real-Time Sync
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Source</div>
-            <div className="text-white font-medium">Paid WebSocket</div>
-            <div className="text-gray-400 text-xs mt-1">Live prices via <code className="text-[#39FF14]">!miniTicker@arr</code> stream — sub-second price updates for all tracked pairs</div>
+            <div className="text-white font-medium">Multi-Exchange Workers</div>
+            <div className="text-gray-400 text-xs mt-1">Dedicated WebWorkers parse <code className="text-[#39FF14]">binance</code> and <code className="text-[#39FF14]">bybit</code> streams in parallel for sub-second precision.</div>
           </div>
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
             <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Indicators</div>
-            <div className="text-white font-medium">Server-Side Compute</div>
-            <div className="text-gray-400 text-xs mt-1">1000× 1m candles + 100× 1h candles fetched via REST API, indicators computed in batches of 50</div>
+            <div className="text-white font-medium">Hybrid Compute</div>
+            <div className="text-gray-400 text-xs mt-1">Background threads calculate RSI, EMA, and MACD shadows to prevent UI lag during high-volatility sessions.</div>
           </div>
           <div className="p-3 rounded-lg bg-dark-900/60 border border-dark-700">
-            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">Delivery</div>
-            <div className="text-white font-medium">Hybrid Architecture</div>
-            <div className="text-gray-400 text-xs mt-1">WebSocket for real-time prices (2s flush), REST for indicators (30–60s refresh), merged client-side</div>
+            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">UI Delivery</div>
+            <div className="text-white font-medium">Live Pulse Engine</div>
+            <div className="text-gray-400 text-xs mt-1">WebSocket prices merge with indicator data using 300ms flushes, creating an "always-on" real-time dashboard experience.</div>
           </div>
         </div>
       </section>
@@ -594,21 +639,35 @@ export default function IndicatorGuide() {
           </div>
 
           <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-5 space-y-4 md:col-span-2">
-            <h3 className="text-sm font-semibold text-[#39FF14] uppercase tracking-wider">Per-Coin Customization</h3>
+            <h3 className="text-sm font-semibold text-[#39FF14] uppercase tracking-wider">Indicator & Strategy Controls</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Click the <span className="text-[#39FF14]">⚙️</span> icon on any asset row to open its specific settings. You can override global thresholds for that specific coin:
-              </p>
-              <ul className="space-y-2">
-                <li className="text-xs text-gray-300 flex items-start gap-2">
-                  <span className="text-[#39FF14]">•</span>
-                  <span><strong>RSI Period:</strong> Use 7 for high sensitivity or 21 for trend smoothing on specific assets.</span>
-                </li>
-                <li className="text-xs text-gray-300 flex items-start gap-2">
-                  <span className="text-[#39FF14]">•</span>
-                  <span><strong>Volatility Multipliers:</strong> Tighten thresholds for stable assets (e.g. 2.0x) or loosen for "pump-and-dump" coins (e.g. 10.0x).</span>
-                </li>
-              </ul>
+              <div className="space-y-2">
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  The <span className="text-[#39FF14]">Global Indicator Toggles</span> give you total control over the strategy algorithm. You can enable or disable any of the 9 indicator categories:
+                </p>
+                <ul className="space-y-1.5">
+                  <li className="text-[11px] text-gray-300 flex items-center gap-2">
+                    <span className="text-[#39FF14]">•</span> <strong>Visual Focus:</strong> Disabled indicators are hidden from view.
+                  </li>
+                  <li className="text-[11px] text-gray-300 flex items-center gap-2">
+                    <span className="text-[#39FF14]">•</span> <strong>Strategy Weighting:</strong> Disabled indicators are excluded from the Score.
+                  </li>
+                  <li className="text-[11px] text-gray-300 flex items-center gap-2">
+                    <span className="text-[#39FF14]">•</span> <strong>Placeholder Mode:</strong> Disabled indicators show a steady "—" instead of zero, allowing you to instantly spot which metrics are currently inactive.
+                  </li>
+                  <li className="text-[11px] text-gray-300 flex items-center gap-2">
+                    <span className="text-[#39FF14]">•</span> <strong>Alert Filtering:</strong> Alerts only trigger for active indicators. Disabling an indicator globally silences all related push notifications.
+                  </li>
+                </ul>
+              </div>
+              <div className="p-3 rounded-lg bg-dark-900/40 border border-[#39FF14]/10">
+                <div className="text-[11px] text-[#39FF14] font-bold uppercase mb-2 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" /> Live Pulse & Strict Gating
+                </div>
+                <p className="text-[11px] text-gray-400 leading-normal">
+                  Toggle any indicator (RSI, EMA, MACD, etc.) to instantly remove its visual column and Strategy contribution. Active indicators feature "Live Pulse" technology for sub-second order book sync.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -622,19 +681,19 @@ export default function IndicatorGuide() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="rounded-xl border border-dark-700 bg-dark-800/40 p-4">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">RSI Signal (original)</h3>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#39FF14]/10 border border-[#39FF14]/20">
-                <span className="text-[#39FF14]">▼ Oversold</span>
-                <span className="text-gray-400 text-xs">RSI &lt; 30</span>
+            <h3 className="text-sm font-medium text-gray-300 mb-3">Signal Tags (RSI Gating)</h3>
+            <div className="space-y-3 text-sm">
+              <div className="p-2.5 rounded-lg bg-dark-900/60 border border-dark-700">
+                <div className="text-[11px] text-[#39FF14] font-bold uppercase mb-1">Default Mode (70/30)</div>
+                <p className="text-[11px] text-gray-400">Applies standard 70 (Overbought) and 30 (Oversold) thresholds to all coins across the board.</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-dark-900/60 border border-[#39FF14]/20">
+                <div className="text-[11px] text-emerald-400 font-bold uppercase mb-1">Custom Logic (Strict)</div>
+                <p className="text-[11px] text-gray-400">Highly precise mode. Tags only appear for coins with specific custom thresholds OR when "Extreme RSI Mode" is globally active. No 70/30 fallback.</p>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-500/10 border border-gray-500/20">
-                <span className="text-gray-400">Neutral</span>
-                <span className="text-gray-400 text-xs">RSI 30–70</span>
-              </div>
-              <div className="flex items-center justify-between p-2 rounded-lg bg-[#FF4B5C]/10 border border-[#FF4B5C]/20">
-                <span className="text-[#FF4B5C]">▲ Overbought</span>
-                <span className="text-gray-400 text-xs">RSI &gt; 70</span>
+                <span className="text-gray-400">Neutral (—)</span>
+                <span className="text-gray-400 text-xs">Standard State</span>
               </div>
             </div>
           </div>

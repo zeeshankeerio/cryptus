@@ -45,6 +45,7 @@ let globalThresholdsEnabled = false;
 let globalLongCandleThreshold = 3.0;
 let globalVolumeSpikeThreshold = 5.0;
 let globalVolatilityEnabled = false;
+let globalEnabledIndicators = null;
 let portVisibility = new Map(); // Track visibility per port
 function isAnyTabVisible() {
   for (const v of portVisibility.values()) if (v) return true;
@@ -484,7 +485,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       emaCross,
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
-      momentum: state.momentum
+      momentum: state.momentum,
+      enabledIndicators: globalEnabledIndicators
     });
 
     Object.assign(liveIndicators, {
@@ -836,6 +838,9 @@ function handleMessage(e, port = null) {
       if (payload.globalVolatilityEnabled !== undefined) {
         globalVolatilityEnabled = payload.globalVolatilityEnabled;
       }
+      if (payload.enabledIndicators !== undefined) {
+        globalEnabledIndicators = payload.enabledIndicators;
+      }
       if (payload.configs) {
         const now = Date.now();
         const isInitialSync = coinConfigs.size === 0;
@@ -1089,9 +1094,13 @@ function computeHysteresis(obT, osT) {
 function computeWorkerStrategyScore(params) {
   let score = 0;
   let factors = 0;
+  const enabled = params.enabledIndicators || {
+    rsi: true, macd: true, bb: true, stoch: true, ema: true, 
+    vwap: true, confluence: true, divergence: true, momentum: true
+  };
 
   const rsiScore = (val, weight) => {
-    if (val === null || val === undefined) return;
+    if (val === null || val === undefined || enabled.rsi === false) return;
     factors += weight;
     if (val <= 20) score += 100 * weight;
     else if (val <= 30) score += 70 * weight;
@@ -1107,14 +1116,14 @@ function computeWorkerStrategyScore(params) {
   rsiScore(params.rsi15m, 1.5);
   rsiScore(params.rsi1h, 2);
 
-  if (params.macdHistogram !== null && params.price > 0) {
+  if (enabled.macd !== false && params.macdHistogram !== null && params.price > 0) {
     factors += 1.5;
     const hPct = (params.macdHistogram / params.price) * 100;
     if (hPct > 0) score += Math.min(hPct * 200, 100) * 1.5;
     else score += Math.max(hPct * 200, -100) * 1.5;
   }
 
-  if (params.bbPosition !== null) {
+  if (enabled.bb !== false && params.bbPosition !== null) {
     factors += 1;
     const bp = params.bbPosition;
     if (bp <= 0.1) score += 80 * 1;
@@ -1123,7 +1132,7 @@ function computeWorkerStrategyScore(params) {
     else if (bp >= 0.75) score -= 40 * 1;
   }
 
-  if (params.stochK != null && params.stochD != null) {
+  if (enabled.stoch !== false && params.stochK != null && params.stochD != null) {
     factors += 1;
     if (params.stochK < 20 && params.stochD < 20) score += 80 * 1;
     else if (params.stochK < 30) score += 40 * 1;
@@ -1134,35 +1143,35 @@ function computeWorkerStrategyScore(params) {
     else if (params.stochK < params.stochD && params.stochK > 50) score -= 20;
   }
 
-  if (params.emaCross) {
+  if (enabled.ema !== false && params.emaCross) {
     factors += 1.5;
     score += (params.emaCross === 'bullish' ? 60 : -60) * 1.5;
   }
 
-  if (params.vwapDiff != null) {
+  if (enabled.vwap !== false && params.vwapDiff != null) {
     factors += 0.5;
     if (params.vwapDiff < -2) score += 40 * 0.5;
     else if (params.vwapDiff > 2) score -= 40 * 0.5;
   }
 
-  if (params.volumeSpike && factors > 0) {
-    score *= 1.15;
+  if (enabled.confluence !== false && params.confluence) {
+    factors += 1;
+    score += (params.confluence === 'bullish' ? 50 : -50) * 1;
   }
 
-  if (params.confluence !== undefined) {
-    factors += 2;
-    score += params.confluence * 2;
-  }
-
-  if (params.rsiDivergence && params.rsiDivergence !== 'none') {
+  if (enabled.divergence !== false && params.rsiDivergence && params.rsiDivergence !== 'none') {
     factors += 1.5;
     score += (params.rsiDivergence === 'bullish' ? 70 : -70) * 1.5;
   }
 
-  if (params.momentum != null && Math.abs(params.momentum) > 0.5) {
+  if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum) > 0.5) {
     factors += 0.5;
     const mScore = Math.max(-60, Math.min(60, params.momentum * 15));
     score += mScore * 0.5;
+  }
+
+  if (params.volumeSpike && factors > 0) {
+    score *= 1.15;
   }
 
   let normalized = factors > 0 ? score / factors : 0;

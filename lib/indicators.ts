@@ -496,14 +496,28 @@ export function computeStrategyScore(params: {
   confluence?: number;
   rsiDivergence?: 'bullish' | 'bearish' | 'none';
   momentum?: number | null;
+  enabledIndicators?: {
+    rsi?: boolean;
+    macd?: boolean;
+    bb?: boolean;
+    stoch?: boolean;
+    ema?: boolean;
+    vwap?: boolean;
+    confluence?: boolean;
+    divergence?: boolean;
+    momentum?: boolean;
+  };
 }): StrategyResult {
   let score = 0;
   let factors = 0;
   const reasons: string[] = [];
+  const enabled = params.enabledIndicators || {
+    rsi: true, macd: true, bb: true, stoch: true, ema: true, vwap: true, confluence: true, divergence: true, momentum: true
+  };
 
   // RSI scoring (higher weight for longer timeframes)
   const rsiScore = (rsi: number | null, weight: number, tf: string) => {
-    if (rsi === null) return;
+    if (rsi === null || enabled.rsi === false) return;
     factors += weight;
     if (rsi <= 20) { score += 100 * weight; reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) deep oversold`); }
     else if (rsi <= 30) { score += 70 * weight; if (weight >= 1) reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) oversold`); }
@@ -520,7 +534,7 @@ export function computeStrategyScore(params: {
   rsiScore(params.rsi1h, 2, '1h');
 
   // MACD histogram (normalized as % of price for fair cross-asset comparison)
-  if (params.macdHistogram !== null && params.price > 0) {
+  if (params.macdHistogram !== null && params.price > 0 && enabled.macd !== false) {
     factors += 1.5;
     const hPct = (params.macdHistogram / params.price) * 100;
     if (hPct > 0) {
@@ -533,7 +547,7 @@ export function computeStrategyScore(params: {
   }
 
   // Bollinger position
-  if (params.bbPosition !== null) {
+  if (params.bbPosition !== null && enabled.bb !== false) {
     factors += 1;
     const bp = params.bbPosition;
     if (bp <= 0.1) { score += 80 * 1; reasons.push(`Near lower BB (${bp.toFixed(2)})`); }
@@ -543,7 +557,7 @@ export function computeStrategyScore(params: {
   }
 
   // Stochastic RSI
-  if (params.stochK !== null && params.stochD !== null) {
+  if (params.stochK !== null && params.stochD !== null && enabled.stoch !== false) {
     factors += 1;
     if (params.stochK < 20 && params.stochD < 20) { score += 80 * 1; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) oversold`); }
     else if (params.stochK < 30) score += 40 * 1;
@@ -555,14 +569,14 @@ export function computeStrategyScore(params: {
   }
 
   // EMA cross
-  if (params.emaCross !== 'none') {
+  if (params.emaCross !== 'none' && enabled.ema !== false) {
     factors += 1.5;
     score += (params.emaCross === 'bullish' ? 60 : -60) * 1.5;
     reasons.push(params.emaCross === 'bullish' ? 'Bullish EMA cross' : 'Bearish EMA cross');
   }
 
   // VWAP
-  if (params.vwapDiff !== null) {
+  if (params.vwapDiff !== null && enabled.vwap !== false) {
     factors += 0.5;
     if (params.vwapDiff < -2) { score += 40 * 0.5; if (params.vwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff}%)`); }
     else if (params.vwapDiff > 2) { score -= 40 * 0.5; if (params.vwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff}%)`); }
@@ -577,7 +591,7 @@ export function computeStrategyScore(params: {
   // ── Intelligence signals ──
 
   // Multi-TF confluence (strong when indicators and timeframes agree)
-  if (params.confluence !== undefined && Math.abs(params.confluence) >= 20) {
+  if (params.confluence !== undefined && Math.abs(params.confluence) >= 20 && enabled.confluence !== false) {
     factors += 2;
     score += params.confluence * 2;
     if (params.confluence >= 50) reasons.push('Strong multi-TF bullish');
@@ -587,7 +601,7 @@ export function computeStrategyScore(params: {
   }
 
   // RSI divergence (powerful reversal signal)
-  if (params.rsiDivergence && params.rsiDivergence !== 'none') {
+  if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
     factors += 1.5;
     if (params.rsiDivergence === 'bullish') {
       score += 70 * 1.5;
@@ -599,7 +613,7 @@ export function computeStrategyScore(params: {
   }
 
   // Momentum (ROC)
-  if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum) > 0.5) {
+  if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum) > 0.5 && enabled.momentum !== false) {
     factors += 0.5;
     const mScore = Math.max(-60, Math.min(60, params.momentum * 15));
     score += mScore * 0.5;

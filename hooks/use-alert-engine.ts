@@ -71,7 +71,18 @@ export function useAlertEngine(
   globalThresholdTimeframes: string[] = ['1m', '5m', '15m', '1h'],
   globalLongCandleThreshold: number = 3.0,
   globalVolumeSpikeThreshold: number = 5.0,
-  globalVolatilityEnabled: boolean = false
+  globalVolatilityEnabled: boolean = false,
+  enabledIndicators?: {
+    rsi?: boolean;
+    macd?: boolean;
+    bb?: boolean;
+    stoch?: boolean;
+    ema?: boolean;
+    vwap?: boolean;
+    confluence?: boolean;
+    divergence?: boolean;
+    momentum?: boolean;
+  }
 ) {
   // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
   useEffect(() => {
@@ -358,6 +369,9 @@ export function useAlertEngine(
 
   const globalVolatilityEnabledRef = useRef(globalVolatilityEnabled);
   useEffect(() => { globalVolatilityEnabledRef.current = globalVolatilityEnabled; }, [globalVolatilityEnabled]);
+
+  const enabledIndicatorsRef = useRef(enabledIndicators);
+  useEffect(() => { enabledIndicatorsRef.current = enabledIndicators; }, [enabledIndicators]);
 
   // ── Native notification ──
   const triggerNativeNotification = useCallback((title: string, body: string) => {
@@ -651,6 +665,7 @@ export function useAlertEngine(
               confluence: entry.confluence,
               rsiDivergence: entry.rsiDivergence,
               momentum: entry.momentum,
+              enabledIndicators: enabledIndicatorsRef.current
             });
 
             const currentStrat = liveStrategy.signal;

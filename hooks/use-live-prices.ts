@@ -289,10 +289,10 @@ class PriceTickEngine extends EventTarget {
     configs?: Record<string, any>, 
     rsiStates?: Record<string, any>, 
     alertsEnabled?: boolean,
-    globalThresholdsEnabled?: boolean,
     globalLongCandleThreshold?: number,
     globalVolumeSpikeThreshold?: number,
-    globalVolatilityEnabled?: boolean
+    globalVolatilityEnabled?: boolean,
+    enabledIndicators?: Record<string, boolean>
   }) {
     this.postToWorker({ type: 'SYNC_STATES', payload: data });
   }

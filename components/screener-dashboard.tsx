@@ -153,7 +153,22 @@ const ScreenerRow = memo(function ScreenerRow({
   onOpenSettings,
   coinConfigs,
   onSaveConfig,
-  reportVisibility
+  reportVisibility,
+  globalShowSignalTags,
+  globalSignalThresholdMode,
+  globalThresholdsEnabled,
+  globalOverbought,
+  globalOversold,
+  globalUseRsi,
+  globalUseMacd,
+  globalUseBb,
+  globalUseStoch,
+  globalUseEma,
+  globalUseVwap,
+  globalUseConfluence,
+  globalUseDivergence,
+  globalUseMomentum,
+  globalVolatilityEnabled,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -166,6 +181,21 @@ const ScreenerRow = memo(function ScreenerRow({
   coinConfigs: Record<string, any>;
   onSaveConfig: (symbol: string, config: any) => Promise<void>;
   reportVisibility: (symbol: string, isVisible: boolean) => void;
+  globalShowSignalTags: boolean;
+  globalSignalThresholdMode: 'default' | 'custom';
+  globalThresholdsEnabled: boolean;
+  globalOverbought: number;
+  globalOversold: number;
+  globalUseRsi: boolean;
+  globalUseMacd: boolean;
+  globalUseBb: boolean;
+  globalUseStoch: boolean;
+  globalUseEma: boolean;
+  globalUseVwap: boolean;
+  globalUseConfluence: boolean;
+  globalUseDivergence: boolean;
+  globalUseMomentum: boolean;
+  globalVolatilityEnabled: boolean;
 }) {
   const isStarred = watchlist.has(entry.symbol);
   const [isVisible, setIsVisible] = useState(false);
@@ -222,11 +252,36 @@ const ScreenerRow = memo(function ScreenerRow({
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
     let signal = entry.signal;
-    const leadRsi = rsi15m ?? rsi1m;
-    if (leadRsi !== null) {
-      if (leadRsi <= osT) signal = "oversold";
-      else if (leadRsi >= obT) signal = "overbought";
-      else signal = "neutral";
+    if (!globalShowSignalTags || !globalUseRsi) {
+      signal = 'neutral';
+    } else {
+      let effectiveObT: number | null = 70;
+      let effectiveOsT: number | null = 30;
+      if (globalSignalThresholdMode === 'custom') {
+        const hasPerCoin = config && (config.overboughtThreshold !== undefined || config.oversoldThreshold !== undefined);
+        if (hasPerCoin) {
+          effectiveObT = obT;
+          effectiveOsT = osT;
+        } else if (globalThresholdsEnabled) {
+          effectiveObT = globalOverbought;
+          effectiveOsT = globalOversold;
+        } else {
+          // Strict: No custom or global extreme config = No signal in Custom mode
+          effectiveObT = null;
+          effectiveOsT = null;
+        }
+      }
+
+      if (effectiveObT !== null && effectiveOsT !== null) {
+        const leadRsi = rsi15m ?? rsi1m;
+        if (leadRsi !== null) {
+          if (leadRsi <= effectiveOsT) signal = 'oversold';
+          else if (leadRsi >= effectiveObT) signal = 'overbought';
+          else signal = 'neutral';
+        }
+      } else {
+        signal = 'neutral';
+      }
     }
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -241,6 +296,17 @@ const ScreenerRow = memo(function ScreenerRow({
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
+      enabledIndicators: {
+        rsi: globalUseRsi,
+        macd: globalUseMacd,
+        bb: globalUseBb,
+        stoch: globalUseStoch,
+        ema: globalUseEma,
+        vwap: globalUseVwap,
+        confluence: globalUseConfluence,
+        divergence: globalUseDivergence,
+        momentum: globalUseMomentum
+      }
     });
     return {
       price: tick.price,
@@ -286,7 +352,13 @@ const ScreenerRow = memo(function ScreenerRow({
       candleDirection: tick.candleDirection,
       isLiveRsi: true
     };
-  }, [tick, coinConfigs, entry, rsiPeriod]);
+  }, [
+    tick, coinConfigs, entry, rsiPeriod,
+    globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
+    globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
+    globalShowSignalTags, globalSignalThresholdMode, globalThresholdsEnabled,
+    globalOverbought, globalOversold, globalVolatilityEnabled
+  ]);
 
   const display = liveState || {
     price: entry.price,
@@ -301,7 +373,7 @@ const ScreenerRow = memo(function ScreenerRow({
     ema21: entry.ema21,
     emaCross: entry.emaCross,
     bbPosition: entry.bbPosition,
-    signal: entry.signal,
+    signal: globalShowSignalTags ? entry.signal : 'neutral',
     strategyScore: entry.strategyScore,
     strategySignal: entry.strategySignal,
     strategyLabel: entry.strategyLabel,
@@ -415,6 +487,7 @@ const ScreenerRow = memo(function ScreenerRow({
           field="rsi1mPeriod"
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
+          disabled={!globalUseRsi}
         />
       )}
       {visibleCols.has('rsi5m') && (
@@ -424,6 +497,7 @@ const ScreenerRow = memo(function ScreenerRow({
           field="rsi5mPeriod"
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
+          disabled={!globalUseRsi}
         />
       )}
       {visibleCols.has('rsi15m') && (
@@ -433,6 +507,7 @@ const ScreenerRow = memo(function ScreenerRow({
           field="rsi15mPeriod"
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
+          disabled={!globalUseRsi}
         />
       )}
       {visibleCols.has('rsi1h') && (
@@ -442,17 +517,24 @@ const ScreenerRow = memo(function ScreenerRow({
           field="rsi1hPeriod"
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
+          disabled={!globalUseRsi}
         />
       )}
 
       {visibleCols.has('ema9') && (
-        <td className="px-3 py-4 text-right text-xs tabular-nums font-bold font-mono text-slate-300">
-          ${display.ema9 ? formatPrice(display.ema9) : '—'}
+        <td className={cn(
+          "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
+          globalUseEma ? "text-slate-300" : "text-slate-700/40"
+        )}>
+          {globalUseEma && display.ema9 ? `$${formatPrice(display.ema9)}` : '—'}
         </td>
       )}
       {visibleCols.has('ema21') && (
-        <td className="px-3 py-4 text-right text-xs tabular-nums font-bold font-mono text-slate-400">
-          ${display.ema21 ? formatPrice(display.ema21) : '—'}
+        <td className={cn(
+          "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
+          globalUseEma ? "text-slate-400" : "text-slate-700/40"
+        )}>
+          {globalUseEma && display.ema21 ? `$${formatPrice(display.ema21)}` : '—'}
         </td>
       )}
 
@@ -468,7 +550,7 @@ const ScreenerRow = memo(function ScreenerRow({
             )}
 
             {/* Intelligence: Early Signal Badge - Only show if periods match to ensure formula accuracy */}
-            {entry.rsiPeriodAtCreation === rsiPeriod && display.rsiCustom !== null && display.rsi15m !== null && (
+            {globalUseRsi && entry.rsiPeriodAtCreation === rsiPeriod && display.rsiCustom !== null && display.rsi15m !== null && (
               <>
                 {display.rsiCustom <= 30 && display.rsi15m > 30 && (
                   <span className="text-[7px] px-1 bg-[#39FF14]/30 text-[#39FF14] rounded-full animate-pulse border border-[#39FF14]/30" title="Early Oversold (Custom Period)">EARLY BUY</span>
@@ -479,7 +561,7 @@ const ScreenerRow = memo(function ScreenerRow({
               </>
             )}
 
-            {entry.rsiPeriodAtCreation === rsiPeriod && display.rsiDivergenceCustom && display.rsiDivergenceCustom !== 'none' && (
+            {entry.rsiPeriodAtCreation === rsiPeriod && globalUseDivergence && display.rsiDivergenceCustom && display.rsiDivergenceCustom !== 'none' && (
               <span className={cn(
                 "text-[8px] px-1 rounded-sm font-black tracking-tighter uppercase",
                 display.rsiDivergenceCustom === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#722f37]/20 text-[#FF4B5C]"
@@ -495,50 +577,63 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
       {visibleCols.has('emaCross') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          <span className={cn(
-            "px-2 py-1 rounded border",
-            display.emaCross === 'bullish' ? "text-[#39FF14] border-[#39FF14]/20 bg-[#39FF14]/5" :
-              display.emaCross === 'bearish' ? "text-[#FF4B5C] border-[#722f37]/20 bg-[#722f37]/5" :
-                "text-slate-700 border-transparent"
-          )}>
-            {display.emaCross || '—'}
-          </span>
+          {globalUseEma && display.emaCross !== 'none' && (
+            <span className={cn(
+              "px-2 py-1 rounded border",
+              display.emaCross === 'bullish' ? "text-[#39FF14] border-[#39FF14]/20 bg-[#39FF14]/5" :
+                display.emaCross === 'bearish' ? "text-[#FF4B5C] border-[#722f37]/20 bg-[#722f37]/5" :
+                  "text-slate-700 border-transparent"
+            )}>
+              {display.emaCross || '—'}
+            </span>
+          )}
+          {(!globalUseEma || display.emaCross === 'none') && <span className="text-slate-700 opacity-40">—</span>}
         </td>
       )}
 
       {visibleCols.has('macdHistogram') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+          !globalUseMacd || display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
-          {formatNum(display.macdHistogram, 4)}
+          {globalUseMacd ? formatNum(display.macdHistogram, 4) : '—'}
         </td>
       )}
 
       {visibleCols.has('bbUpper') && (
-        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-[#FF4B5C]/70">
-          ${display.bbUpper ? formatPrice(display.bbUpper) : '—'}
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono",
+          globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"
+        )}>
+          {globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper)}` : '—'}
         </td>
       )}
       {visibleCols.has('bbLower') && (
-        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-[#39FF14]/70">
-          ${display.bbLower ? formatPrice(display.bbLower) : '—'}
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono",
+          globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"
+        )}>
+          {globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower)}` : '—'}
         </td>
       )}
 
       {visibleCols.has('bbPosition') && (
         <td className={cn(
           "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          display.bbPosition === null ? "text-slate-700" : display.bbPosition < 0.2 ? "text-[#39FF14]" : display.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
+          !globalUseBb || display.bbPosition === null ? "text-slate-700" : display.bbPosition < 0.2 ? "text-[#39FF14]" : display.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
         )}>
-          {formatNum(display.bbPosition)}
+          {globalUseBb ? formatNum(display.bbPosition) : '—'}
         </td>
       )}
 
       {visibleCols.has('stochK') && (
         <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono">
-          <span className={getRsiColor(display.stochK)}>{formatRsi(display.stochK)}</span>
-          {display.stochD !== null && <span className="text-slate-600 ml-1">/{display.stochD.toFixed(0)}</span>}
+          {globalUseStoch ? (
+            <>
+              <span className={getRsiColor(display.stochK)}>{formatRsi(display.stochK)}</span>
+              {display.stochD !== null && <span className="text-slate-600 ml-1">/{display.stochD.toFixed(0)}</span>}
+            </>
+          ) : <span className="text-slate-700">—</span>}
         </td>
       )}
 
@@ -547,14 +642,14 @@ const ScreenerRow = memo(function ScreenerRow({
           "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
           display.confluence >= 15 ? "text-[#39FF14]" : display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
         )}>
-          {display.confluenceLabel}
+          {globalUseConfluence ? display.confluenceLabel : '—'}
         </td>
       )}
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
-            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
+          {globalUseDivergence && display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
+            globalUseDivergence && display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
         </td>
       )}
 
@@ -563,16 +658,19 @@ const ScreenerRow = memo(function ScreenerRow({
           "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
           display.vwapDiff === null ? "text-slate-700" : display.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
-          {formatPct(display.vwapDiff)}
+          {globalUseVwap ? formatPct(display.vwapDiff) : '—'}
         </td>
       )}
       {visibleCols.has('longCandle') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= 5 ? "text-amber-400" : "text-slate-600"
+          !globalVolatilityEnabled || display.curCandleSize == null || display.avgBarSize1m == null || display.avgBarSize1m <= 0 || (display.curCandleSize / display.avgBarSize1m) < 5 ? "text-slate-600" : "text-amber-400"
         )}>
-          {display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
-            <div className="flex items-center justify-end gap-1">
+          {globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
+            <div className="flex items-center justify-end gap-1.5">
+              {display.isLiveRsi && (
+                <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
+              )}
               {(display.curCandleSize / display.avgBarSize1m) >= 2.5 && (
                  <span className={cn("text-[8px]", display.candleDirection === 'bullish' ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
                    {display.candleDirection === 'bullish' ? '🟢' : '🔴'}
@@ -586,18 +684,25 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('volumeSpike') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= 5 ? "text-[#39FF14]" : "text-slate-600"
+          !globalVolatilityEnabled || display.curCandleVol == null || display.avgVolume1m == null || display.avgVolume1m <= 0 || (display.curCandleVol / display.avgVolume1m) < 5 ? "text-slate-600" : "text-[#39FF14]"
         )}>
-          {display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x') : '—'}
+          {globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (
+            <div className="flex items-center justify-end gap-1.5">
+              {display.isLiveRsi && (
+                <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
+              )}
+              <span>{Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x'}</span>
+            </div>
+          ) : '—'}
         </td>
       )}
 
       {visibleCols.has('momentum') && (
         <td className={cn(
           "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
+          !globalUseMomentum || display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
         )}>
-          {formatPct(display.momentum)}
+          {globalUseMomentum ? formatPct(display.momentum) : '—'}
         </td>
       )}
 
@@ -616,7 +721,7 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       <td className="px-3 py-4 text-right">
-        <SignalBadge signal={display.signal} />
+        {display.signal !== 'neutral' && <SignalBadge signal={display.signal} />}
       </td>
 
       {visibleCols.has('strategy') && (
@@ -712,13 +817,15 @@ function EditableRsiCell({
   rsi,
   field,
   currentConfig,
-  onSave
+  onSave,
+  disabled
 }: {
   symbol: string;
   rsi: number | null;
   field: string;
   currentConfig?: any;
   onSave: (symbol: string, config: any) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(currentConfig?.[field] ?? 14);
@@ -738,6 +845,14 @@ function EditableRsiCell({
   };
 
   const currentPeriod = currentConfig?.[field] ?? 14;
+
+  if (disabled) {
+    return (
+      <td className="px-3 py-4 text-right text-sm tabular-nums font-bold font-mono text-slate-700/40">
+        —
+      </td>
+    );
+  }
 
   if (editing) {
     return (
@@ -881,6 +996,21 @@ const ScreenerCard = memo(function ScreenerCard({
   visibleCols,
   reportVisibility,
   exchange,
+  globalShowSignalTags,
+  globalSignalThresholdMode,
+  globalThresholdsEnabled,
+  globalOverbought,
+  globalOversold,
+  globalUseRsi,
+  globalUseMacd,
+  globalUseBb,
+  globalUseStoch,
+  globalUseEma,
+  globalUseVwap,
+  globalUseConfluence,
+  globalUseDivergence,
+  globalUseMomentum,
+  globalVolatilityEnabled,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -893,6 +1023,21 @@ const ScreenerCard = memo(function ScreenerCard({
   visibleCols: Set<ColumnId>;
   reportVisibility: (symbol: string, isVisible: boolean) => void;
   exchange: string;
+  globalShowSignalTags: boolean;
+  globalSignalThresholdMode: 'default' | 'custom';
+  globalThresholdsEnabled: boolean;
+  globalOverbought: number;
+  globalOversold: number;
+  globalUseRsi: boolean;
+  globalUseMacd: boolean;
+  globalUseBb: boolean;
+  globalUseStoch: boolean;
+  globalUseEma: boolean;
+  globalUseVwap: boolean;
+  globalUseConfluence: boolean;
+  globalUseDivergence: boolean;
+  globalUseMomentum: boolean;
+  globalVolatilityEnabled: boolean;
 }) {
   const isStarred = watchlist.has(entry.symbol);
 
@@ -950,11 +1095,36 @@ const ScreenerCard = memo(function ScreenerCard({
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
     let signal = entry.signal;
-    const leadRsi = rsi15m ?? rsi1m;
-    if (leadRsi !== null) {
-      if (leadRsi <= osT) signal = "oversold";
-      else if (leadRsi >= obT) signal = "overbought";
-      else signal = "neutral";
+    if (!globalShowSignalTags || !globalUseRsi) {
+      signal = 'neutral';
+    } else {
+      let effectiveObT: number | null = 70;
+      let effectiveOsT: number | null = 30;
+      if (globalSignalThresholdMode === 'custom') {
+        const hasPerCoin = config && (config.overboughtThreshold !== undefined || config.oversoldThreshold !== undefined);
+        if (hasPerCoin) {
+          effectiveObT = obT;
+          effectiveOsT = osT;
+        } else if (globalThresholdsEnabled) {
+          effectiveObT = globalOverbought;
+          effectiveOsT = globalOversold;
+        } else {
+          // Strict: No custom or global extreme config = No signal in Custom mode
+          effectiveObT = null;
+          effectiveOsT = null;
+        }
+      }
+
+      if (effectiveObT !== null && effectiveOsT !== null) {
+        const leadRsi = rsi15m ?? rsi1m;
+        if (leadRsi !== null) {
+          if (leadRsi <= effectiveOsT) signal = 'oversold';
+          else if (leadRsi >= effectiveObT) signal = 'overbought';
+          else signal = 'neutral';
+        }
+      } else {
+        signal = 'neutral';
+      }
     }
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -962,13 +1132,24 @@ const ScreenerCard = memo(function ScreenerCard({
       bbPosition,
       stochK: entry.stochK,
       stochD: entry.stochD,
-      emaCross,
+      emaCross: (tick.emaCross as any) ?? emaCross,
       vwapDiff: entry.vwapDiff,
       volumeSpike: entry.volumeSpike,
       price: tick.price,
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
+      enabledIndicators: {
+        rsi: globalUseRsi,
+        macd: globalUseMacd,
+        bb: globalUseBb,
+        stoch: globalUseStoch,
+        ema: globalUseEma,
+        vwap: globalUseVwap,
+        confluence: globalUseConfluence,
+        divergence: globalUseDivergence,
+        momentum: globalUseMomentum
+      }
     });
     return {
       price: tick.price,
@@ -1014,7 +1195,13 @@ const ScreenerCard = memo(function ScreenerCard({
       candleDirection: tick.candleDirection,
       isLiveRsi: true
     };
-  }, [tick, coinConfigs, entry, rsiPeriod]);
+  }, [
+    tick, coinConfigs, entry, rsiPeriod,
+    globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
+    globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
+    globalShowSignalTags, globalSignalThresholdMode, globalThresholdsEnabled,
+    globalOverbought, globalOversold, globalVolatilityEnabled
+  ]);
 
   const display = liveState || {
     price: entry.price,
@@ -1029,7 +1216,7 @@ const ScreenerCard = memo(function ScreenerCard({
     ema21: entry.ema21,
     emaCross: entry.emaCross,
     bbPosition: entry.bbPosition,
-    signal: entry.signal,
+    signal: globalShowSignalTags ? entry.signal : 'neutral',
     strategyScore: entry.strategyScore,
     strategySignal: entry.strategySignal,
     strategyLabel: entry.strategyLabel,
@@ -1142,43 +1329,79 @@ const ScreenerCard = memo(function ScreenerCard({
               <div key={col.id} className="flex flex-col items-center shrink-0 min-w-[32px]">
                 <span className="text-[6px] font-black text-slate-600 uppercase mb-0.5">{col.label.replace('RSI ', '')}</span>
                 {isRsi ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", getRsiColor(val as number))}>{formatRsi(val as number)}</span>
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseRsi ? getRsiColor(val as number) : "text-slate-700/40")}>
+                    {globalUseRsi ? formatRsi(val as number) : '—'}
+                  </span>
                 ) : col.id === 'strategy' ? (
                   <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} />
                 ) : col.id === 'divergence' ? (
-                  <span className={cn("text-[8px] font-black uppercase", display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {display.rsiDivergence === 'bullish' ? 'DIV+' : display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
+                  <span className={cn("text-[8px] font-black uppercase", globalUseDivergence && display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : globalUseDivergence && display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {globalUseDivergence && display.rsiDivergence === 'bullish' ? 'DIV+' : globalUseDivergence && display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
                   </span>
                 ) : col.id === 'vwapDiff' ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (val as number) > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-                    {formatPct(val as number)}
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseVwap && (val as number) > 0 ? "text-[#39FF14]" : globalUseVwap && (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {globalUseVwap ? formatPct(val as number) : '—'}
                   </span>
                 ) : col.id === 'longCandle' ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono flex items-center gap-1", (display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= 5) ? "text-amber-400" : "text-slate-700")}>
-                    {display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
-                      <>
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono flex items-center justify-center gap-1", (globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= 5) ? "text-amber-400" : "text-slate-700")}>
+                    {globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
+                      <div className="flex items-center gap-1">
+                        {display.isLiveRsi && (
+                          <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
+                        )}
                         {(display.curCandleSize / display.avgBarSize1m) >= 2.5 && (
                           <span className="text-[8px]">{display.candleDirection === 'bullish' ? '🟢' : '🔴'}</span>
                         )}
                         {Number.isFinite(display.curCandleSize / display.avgBarSize1m) ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '0.0x'}
-                      </>
+                      </div>
                     ) : '—'}
                   </span>
                 ) : col.id === 'volumeSpike' ? (
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", (display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= 5) ? "text-[#39FF14]" : "text-slate-700")}>
-                    {display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x') : '—'}
-                  </span>
-                ) : col.id === 'ema9' || col.id === 'ema21' || col.id === 'bbUpper' || col.id === 'bbLower' ? (
-                  <span className="text-[9px] font-bold text-slate-300 tabular-nums">
-                    ${typeof val === 'number' ? formatPrice(val) : '—'}
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono flex items-center justify-center gap-1", (globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= 5) ? "text-[#39FF14]" : "text-slate-700")}>
+                    {globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (
+                      <div className="flex items-center gap-1">
+                        {display.isLiveRsi && (
+                          <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
+                        )}
+                        {Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x'}
+                      </div>
+                    ) : '—'}
                   </span>
                 ) : col.id === 'momentum' ? (
-                  <span className={cn("text-[9px] font-bold tabular-nums", (val as number) > 0 ? "text-emerald-300" : (val as number) < 0 ? "text-red-300" : "text-slate-500")}>
-                    {formatPct(val as number)}
+                  <span className={cn("text-[9px] font-bold tabular-nums", globalUseMomentum && (val as number) > 0 ? "text-emerald-300" : globalUseMomentum && (val as number) < 0 ? "text-red-300" : "text-slate-500")}>
+                    {globalUseMomentum ? formatPct(val as number) : '—'}
                   </span>
-                ) : col.id === 'atr' ? (
-                  <span className="text-[9px] font-bold text-amber-300/80 tabular-nums">
-                    {typeof val === 'number' ? val.toFixed(val < 1 ? 6 : 2) : '—'}
+                ) : col.id === 'ema9' || col.id === 'ema21' ? (
+                  <span className="text-[9px] font-bold text-slate-300 tabular-nums">
+                    {globalUseEma && typeof val === 'number' ? `$${formatPrice(val)}` : '—'}
+                  </span>
+                ) : col.id === 'bbUpper' || col.id === 'bbLower' ? (
+                  <span className="text-[9px] font-bold text-slate-300 tabular-nums">
+                    {globalUseBb && typeof val === 'number' ? `$${formatPrice(val)}` : '—'}
+                  </span>
+                ) : col.id === 'macdHistogram' ? (
+                  <span className={cn("text-[9px] font-bold tabular-nums", globalUseMacd && (val as number) > 0 ? "text-[#39FF14]" : globalUseMacd && (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {globalUseMacd && typeof val === 'number' ? val.toFixed(4) : '—'}
+                  </span>
+                ) : col.id === 'confluence' ? (
+                  <span className={cn("text-[9px] font-bold tabular-nums", globalUseConfluence && display.confluence >= 15 ? "text-[#39FF14]" : globalUseConfluence && display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {globalUseConfluence ? display.confluenceLabel : '—'}
+                  </span>
+                ) : col.id === 'emaCross' ? (
+                  <span className={cn("text-[9px] font-bold uppercase", globalUseEma && display.emaCross === 'bullish' ? "text-[#39FF14]" : globalUseEma && display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {globalUseEma && display.emaCross !== 'none' ? (display.emaCross === 'bullish' ? 'BULL' : 'BEAR') : '—'}
+                  </span>
+                ) : col.id === 'stochK' ? (
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseStoch && (val as number) > 80 ? "text-[#FF4B5C]" : globalUseStoch && (val as number) < 20 ? "text-[#39FF14]" : "text-slate-300")}>
+                    {globalUseStoch && typeof val === 'number' ? val.toFixed(1) : '—'}
+                  </span>
+                ) : col.id === 'bbPosition' ? (
+                  <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseBb && (val as number) >= 0.9 ? "text-[#FF4B5C]" : globalUseBb && (val as number) <= 0.1 ? "text-[#39FF14]" : "text-slate-300")}>
+                    {globalUseBb && typeof val === 'number' ? val.toFixed(2) : '—'}
+                  </span>
+                ) : col.id === 'atr' || col.id === 'adx' ? (
+                  <span className="text-[10px] font-black tabular-nums font-mono text-slate-300">
+                    {globalVolatilityEnabled && typeof val === 'number' ? val.toFixed(col.id === 'atr' ? 4 : 1) : '—'}
                   </span>
                 ) : (
                   <span className={cn(
@@ -1186,7 +1409,7 @@ const ScreenerCard = memo(function ScreenerCard({
                     display.isLiveRsi ? "text-[#39FF14]" : "text-slate-300"
                   )}>
                     {typeof val === 'number'
-                      ? val.toFixed(col.id === 'macdHistogram' ? 4 : 2)
+                      ? val.toFixed(2)
                       : typeof val === 'string'
                         ? val
                         : '—'}
@@ -1327,6 +1550,20 @@ export default function ScreenerDashboard() {
   const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(3.0);
   const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(5.0);
   const [globalVolatilityEnabled, setGlobalVolatilityEnabled] = useState(false);
+  // ── Signal Tag Display Controls ──
+  const [globalShowSignalTags, setGlobalShowSignalTags] = useState(false);
+  const [globalSignalThresholdMode, setGlobalSignalThresholdMode] = useState<'default' | 'custom'>('custom');
+
+  // ── Indicator Feature Flags ──
+  const [globalUseRsi, setGlobalUseRsi] = useState(true);
+  const [globalUseMacd, setGlobalUseMacd] = useState(true);
+  const [globalUseBb, setGlobalUseBb] = useState(true);
+  const [globalUseStoch, setGlobalUseStoch] = useState(true);
+  const [globalUseEma, setGlobalUseEma] = useState(true);
+  const [globalUseVwap, setGlobalUseVwap] = useState(true);
+  const [globalUseConfluence, setGlobalUseConfluence] = useState(true);
+  const [globalUseDivergence, setGlobalUseDivergence] = useState(true);
+  const [globalUseMomentum, setGlobalUseMomentum] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
@@ -1407,6 +1644,25 @@ export default function ScreenerDashboard() {
 
     const gVE = localStorage.getItem('crypto-rsi-global-volatility-enabled');
     if (gVE !== null) setGlobalVolatilityEnabled(gVE === '1');
+
+    // Signal tag control settings
+    const gSTM = localStorage.getItem('crypto-rsi-global-signal-threshold-mode');
+    if (gSTM === 'custom' || gSTM === 'default') setGlobalSignalThresholdMode(gSTM);
+
+    // Indicator feature flags
+    const loadFlag = (key: string, setter: (v: boolean) => void) => {
+      const val = localStorage.getItem(key);
+      if (val !== null) setter(val === '1');
+    };
+    loadFlag('crypto-rsi-global-use-rsi', setGlobalUseRsi);
+    loadFlag('crypto-rsi-global-use-macd', setGlobalUseMacd);
+    loadFlag('crypto-rsi-global-use-bb', setGlobalUseBb);
+    loadFlag('crypto-rsi-global-use-stoch', setGlobalUseStoch);
+    loadFlag('crypto-rsi-global-use-ema', setGlobalUseEma);
+    loadFlag('crypto-rsi-global-use-vwap', setGlobalUseVwap);
+    loadFlag('crypto-rsi-global-use-confluence', setGlobalUseConfluence);
+    loadFlag('crypto-rsi-global-use-divergence', setGlobalUseDivergence);
+    loadFlag('crypto-rsi-global-use-momentum', setGlobalUseMomentum);
   }, []);
 
   const reportVisibility = useCallback((symbol: string, isVisible: boolean) => {
@@ -1474,7 +1730,11 @@ export default function ScreenerDashboard() {
         rsi15m: live.rsi15m ?? entry.rsi15m,
         rsi1h: live.rsi1h ?? entry.rsi1h,
         rsiCustom: live.rsiCustom ?? entry.rsiCustom,
-        emaCross: (live.emaCross ?? entry.emaCross) as any, // Cast to any then back if needed, or just satisfy the type
+        ema9: live.ema9 ?? entry.ema9,
+        ema21: live.ema21 ?? entry.ema21,
+        emaCross: (live.emaCross ?? entry.emaCross) as any,
+        macdHistogram: live.macdHistogram ?? entry.macdHistogram,
+        bbPosition: live.bbPosition ?? entry.bbPosition,
         strategyScore: live.strategyScore ?? entry.strategyScore,
         strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
         curCandleSize: live.curCandleSize ?? entry.curCandleSize,
@@ -1563,14 +1823,27 @@ export default function ScreenerDashboard() {
         globalThresholdsEnabled,
         globalLongCandleThreshold,
         globalVolumeSpikeThreshold,
-        globalVolatilityEnabled
+        globalVolatilityEnabled,
+        enabledIndicators: {
+          rsi: globalUseRsi,
+          macd: globalUseMacd,
+          bb: globalUseBb,
+          stoch: globalUseStoch,
+          ema: globalUseEma,
+          vwap: globalUseVwap,
+          confluence: globalUseConfluence,
+          divergence: globalUseDivergence,
+          momentum: globalUseMomentum
+        }
       });
-
-      // (Worker exchange connection is managed exclusively by use-live-prices.ts when exchange prop changes)
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker]);
+  }, [
+    processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker,
+    globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma, 
+    globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum
+  ]);
 
   // Removed old duplicate processedData block
 
@@ -1585,7 +1858,18 @@ export default function ScreenerDashboard() {
     globalThresholdTimeframes,
     globalLongCandleThreshold,
     globalVolumeSpikeThreshold,
-    globalVolatilityEnabled
+    globalVolatilityEnabled,
+    {
+      rsi: globalUseRsi,
+      macd: globalUseMacd,
+      bb: globalUseBb,
+      stoch: globalUseStoch,
+      ema: globalUseEma,
+      vwap: globalUseVwap,
+      confluence: globalUseConfluence,
+      divergence: globalUseDivergence,
+      momentum: globalUseMomentum
+    }
   );
 
   // Keep coinConfigsRef in sync for stable callbacks (fetchData)
@@ -1627,6 +1911,46 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-pairs', pairCount.toString());
   }, [pairCount]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-show-signal-tags', globalShowSignalTags ? '1' : '0');
+  }, [globalShowSignalTags]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-signal-threshold-mode', globalSignalThresholdMode);
+  }, [globalSignalThresholdMode]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-rsi', globalUseRsi ? '1' : '0');
+  }, [globalUseRsi]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-macd', globalUseMacd ? '1' : '0');
+  }, [globalUseMacd]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-bb', globalUseBb ? '1' : '0');
+  }, [globalUseBb]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-stoch', globalUseStoch ? '1' : '0');
+  }, [globalUseStoch]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-ema', globalUseEma ? '1' : '0');
+  }, [globalUseEma]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-vwap', globalUseVwap ? '1' : '0');
+  }, [globalUseVwap]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-confluence', globalUseConfluence ? '1' : '0');
+  }, [globalUseConfluence]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-divergence', globalUseDivergence ? '1' : '0');
+  }, [globalUseDivergence]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-momentum', globalUseMomentum ? '1' : '0');
+  }, [globalUseMomentum]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-volatility-enabled', globalVolatilityEnabled ? '1' : '0');
+  }, [globalVolatilityEnabled]);
 
   // ─── Real-time Stats Engine ──────────────────────────────────
   const stats = useMemo(() => {
@@ -2812,6 +3136,21 @@ export default function ScreenerDashboard() {
                   visibleCols={visibleCols}
                   reportVisibility={reportVisibility}
                   exchange={exchange}
+                  globalShowSignalTags={globalShowSignalTags}
+                  globalSignalThresholdMode={globalSignalThresholdMode}
+                  globalThresholdsEnabled={globalThresholdsEnabled}
+                  globalOverbought={globalOverbought}
+                  globalOversold={globalOversold}
+                  globalUseRsi={globalUseRsi}
+                  globalUseMacd={globalUseMacd}
+                  globalUseBb={globalUseBb}
+                  globalUseStoch={globalUseStoch}
+                  globalUseEma={globalUseEma}
+                  globalUseVwap={globalUseVwap}
+                  globalUseConfluence={globalUseConfluence}
+                  globalUseDivergence={globalUseDivergence}
+                  globalUseMomentum={globalUseMomentum}
+                  globalVolatilityEnabled={globalVolatilityEnabled}
                 />
               ))}
             </>
@@ -2887,6 +3226,21 @@ export default function ScreenerDashboard() {
                         coinConfigs={coinConfigs}
                         onSaveConfig={handleSaveConfig}
                         reportVisibility={reportVisibility}
+                        globalShowSignalTags={globalShowSignalTags}
+                        globalSignalThresholdMode={globalSignalThresholdMode}
+                        globalThresholdsEnabled={globalThresholdsEnabled}
+                        globalOverbought={globalOverbought}
+                        globalOversold={globalOversold}
+                        globalUseRsi={globalUseRsi}
+                        globalUseMacd={globalUseMacd}
+                        globalUseBb={globalUseBb}
+                        globalUseStoch={globalUseStoch}
+                        globalUseEma={globalUseEma}
+                        globalUseVwap={globalUseVwap}
+                        globalUseConfluence={globalUseConfluence}
+                        globalUseDivergence={globalUseDivergence}
+                        globalUseMomentum={globalUseMomentum}
+                        globalVolatilityEnabled={globalVolatilityEnabled}
                       />
                     ))}
                   </>
@@ -3043,6 +3397,28 @@ export default function ScreenerDashboard() {
             setGlobalVolumeSpikeThreshold={setGlobalVolumeSpikeThreshold}
             globalVolatilityEnabled={globalVolatilityEnabled}
             setGlobalVolatilityEnabled={setGlobalVolatilityEnabled}
+            globalShowSignalTags={globalShowSignalTags}
+            setGlobalShowSignalTags={setGlobalShowSignalTags}
+            globalSignalThresholdMode={globalSignalThresholdMode}
+            setGlobalSignalThresholdMode={setGlobalSignalThresholdMode}
+            globalUseRsi={globalUseRsi}
+            setGlobalUseRsi={setGlobalUseRsi}
+            globalUseMacd={globalUseMacd}
+            setGlobalUseMacd={setGlobalUseMacd}
+            globalUseBb={globalUseBb}
+            setGlobalUseBb={setGlobalUseBb}
+            globalUseStoch={globalUseStoch}
+            setGlobalUseStoch={setGlobalUseStoch}
+            globalUseEma={globalUseEma}
+            setGlobalUseEma={setGlobalUseEma}
+            globalUseVwap={globalUseVwap}
+            setGlobalUseVwap={setGlobalUseVwap}
+            globalUseConfluence={globalUseConfluence}
+            setGlobalUseConfluence={setGlobalUseConfluence}
+            globalUseDivergence={globalUseDivergence}
+            setGlobalUseDivergence={setGlobalUseDivergence}
+            globalUseMomentum={globalUseMomentum}
+            setGlobalUseMomentum={setGlobalUseMomentum}
           />
         )}
       </AnimatePresence>
@@ -3742,7 +4118,29 @@ function GlobalSettingsModal({
   globalVolumeSpikeThreshold,
   setGlobalVolumeSpikeThreshold,
   globalVolatilityEnabled,
-  setGlobalVolatilityEnabled
+  setGlobalVolatilityEnabled,
+  globalShowSignalTags,
+  setGlobalShowSignalTags,
+  globalSignalThresholdMode,
+  setGlobalSignalThresholdMode,
+  globalUseRsi,
+  setGlobalUseRsi,
+  globalUseMacd,
+  setGlobalUseMacd,
+  globalUseBb,
+  setGlobalUseBb,
+  globalUseStoch,
+  setGlobalUseStoch,
+  globalUseEma,
+  setGlobalUseEma,
+  globalUseVwap,
+  setGlobalUseVwap,
+  globalUseConfluence,
+  setGlobalUseConfluence,
+  globalUseDivergence,
+  setGlobalUseDivergence,
+  globalUseMomentum,
+  setGlobalUseMomentum
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
@@ -3773,6 +4171,28 @@ function GlobalSettingsModal({
   setGlobalVolumeSpikeThreshold: (v: number) => void;
   globalVolatilityEnabled: boolean;
   setGlobalVolatilityEnabled: (v: boolean) => void;
+  globalShowSignalTags: boolean;
+  setGlobalShowSignalTags: (v: boolean) => void;
+  globalSignalThresholdMode: 'default' | 'custom';
+  setGlobalSignalThresholdMode: (v: 'default' | 'custom') => void;
+  globalUseRsi: boolean;
+  setGlobalUseRsi: (v: boolean) => void;
+  globalUseMacd: boolean;
+  setGlobalUseMacd: (v: boolean) => void;
+  globalUseBb: boolean;
+  setGlobalUseBb: (v: boolean) => void;
+  globalUseStoch: boolean;
+  setGlobalUseStoch: (v: boolean) => void;
+  globalUseEma: boolean;
+  setGlobalUseEma: (v: boolean) => void;
+  globalUseVwap: boolean;
+  setGlobalUseVwap: (v: boolean) => void;
+  globalUseConfluence: boolean;
+  setGlobalUseConfluence: (v: boolean) => void;
+  globalUseDivergence: boolean;
+  setGlobalUseDivergence: (v: boolean) => void;
+  globalUseMomentum: boolean;
+  setGlobalUseMomentum: (v: boolean) => void;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
@@ -3972,6 +4392,103 @@ function GlobalSettingsModal({
                 )}
               </div>
 
+              <div className="flex flex-col gap-4 mt-6">
+                <div className="flex items-center justify-between ml-1">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                      <BrainCircuit size={12} className="text-[#39FF14]" />
+                      Strategy Indicators
+                    </span>
+                    <span className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">Toggle indicators used in scoring logic</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'rsi', label: 'RSI (Full)', state: globalUseRsi, setter: setGlobalUseRsi, icon: <Gauge size={10} /> },
+                    { id: 'macd', label: 'MACD Hist', state: globalUseMacd, setter: setGlobalUseMacd, icon: <BarChart3 size={10} /> },
+                    { id: 'bb', label: 'Bollinger', state: globalUseBb, setter: setGlobalUseBb, icon: <Activity size={10} /> },
+                    { id: 'stoch', label: 'Stoch RSI', state: globalUseStoch, setter: setGlobalUseStoch, icon: <RefreshCcw size={10} /> },
+                    { id: 'ema', label: 'EMA Cross', state: globalUseEma, setter: setGlobalUseEma, icon: <TrendingUp size={10} /> },
+                    { id: 'vwap', label: 'VWAP %', state: globalUseVwap, setter: setGlobalUseVwap, icon: <ShieldCheck size={10} /> },
+                    { id: 'conf', label: 'Confluence', state: globalUseConfluence, setter: setGlobalUseConfluence, icon: <BrainCircuit size={10} /> },
+                    { id: 'div', label: 'Divergence', state: globalUseDivergence, setter: setGlobalUseDivergence, icon: <Zap size={10} /> },
+                    { id: 'mom', label: 'Momentum', state: globalUseMomentum, setter: setGlobalUseMomentum, icon: <TrendingUp size={10} /> }
+                  ].map(ind => (
+                    <button
+                      key={ind.id}
+                      onClick={() => ind.setter(!ind.state)}
+                      className={cn(
+                        "flex items-center gap-2 px-2.5 py-2.5 rounded-xl border transition-all text-left",
+                        ind.state ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/[0.02] border-white/5 text-slate-600 opacity-60"
+                      )}
+                    >
+                      <div className={cn("p-1.5 rounded-lg border", ind.state ? "bg-[#39FF14] border-[#39FF14] text-black" : "bg-slate-900 border-slate-800 text-slate-700")}>
+                        {ind.icon}
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black uppercase tracking-tight leading-none">{ind.label}</span>
+                        <span className="text-[7px] font-bold uppercase mt-0.5 opacity-60">{ind.state ? 'Enabled' : 'Disabled'}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Signal Tag Display Controls */}
+              <div className="p-5 rounded-3xl border border-white/5 bg-white/[0.02] space-y-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                      <ShieldCheck size={12} className="text-[#39FF14]" />
+                      Signal Tag Display
+                    </span>
+                    <span className="text-[8px] text-slate-500 font-bold uppercase mt-0.5">Show Overbought/Oversold tags</span>
+                  </div>
+                  <button
+                    onClick={() => setGlobalShowSignalTags(!globalShowSignalTags)}
+                    className={cn(
+                      "w-12 h-6 rounded-full p-1 transition-all flex items-center",
+                      globalShowSignalTags ? "bg-[#39FF14]" : "bg-slate-800"
+                    )}
+                  >
+                    <div className={cn(
+                      "w-4 h-4 rounded-full bg-white transition-all shadow-sm",
+                      globalShowSignalTags ? "translate-x-6" : "translate-x-0"
+                    )} />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="text-[7px] font-black uppercase tracking-widest text-slate-500 ml-0.5">Threshold Source</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'default', label: 'Default (70/30)' },
+                      { id: 'custom', label: 'Custom Logic' }
+                    ].map(opt => (
+                      <button
+                        key={opt.id}
+                        disabled={!globalShowSignalTags}
+                        onClick={() => setGlobalSignalThresholdMode(opt.id as any)}
+                        className={cn(
+                          "px-3 py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all tracking-wider",
+                          globalSignalThresholdMode === opt.id
+                            ? "bg-[#39FF14]/10 border-[#39FF14]/40 text-[#39FF14]"
+                            : "bg-black/20 border-white/5 text-slate-600 hover:text-slate-400"
+                        )}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[7px] text-slate-600 font-bold uppercase leading-relaxed px-1">
+                    {globalSignalThresholdMode === 'default' 
+                      ? "Tags always use industry standard 70/30 levels." 
+                      : "Tags respect per-coin custom thresholds or global extreme settings."}
+                  </p>
+                </div>
+              </div>
+
               {/* Global Extreme RSI Activation */}
               <div className={cn(
                 "p-5 rounded-3xl border transition-all relative overflow-hidden group/extreme",
@@ -3989,10 +4506,10 @@ function GlobalSettingsModal({
                     globalThresholdsEnabled ? "text-purple-400" : "text-slate-500"
                   )}>
                     <Activity size={14} className={cn(globalThresholdsEnabled && "animate-pulse")} />
-                    Extreme RSI Global Mode
+                    Extreme RSI Mode (Alerts)
                   </span>
                   <span className="text-[9px] text-slate-500 font-bold uppercase mt-1.5 leading-relaxed pr-16">
-                    Alert on ANY coin reaching extreme oversold/overbought levels, even without manual config.
+                    Global thresholds for RSI alerts on all pairs. Used as fallback for signal tags in Custom Logic mode.
                   </span>
                 </div>
 
@@ -4085,7 +4602,7 @@ function GlobalSettingsModal({
                     Volatility Surge Mode
                   </span>
                   <span className="text-[9px] text-slate-500 font-bold uppercase mt-1.5 leading-relaxed pr-16">
-                    Alert on sudden price or volume spikes compared to the last 20min average.
+                    Real-time alerts when current 1m candle exceeds the 20-bar average size.
                   </span>
                 </div>
 
