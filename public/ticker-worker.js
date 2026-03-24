@@ -44,6 +44,8 @@ let globalAlertsEnabled = false;
 let globalThresholdsEnabled = false;
 let globalLongCandleThreshold = 3.0;
 let globalVolumeSpikeThreshold = 5.0;
+let globalThresholdTimeframes = [];
+let globalSignalThresholdMode = 'standard';
 let globalVolatilityEnabled = true;
 let globalEnabledIndicators = null;
 let portVisibility = new Map(); // Track visibility per port
@@ -495,7 +497,21 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
       momentum: state.momentum,
-      enabledIndicators: globalEnabledIndicators
+      globalLongCandleThreshold,
+      globalVolumeSpikeThreshold,
+      globalVolatilityEnabled,
+      enabledIndicators: {
+        rsi: globalUseRsi,
+        macd: globalUseMacd,
+        bb: globalUseBb,
+        stoch: globalUseStoch,
+        ema: globalUseEma,
+        vwap: globalUseVwap,
+        confluence: globalUseConfluence,
+        divergence: globalUseDivergence,
+        momentum: globalUseMomentum
+      },
+      globalSignalThresholdMode
     });
 
     Object.assign(liveIndicators, {
@@ -570,6 +586,32 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     ];
 
     tfs.forEach(tf => {
+      // Zone state key includes exchange to track per-exchange zones separately
+      const zoneKey = `${trackingKey}-${tf.label}`;
+      const previousZone = zoneStates.get(zoneKey);
+      let zone = 'NEUTRAL';
+      const isInverted = obT < osT;
+
+      const NEAR_BUFFER = 0.3; // Allow "near" reach alerts
+      if (previousZone === 'OVERSOLD') {
+        zone = isInverted
+          ? (tf.rsi < osT - hysteresis ? 'NEUTRAL' : 'OVERSOLD')
+          : (tf.rsi > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD');
+      } else if (previousZone === 'OVERBOUGHT') {
+        zone = isInverted
+          ? (tf.rsi > obT + hysteresis ? 'NEUTRAL' : 'OVERBOUGHT')
+          : (tf.rsi < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT');
+      } else {
+        if (isInverted) {
+          if (tf.rsi >= osT - NEAR_BUFFER) zone = 'OVERSOLD';
+          else if (tf.rsi <= obT + NEAR_BUFFER) zone = 'OVERBOUGHT';
+        } else {
+          if (tf.rsi <= osT + NEAR_BUFFER) zone = 'OVERSOLD';
+          else if (tf.rsi >= obT - NEAR_BUFFER) zone = 'OVERBOUGHT';
+        }
+      }
+
+      // INTELLIGENCE: Strict Custom Mode Whitelisting.
       const hasManualAlert = !!config?.[tf.cfgKey];
       
       // Determine if this hit a global threshold fallback
@@ -584,40 +626,14 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
         }
       }
 
-      // INTELLIGENCE: Strict Isolation.
-      // If a manual config exists for this coin, it MUST have the alert switch enabled.
-      // Global fallback is ONLY allowed if no custom manual configuration is present.
-      const shouldNotify = config ? hasManualAlert : (hasManualAlert || isGlobalHit);
+      // If in Custom Mode, we ONLY allow notifications if this coin is explicitly configured & enabled.
+      const isCustomMode = globalSignalThresholdMode === 'custom';
+      const shouldNotify = isCustomMode 
+        ? (config && hasManualAlert) 
+        : (hasManualAlert || isGlobalHit);
 
       if (!shouldNotify || tf.rsi === null || tf.rsi === undefined) return;
 
-
-      // Zone state key includes exchange to track per-exchange zones separately
-      const zoneKey = `${trackingKey}-${tf.label}`;
-      const previousZone = zoneStates.get(zoneKey);
-      let zone = 'NEUTRAL';
-      const isInverted = obT < osT;
-
-        const NEAR_BUFFER = 0.3; // Allow "near" reach alerts
-        if (previousZone === 'OVERSOLD') {
-          zone = isInverted
-            ? (tf.rsi < osT - hysteresis ? 'NEUTRAL' : 'OVERSOLD')
-            : (tf.rsi > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD');
-        } else if (previousZone === 'OVERBOUGHT') {
-          zone = isInverted
-            ? (tf.rsi > obT + hysteresis ? 'NEUTRAL' : 'OVERBOUGHT')
-            : (tf.rsi < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT');
-        } else {
-          if (isInverted) {
-            // Inverted reach: "Very near or reach"
-            if (tf.rsi >= osT - NEAR_BUFFER) zone = 'OVERSOLD';
-            else if (tf.rsi <= obT + NEAR_BUFFER) zone = 'OVERBOUGHT';
-          } else {
-            // Normal reach: "Very near or reach"
-            if (tf.rsi <= osT + NEAR_BUFFER) zone = 'OVERSOLD';
-            else if (tf.rsi >= obT - NEAR_BUFFER) zone = 'OVERBOUGHT';
-          }
-        }
 
         const recentlyUpdated = (configLastUpdated.get(t.s) || 0) > Date.now() - 15000;
         const isFirstSeen = previousZone === undefined || previousZone === 'NEUTRAL';
@@ -867,6 +883,10 @@ function handleMessage(e, port = null) {
       if (payload.globalThresholdTimeframes !== undefined) {
         globalThresholdTimeframes = payload.globalThresholdTimeframes;
       }
+      if (payload.globalSignalThresholdMode !== undefined) {
+        globalSignalThresholdMode = payload.globalSignalThresholdMode;
+      }
+
 
       if (payload.globalLongCandleThreshold !== undefined) {
         globalLongCandleThreshold = payload.globalLongCandleThreshold;

@@ -230,8 +230,9 @@ const ScreenerRow = memo(function ScreenerRow({
     const r5mP = config?.rsi5mPeriod ?? 14;
     const r15mP = config?.rsi15mPeriod ?? 14;
     const r1hP = config?.rsi1hPeriod ?? 14;
-    const obT = config?.overboughtThreshold ?? 70;
-    const osT = config?.oversoldThreshold ?? 30;
+    const obT = config?.overboughtThreshold ?? globalOverbought;
+    const osT = config?.oversoldThreshold ?? globalOversold;
+
     let rsi1m = entry.rsi1m;
     let rsi5m = entry.rsi5m;
     let rsi15m = entry.rsi15m;
@@ -256,9 +257,13 @@ const ScreenerRow = memo(function ScreenerRow({
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
     // Intelligence: Derive real-time signal tag based on user threshold preferences
-    const signal = globalSignalThresholdMode === 'custom'
-      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
-      : deriveSignal(rsi15m ?? rsi1m, 70, 30);
+    const isCustomMode = globalSignalThresholdMode === 'custom';
+    const signal = isCustomMode
+      ? (config ? deriveSignal(rsi15m ?? rsi1m, obT, osT) : 'NEUTRAL')
+      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
+
+
+
 
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -699,7 +704,8 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       <td className="px-3 py-4 text-right">
-        {display.signal !== 'neutral' && <SignalBadge signal={display.signal} />}
+        {display.signal !== 'neutral' && <SignalBadge signal={display.signal.toLowerCase() as any} />}
+
       </td>
 
       {visibleCols.has('strategy') && (
@@ -1104,9 +1110,13 @@ const ScreenerCard = memo(function ScreenerCard({
     });
 
     // Intelligence: Derive real-time signal tag based on user threshold preferences
-    const signal = globalSignalThresholdMode === 'custom'
-      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
-      : deriveSignal(rsi15m ?? rsi1m, 70, 30);
+    const isCustomMode = globalSignalThresholdMode === 'custom';
+    const signal = isCustomMode
+      ? (config ? deriveSignal(rsi15m ?? rsi1m, obT, osT) : 'NEUTRAL')
+      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
+
+
+
 
     return {
       price: tick.price,
@@ -1265,7 +1275,8 @@ const ScreenerCard = memo(function ScreenerCard({
             </div>
             {display.signal !== 'neutral' && (
               <div className="scale-[0.65] origin-left -ml-1 -my-1">
-                <SignalBadge signal={display.signal} />
+                <SignalBadge signal={display.signal.toLowerCase() as any} />
+
               </div>
             )}
           </div>
@@ -1667,9 +1678,14 @@ export default function ScreenerDashboard() {
       globalThresholdsEnabled,
       globalOverbought,
       globalOversold,
-      globalThresholdTimeframes
+      globalThresholdTimeframes,
+      globalSignalThresholdMode
     });
-  }, [baseSyncStates, globalVolatilityEnabled, globalThresholdsEnabled, globalOverbought, globalOversold, globalThresholdTimeframes]);
+  }, [
+    baseSyncStates, globalVolatilityEnabled, globalThresholdsEnabled, 
+    globalOverbought, globalOversold, globalThresholdTimeframes, globalSignalThresholdMode
+  ]);
+
 
 
   // ─── Hybrid Atomic Data ───
@@ -1878,8 +1894,10 @@ export default function ScreenerDashboard() {
       confluence: globalUseConfluence,
       divergence: globalUseDivergence,
       momentum: globalUseMomentum
-    }
+    },
+    globalSignalThresholdMode
   );
+
 
   // Keep coinConfigsRef in sync for stable callbacks (fetchData)
   useEffect(() => { coinConfigsRef.current = coinConfigs; }, [coinConfigs]);

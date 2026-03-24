@@ -82,8 +82,11 @@ export function useAlertEngine(
     confluence?: boolean;
     divergence?: boolean;
     momentum?: boolean;
-  }
+  },
+  globalSignalThresholdMode: 'default' | 'custom' = 'default'
 ) {
+
+
   // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
   useEffect(() => {
     if (enabled) {
@@ -629,9 +632,13 @@ export function useAlertEngine(
               }
             }
 
-            // INTELLIGENCE: If the coin has a custom configuration, it is isolated from the global pool.
-            // Notifications only fire if the user has explicitly enabled the specific timeframe alert.
-            const shouldNotify = config ? hasManualAlert : (hasManualAlert || isGlobalHit);
+            // INTELLIGENCE: Strict Custom Mode Whitelisting.
+            // If in Custom Mode, we ONLY allow notifications if this coin is explicitly configured & enabled.
+            const isCustomMode = globalSignalThresholdMode === 'custom';
+            const shouldNotify = isCustomMode 
+              ? (config && hasManualAlert) 
+              : (hasManualAlert || isGlobalHit);
+
 
 
             if (justEntered && (previousZone !== undefined || recentlyUpdated) && hasConfluence && shouldNotify) {
