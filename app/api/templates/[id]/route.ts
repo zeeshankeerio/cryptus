@@ -10,14 +10,15 @@ import { auth } from '@/lib/auth';
 // ── DELETE /api/templates/:id ─────────────────────────────────────────────────
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     await prisma.alertTemplate.deleteMany({
-      where: { id: params.id, userId: session.user.id },
+      where: { id, userId: session.user.id },
     });
 
     return NextResponse.json({ success: true });
@@ -30,15 +31,16 @@ export async function DELETE(
 // ── PATCH /api/templates/:id ──────────────────────────────────────────────────
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await request.json();
     const template = await prisma.alertTemplate.updateMany({
-      where: { id: params.id, userId: session.user.id },
+      where: { id, userId: session.user.id },
       data: {
         name: body.name,
         description: body.description,

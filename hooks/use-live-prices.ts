@@ -22,6 +22,7 @@ export interface LiveTick {
   bbPosition?: number;
   strategyScore?: number;
   strategySignal?: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
+  volumeSpike?: boolean;
   curCandleSize?: number;
   curCandleVol?: number;
   avgBarSize1m?: number;
@@ -182,6 +183,7 @@ class PriceTickEngine extends EventTarget {
         try {
           const res = await fetch(`https://api.bybit.com/v5/market/tickers?category=spot`, {
             signal: AbortSignal.timeout(8000),
+            cache: 'no-store',
           });
           if (!res.ok) return;
           const payload = await res.json();
@@ -220,7 +222,14 @@ class PriceTickEngine extends EventTarget {
   private async pollSymbolsViaRest(symbols: string[], exchange: string) {
     try {
       const count = Math.max(100, this.symbols.size);
-      const res = await fetch(`/api/screener?count=${count}&exchange=${exchange}`); 
+      const freshnessTs = Date.now();
+      const res = await fetch(`/api/screener?count=${count}&exchange=${exchange}&ts=${freshnessTs}`, {
+        cache: 'no-store',
+        headers: {
+          'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+          pragma: 'no-cache',
+        },
+      }); 
       if (!res.ok) return;
       const json = await res.json();
       const data = json.data as any[];
@@ -285,6 +294,16 @@ class PriceTickEngine extends EventTarget {
     return this.prices.get(symbol);
   }
 
+  getLatestBatch(symbols?: Set<string>): Map<string, LiveTick> {
+    if (!symbols || symbols.size === 0) return new Map(this.prices);
+    const next = new Map<string, LiveTick>();
+    symbols.forEach((sym) => {
+      const tick = this.prices.get(sym);
+      if (tick) next.set(sym, tick);
+    });
+    return next;
+  }
+
   syncStates(data: { 
     configs?: Record<string, any>, 
     rsiStates?: Record<string, any>, 
@@ -331,20 +350,30 @@ if (typeof window !== 'undefined') {
 
 export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
   const [isConnected, setIsConnected] = useState(false);
-  const [livePrices, setLivePrices] = useState<Map<string, LiveTick>>(new Map());
-  const [exchange, setExchangeState] = useState<string>('binance');
+  const [livePrices, setLivePrices] = useState<Map<string, LiveTick>>(() => engine.getLatestBatch(symbols));
+  const [exchange, setExchangeState] = useState<string>(() => {
+    if (typeof window === 'undefined') return 'binance';
+    return engine.hydrate();
+  });
   const mountedRef = useRef(true);
+  const throttleRef = useRef(Math.max(80, throttleMs));
+
+  useEffect(() => {
+    throttleRef.current = Math.max(80, throttleMs);
+  }, [throttleMs]);
 
   useEffect(() => {
     mountedRef.current = true;
-    
-    // 1. Hydrate exchange from localStorage
-    const savedExchange = engine.hydrate();
-    setExchangeState(savedExchange);
 
-    // 2. Start engine
+    // 1. Start engine
     engine.start(symbols);
     setIsConnected(true);
+
+    // 2. Warm React state immediately from worker cache for instant first paint
+    const warm = engine.getLatestBatch(symbols);
+    if (warm.size > 0) {
+      setLivePrices(warm);
+    }
 
     let lastUpdate = Date.now();
     let pendingBatch = new Map<string, LiveTick>();
@@ -373,11 +402,24 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
       });
 
       const now = Date.now();
-      if (now - lastUpdate >= throttleMs) {
+      const throttle = throttleRef.current;
+      if (now - lastUpdate >= throttle) {
         setLivePrices(new Map(pendingBatch));
         lastUpdate = now;
       }
     };
+
+    // Periodic flush: ensures accumulated ticks reach React state even when
+    // the WebSocket goes quiet between batches (e.g. low-volatility periods).
+    const flushTimer = setInterval(() => {
+      if (!mountedRef.current || pendingBatch.size === 0) return;
+      const now = Date.now();
+      const throttle = throttleRef.current;
+      if (now - lastUpdate >= throttle) {
+        setLivePrices(new Map(pendingBatch));
+        lastUpdate = now;
+      }
+    }, 80);
 
     const handleWorkerMessage = (e: MessageEvent) => {
       if (!mountedRef.current) return;
@@ -396,6 +438,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
 
     return () => {
       mountedRef.current = false;
+      clearInterval(flushTimer);
       engine.removeEventListener('ticks', handleBatch);
       if ((engine as any).worker) {
           (engine as any).worker.removeEventListener('message', handleWorkerMessage);
@@ -405,6 +448,8 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
 
   useEffect(() => {
     engine.updateSymbols(symbols);
+    const warm = engine.getLatestBatch(symbols);
+    if (warm.size > 0) setLivePrices(warm);
   }, [symbols]);
 
   const [isMaster, setIsMaster] = useState(engine.getIsMaster());

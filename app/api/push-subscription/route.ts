@@ -30,7 +30,12 @@ export async function POST(request: Request) {
       },
     });
 
-    return NextResponse.json({ success: true, id: saved.id });
+    return NextResponse.json({ success: true, id: saved.id }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+      },
+    });
   } catch (err) {
     console.error('[push-subscription] POST error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
@@ -56,7 +61,12 @@ export async function DELETE(request: Request) {
       },
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+      },
+    });
   } catch (err) {
     console.error('[push-subscription] DELETE error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

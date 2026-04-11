@@ -3,6 +3,9 @@
 
 declare const self: ServiceWorkerGlobalScope;
 
+const LIVE_NOTIFICATION_DEDUPE_MS = 15000;
+const notificationDedupe = new Map<string, number>();
+
 // ── SERVICE WORKER LIFECYCLE ──
 self.addEventListener('install', () => {
   self.skipWaiting(); // Force activate new worker instantly
@@ -10,6 +13,24 @@ self.addEventListener('install', () => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim()); // Take control of all tabs immediately
+});
+
+// Force live APIs to always hit network and bypass runtime caches.
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  let url: URL;
+  try {
+    url = new URL(req.url);
+  } catch {
+    return;
+  }
+
+  if (url.origin !== self.location.origin) return;
+  if (!url.pathname.startsWith('/api/')) return;
+
+  event.respondWith(fetch(req, { cache: 'no-store' }));
 });
 
 // ── BULLETPROOF GLOBAL POLYFILLS FOR NEXT.JS SWC BUG ──
@@ -90,6 +111,23 @@ self.__WB_DISABLE_DEV_LOGS = true;
 // This is explicitly required by Android Chrome for installed PWAs
 const showNativeNotification = (payload: any) => {
   const { title, body, icon, exchange } = payload;
+  const dedupeKey = `${exchange || 'unknown'}:${title}:${body}`;
+  const now = Date.now();
+  const lastSeen = notificationDedupe.get(dedupeKey) ?? 0;
+
+  // Prevent duplicate delivery when the same event arrives from push + broadcast + postMessage.
+  if (now - lastSeen < LIVE_NOTIFICATION_DEDUPE_MS) {
+    return Promise.resolve();
+  }
+  notificationDedupe.set(dedupeKey, now);
+
+  if (notificationDedupe.size > 500) {
+    for (const [key, ts] of notificationDedupe) {
+      if (now - ts > LIVE_NOTIFICATION_DEDUPE_MS * 4) {
+        notificationDedupe.delete(key);
+      }
+    }
+  }
 
   // Use exchange-aware tag to prevent notification collision across exchanges
   const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
@@ -193,7 +231,14 @@ async function refreshDataInBackground() {
     }
 
     // 1. Fetch top 100 pairs from the API using active exchange
-    const res = await fetch(`/api/screener?count=100&exchange=${exchange}`);
+    const freshnessTs = Date.now();
+    const res = await fetch(`/api/screener?count=100&exchange=${exchange}&ts=${freshnessTs}`, {
+      cache: 'no-store',
+      headers: {
+        'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+        pragma: 'no-cache',
+      },
+    });
     if (!res.ok) return;
     const json = await res.json();
     const data = json.data as any[];

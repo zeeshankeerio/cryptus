@@ -63,27 +63,29 @@ export function PWAInstallPrompt() {
         setTimeout(() => setIsVisible(true), isDebug ? 500 : 2000);
       }
     };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    // 3. Fallback Logic for iOS/Firefox/Desktop without prompt
-    if (!checkStandalone() && (!sessionStorage.getItem('pwa-snoozed') || isDebug)) {
-      const delay = isIOS ? 4000 : 10000;
-      const timer = setTimeout(() => {
-        if (!isInstalled) setIsVisible(true);
-      }, delay);
-      return () => clearTimeout(timer);
-    }
-
-    window.addEventListener('appinstalled', () => {
+    const onAppInstalled = () => {
       console.log("[PWA] App installed successfully");
       setIsInstalled(true);
       setIsVisible(false);
       setDeferredPrompt(null);
-    });
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', onAppInstalled);
+
+    // 3. Fallback Logic for iOS/Firefox/Desktop without prompt
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (!checkStandalone() && (!sessionStorage.getItem('pwa-snoozed') || isDebug)) {
+      const delay = isIOS ? 4000 : 10000;
+      timer = setTimeout(() => {
+        if (!isInstalled) setIsVisible(true);
+      }, delay);
+    }
 
     return () => {
+      if (timer) clearTimeout(timer);
       window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', onAppInstalled);
     };
   }, [isInstalled]);
 

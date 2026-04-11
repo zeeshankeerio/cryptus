@@ -110,7 +110,13 @@ export function useAlertEngine(
 
   // Hydrate alert history from API on mount
   useEffect(() => {
-    fetch('/api/alerts')
+    fetch('/api/alerts', {
+      cache: 'no-store',
+      headers: {
+        'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+        pragma: 'no-cache',
+      },
+    })
       .then(res => res.json())
       .then(data => {
         if (Array.isArray(data)) {
@@ -430,6 +436,7 @@ export function useAlertEngine(
       const res = await fetch('/api/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify(alert),
       });
       if (res.ok) {
@@ -884,7 +891,7 @@ export function useAlertEngine(
   const clearAlertHistory = useCallback(async () => {
     await resumeAudioContext();
     try {
-      const res = await fetch('/api/alerts', { method: 'DELETE' });
+      const res = await fetch('/api/alerts', { method: 'DELETE', cache: 'no-store' });
       if (res.ok) {
         setAlerts([]);
         toast.success("Alert history purged.");

@@ -3,6 +3,7 @@ import { prisma } from './prisma'
 // ── AlertRecord interface ──────────────────────────────────────────────────────
 
 export interface AlertRecord {
+  userId?: string
   symbol: string
   exchange: string
   timeframe: string
@@ -73,6 +74,7 @@ class AlertCoordinator {
     try {
       await prisma.alertLog.create({
         data: {
+          userId: alert.userId,
           symbol: alert.symbol,
           exchange: alert.exchange,
           timeframe: alert.timeframe,
@@ -93,6 +95,7 @@ class AlertCoordinator {
    * Used for cross-instance coordination (e.g. multiple Vercel instances).
    */
   async checkDbCooldown(
+    userId: string | undefined,
     symbol: string,
     exchange: string,
     timeframe: string,
@@ -103,6 +106,7 @@ class AlertCoordinator {
     try {
       const recent = await prisma.alertLog.findFirst({
         where: {
+          userId,
           symbol,
           exchange,
           timeframe,

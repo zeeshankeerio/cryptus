@@ -11,6 +11,35 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { resolveEntitlementsForUser } from '@/lib/entitlements';
+
+const ALERT_FIELDS = [
+  'alertOn1m',
+  'alertOn5m',
+  'alertOn15m',
+  'alertOn1h',
+  'alertOnCustom',
+  'alertConfluence',
+  'alertOnStrategyShift',
+  'alertOnLongCandle',
+  'alertOnVolumeSpike',
+] as const;
+
+const CUSTOM_SETTING_FIELDS = [
+  'rsi1mPeriod',
+  'rsi5mPeriod',
+  'rsi15mPeriod',
+  'rsi1hPeriod',
+  'overboughtThreshold',
+  'oversoldThreshold',
+  'longCandleThreshold',
+  'volumeSpikeThreshold',
+  'priority',
+  'sound',
+  'quietHoursEnabled',
+  'quietHoursStart',
+  'quietHoursEnd',
+] as const;
 
 export interface BulkOperationResult {
   success: boolean;
@@ -25,6 +54,14 @@ export async function POST(request: Request) {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, role: true, createdAt: true },
+    });
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const entitlements = await resolveEntitlementsForUser(user);
+
     const body = await request.json();
     const { action, symbols, updates } = body as {
       action: 'enable' | 'disable' | 'delete' | 'update';
@@ -34,6 +71,48 @@ export async function POST(request: Request) {
 
     if (!action || !Array.isArray(symbols) || symbols.length === 0) {
       return NextResponse.json({ error: 'action and symbols[] are required' }, { status: 400 });
+    }
+
+    if (!entitlements.features.enableAlerts && action === 'enable') {
+      return NextResponse.json(
+        {
+          error: 'Upgrade required to enable alerts.',
+          errorCode: 'UPGRADE_REQUIRED_FEATURE',
+          feature: 'alerts',
+          entitlements,
+        },
+        { status: 403 },
+      );
+    }
+
+    if (action === 'update' && updates) {
+      const hasCustomSettingMutation = CUSTOM_SETTING_FIELDS.some((field) =>
+        Object.prototype.hasOwnProperty.call(updates, field),
+      );
+      if (!entitlements.features.enableCustomSettings && hasCustomSettingMutation) {
+        return NextResponse.json(
+          {
+            error: 'Upgrade required to edit custom settings.',
+            errorCode: 'UPGRADE_REQUIRED_FEATURE',
+            feature: 'custom-settings',
+            entitlements,
+          },
+          { status: 403 },
+        );
+      }
+
+      const requestedAlertEnable = ALERT_FIELDS.some((field) => updates[field] === true);
+      if (!entitlements.features.enableAlerts && requestedAlertEnable) {
+        return NextResponse.json(
+          {
+            error: 'Upgrade required to enable alerts.',
+            errorCode: 'UPGRADE_REQUIRED_FEATURE',
+            feature: 'alerts',
+            entitlements,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     const userId = session.user.id;
@@ -119,7 +198,13 @@ export async function POST(request: Request) {
         processed: 0,
         failed: symbols.length,
         errors,
-      } satisfies BulkOperationResult, { status: 500 });
+      } satisfies BulkOperationResult, {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
+        },
+      });
     }
 
     return NextResponse.json({
@@ -128,7 +213,12 @@ export async function POST(request: Request) {
       processed,
       failed: symbols.length - processed,
       errors,
-    } satisfies BulkOperationResult);
+    } satisfies BulkOperationResult, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+      },
+    });
   } catch (err) {
     console.error('[bulk-config-api] error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

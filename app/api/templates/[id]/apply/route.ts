@@ -10,9 +10,10 @@ import { auth } from '@/lib/auth';
 
 export async function POST(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -26,7 +27,7 @@ export async function POST(
 
     // Fetch the template (must belong to this user)
     const template = await prisma.alertTemplate.findFirst({
-      where: { id: params.id, userId: session.user.id },
+      where: { id, userId: session.user.id },
     });
     if (!template) {
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });

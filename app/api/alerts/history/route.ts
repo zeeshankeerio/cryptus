@@ -17,12 +17,13 @@ export async function GET(request: Request) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = session.user.id;
 
     const { searchParams } = new URL(request.url);
 
     // ── Statistics mode (Requirement 8.5) ──
     if (searchParams.get('stats') === '1') {
-      return getStatistics();
+      return getStatistics(userId);
     }
 
     // ── Build filter (Requirements 8.1, 8.2) ──
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
     const dateTo = searchParams.get('to') ? new Date(searchParams.get('to')!) : undefined;
     const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
 
-    const where: any = {};
+    const where: any = { userId };
     if (symbol) where.symbol = symbol;
     if (exchange) where.exchange = exchange;
     if (timeframe) where.timeframe = timeframe;
@@ -67,6 +68,8 @@ export async function GET(request: Request) {
         headers: {
           'Content-Type': 'text/csv',
           'Content-Disposition': `attachment; filename="alerts-${Date.now()}.csv"`,
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
         },
       });
     }
@@ -90,6 +93,11 @@ export async function GET(request: Request) {
         total,
         totalPages: Math.ceil(total / PAGE_SIZE),
       },
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        Pragma: 'no-cache',
+      },
     });
   } catch (err) {
     console.error('[alerts-history-api] GET error:', err);
@@ -102,6 +110,7 @@ export async function DELETE(request: Request) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = session.user.id;
 
     const body = await request.json().catch(() => ({}));
     const ids: string[] = body.ids ?? [];
@@ -109,13 +118,23 @@ export async function DELETE(request: Request) {
     if (ids.length > 0) {
       // Delete specific IDs
       const result = await prisma.alertLog.deleteMany({
-        where: { id: { in: ids } },
+        where: { id: { in: ids }, userId },
       });
-      return NextResponse.json({ deleted: result.count });
+      return NextResponse.json({ deleted: result.count }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
+        },
+      });
     } else {
       // Delete all (clear history)
-      const result = await prisma.alertLog.deleteMany({});
-      return NextResponse.json({ deleted: result.count });
+      const result = await prisma.alertLog.deleteMany({ where: { userId } });
+      return NextResponse.json({ deleted: result.count }, {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          Pragma: 'no-cache',
+        },
+      });
     }
   } catch (err) {
     console.error('[alerts-history-api] DELETE error:', err);
@@ -124,20 +143,24 @@ export async function DELETE(request: Request) {
 }
 
 // ── Statistics helper (Requirement 8.5) ──────────────────────────────────────
-async function getStatistics() {
+async function getStatistics(userId: string) {
+  const where = { userId };
   const [byType, bySymbol, recent] = await Promise.all([
     prisma.alertLog.groupBy({
       by: ['type'],
+      where,
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
     }),
     prisma.alertLog.groupBy({
       by: ['symbol'],
+      where,
       _count: { id: true },
       orderBy: { _count: { id: 'desc' } },
       take: 10,
     }),
     prisma.alertLog.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
       take: 200,
       select: { createdAt: true, symbol: true },
@@ -166,6 +189,11 @@ async function getStatistics() {
     byType: Object.fromEntries(byType.map(r => [r.type, r._count.id])),
     topSymbols: Object.fromEntries(bySymbol.map(r => [r.symbol, r._count.id])),
     avgIntervalSeconds: avgIntervals,
+  }, {
+    headers: {
+      'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+      Pragma: 'no-cache',
+    },
   });
 }
 

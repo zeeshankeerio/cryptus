@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { betterFetch } from "@better-fetch/fetch";
 import type { auth } from "@/lib/auth";
+import { AUTH_CONFIG } from "@/lib/config";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -65,6 +66,49 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register");
   if (session && isAuthPage) {
     return NextResponse.redirect(new URL("/terminal", request.url));
+  }
+
+  // Owner-only route guard for admin panel
+  if (session && pathname.startsWith("/admin")) {
+    const isOwner =
+      session.user.email === AUTH_CONFIG.SUPER_ADMIN_EMAIL ||
+      session.user.role === "owner";
+
+    if (!isOwner) {
+      return NextResponse.redirect(new URL("/terminal", request.url));
+    }
+  }
+
+  // Subscription enforcement for product routes
+  const needsSubscription = pathname.startsWith("/terminal") || pathname.startsWith("/guide");
+  const ownerBypass =
+    session?.user?.email === AUTH_CONFIG.SUPER_ADMIN_EMAIL ||
+    session?.user?.role === "owner";
+
+  if (session && needsSubscription && !ownerBypass) {
+    try {
+      const baseURL = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+      const { data } = await betterFetch<{ hasActiveSubscription?: boolean }>(
+        "/api/subscription/status",
+        {
+          baseURL,
+          headers: {
+            cookie: request.headers.get("cookie") || "",
+          },
+        },
+      );
+
+      if (!data?.hasActiveSubscription) {
+        const url = new URL("/subscription", request.url);
+        url.searchParams.set("required", "1");
+        return NextResponse.redirect(url);
+      }
+    } catch (error) {
+      console.warn("[middleware] subscription check failed:", error);
+      const url = new URL("/subscription", request.url);
+      url.searchParams.set("required", "1");
+      return NextResponse.redirect(url);
+    }
   }
 
   return NextResponse.next();

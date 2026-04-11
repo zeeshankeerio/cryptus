@@ -1,6 +1,7 @@
 import { prisma } from './prisma';
 
 export interface AlertLogEntry {
+  userId: string;
   symbol: string;
   exchange?: string;
   timeframe: string;
@@ -12,6 +13,7 @@ export async function createAlertLog(entry: AlertLogEntry) {
   try {
     return await prisma.alertLog.create({
       data: {
+        userId: entry.userId,
         symbol: entry.symbol,
         exchange: entry.exchange,
         timeframe: entry.timeframe,
@@ -25,9 +27,10 @@ export async function createAlertLog(entry: AlertLogEntry) {
   }
 }
 
-export async function getRecentAlerts(limit = 50) {
+export async function getRecentAlerts(userId: string, limit = 50) {
   try {
     return await prisma.alertLog.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -37,9 +40,9 @@ export async function getRecentAlerts(limit = 50) {
   }
 }
 
-export async function clearAlertLogs() {
+export async function clearAlertLogs(userId: string) {
   try {
-    return await prisma.alertLog.deleteMany();
+    return await prisma.alertLog.deleteMany({ where: { userId } });
   } catch (err) {
     console.error('[alert-log] Failed to clear alerts:', err);
     throw err;

@@ -256,14 +256,22 @@ const ScreenerRow = memo(function ScreenerRow({
       const range = entry.bbUpper - entry.bbLower;
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
+    const volumeSpikeThreshold =
+      config?.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0
+        ? config.volumeSpikeThreshold
+        : globalVolumeSpikeThreshold;
+
+    const liveVolumeSpike =
+      tick.curCandleVol != null &&
+      tick.avgVolume1m != null &&
+      tick.avgVolume1m > 0 &&
+      (tick.curCandleVol / tick.avgVolume1m) >= volumeSpikeThreshold;
+
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? (config ? deriveSignal(rsi15m ?? rsi1m, obT, osT) : 'NEUTRAL')
+      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
       : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
-
-
-
 
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -273,7 +281,7 @@ const ScreenerRow = memo(function ScreenerRow({
       stochD: entry.stochD,
       emaCross,
       vwapDiff: entry.vwapDiff,
-      volumeSpike: entry.volumeSpike,
+      volumeSpike: liveVolumeSpike || entry.volumeSpike,
       price: tick.price,
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
@@ -312,7 +320,7 @@ const ScreenerRow = memo(function ScreenerRow({
       atr: entry.atr,
       adx: entry.adx,
       vwapDiff: entry.vwapDiff,
-      volumeSpike: entry.volumeSpike,
+      volumeSpike: liveVolumeSpike || entry.volumeSpike,
       stochK: entry.stochK,
       stochD: entry.stochD,
       bbUpper: entry.bbUpper,
@@ -324,7 +332,13 @@ const ScreenerRow = memo(function ScreenerRow({
       confluenceLabel: entry.confluenceLabel,
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
-      strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
+      strategyLabel: tick.strategyScore !== undefined
+        ? (tick.strategyScore >= 50 ? 'Strong Buy'
+          : tick.strategyScore >= 20 ? 'Buy'
+          : tick.strategyScore <= -50 ? 'Strong Sell'
+          : tick.strategyScore <= -20 ? 'Sell'
+          : 'Neutral')
+        : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
@@ -559,7 +573,7 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
       {visibleCols.has('emaCross') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {globalUseEma && display.emaCross !== 'none' && (
+          {display.emaCross !== 'none' && (
             <span className={cn(
               "px-2 py-1 rounded border",
               display.emaCross === 'bullish' ? "text-[#39FF14] border-[#39FF14]/20 bg-[#39FF14]/5" :
@@ -569,16 +583,16 @@ const ScreenerRow = memo(function ScreenerRow({
               {display.emaCross || '—'}
             </span>
           )}
-          {(!globalUseEma || display.emaCross === 'none') && <span className="text-slate-700 opacity-40">—</span>}
+          {display.emaCross === 'none' && <span className="text-slate-700 opacity-40">—</span>}
         </td>
       )}
 
       {visibleCols.has('macdHistogram') && (
         <td className={cn(
           "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
-          !globalUseMacd || display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+          display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
-          {globalUseMacd ? formatNum(display.macdHistogram, 4) : '—'}
+          {formatNum(display.macdHistogram, 4)}
         </td>
       )}
 
@@ -624,14 +638,14 @@ const ScreenerRow = memo(function ScreenerRow({
           "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
           display.confluence >= 15 ? "text-[#39FF14]" : display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
         )}>
-          {globalUseConfluence ? display.confluenceLabel : '—'}
+          {display.confluenceLabel || '—'}
         </td>
       )}
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {globalUseDivergence && display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
-            globalUseDivergence && display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
+          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
+            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
         </td>
       )}
 
@@ -944,7 +958,35 @@ const REFRESH_OPTIONS = [
   { label: 'Off', value: 0, maxPairs: 1200 },
 ];
 
-const PAIR_COUNTS = [50, 100, 200, 300, 500, 600];
+const PAIR_COUNTS = [100, 200, 300, 500];
+
+type DashboardEntitlements = {
+  tier: 'owner' | 'subscribed' | 'trial' | 'free' | 'anonymous';
+  isOwner: boolean;
+  hasPaidAccess: boolean;
+  isTrialing: boolean;
+  maxRecords: number;
+  availableRecordOptions: number[];
+  features: {
+    enableAlerts: boolean;
+    enableAdvancedIndicators: boolean;
+    enableCustomSettings: boolean;
+  };
+};
+
+const DEFAULT_ENTITLEMENTS: DashboardEntitlements = {
+  tier: 'trial',
+  isOwner: false,
+  hasPaidAccess: false,
+  isTrialing: true,
+  maxRecords: 100,
+  availableRecordOptions: [100],
+  features: {
+    enableAlerts: false,
+    enableAdvancedIndicators: false,
+    enableCustomSettings: false,
+  },
+};
 
 const SIGNAL_FILTERS: { label: string; value: SignalFilter }[] = [
   { label: 'All', value: 'all' },
@@ -1082,6 +1124,17 @@ const ScreenerCard = memo(function ScreenerCard({
       const range = entry.bbUpper - entry.bbLower;
       if (range > 0) bbPosition = (tick.price - entry.bbLower) / range;
     }
+
+    const volumeSpikeThreshold =
+      config?.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0
+        ? config.volumeSpikeThreshold
+        : globalVolumeSpikeThreshold;
+    const liveVolumeSpike =
+      tick.curCandleVol != null &&
+      tick.avgVolume1m != null &&
+      tick.avgVolume1m > 0 &&
+      (tick.curCandleVol / tick.avgVolume1m) >= volumeSpikeThreshold;
+
     const liveStrategy = computeStrategyScore({
 
       rsi1m, rsi5m, rsi15m, rsi1h,
@@ -1091,7 +1144,7 @@ const ScreenerCard = memo(function ScreenerCard({
       stochD: entry.stochD,
       emaCross: (tick.emaCross as any) ?? emaCross,
       vwapDiff: entry.vwapDiff,
-      volumeSpike: entry.volumeSpike,
+      volumeSpike: (tick.volumeSpike ?? liveVolumeSpike) || entry.volumeSpike,
       price: tick.price,
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
@@ -1112,7 +1165,7 @@ const ScreenerCard = memo(function ScreenerCard({
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? (config ? deriveSignal(rsi15m ?? rsi1m, obT, osT) : 'NEUTRAL')
+      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
       : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
 
 
@@ -1141,7 +1194,7 @@ const ScreenerCard = memo(function ScreenerCard({
       atr: entry.atr,
       adx: entry.adx,
       vwapDiff: entry.vwapDiff,
-      volumeSpike: entry.volumeSpike,
+      volumeSpike: (tick.volumeSpike ?? liveVolumeSpike) || entry.volumeSpike,
       stochK: entry.stochK,
       stochD: entry.stochD,
       bbUpper: entry.bbUpper,
@@ -1153,7 +1206,13 @@ const ScreenerCard = memo(function ScreenerCard({
       confluenceLabel: entry.confluenceLabel,
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
-      strategyLabel: tick.strategyScore !== undefined ? (tick.strategyScore >= 70 ? "Strong Buy" : tick.strategyScore <= -70 ? "Strong Sell" : liveStrategy.label) : liveStrategy.label,
+      strategyLabel: tick.strategyScore !== undefined
+        ? (tick.strategyScore >= 50 ? 'Strong Buy'
+          : tick.strategyScore >= 20 ? 'Buy'
+          : tick.strategyScore <= -50 ? 'Strong Sell'
+          : tick.strategyScore <= -20 ? 'Sell'
+          : 'Neutral')
+        : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
@@ -1168,7 +1227,7 @@ const ScreenerCard = memo(function ScreenerCard({
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalShowSignalTags, globalSignalThresholdMode, globalThresholdsEnabled,
-    globalOverbought, globalOversold, globalVolatilityEnabled
+    globalOverbought, globalOversold, globalVolatilityEnabled, globalVolumeSpikeThreshold
   ]);
 
   const display = liveState || {
@@ -1304,8 +1363,8 @@ const ScreenerCard = memo(function ScreenerCard({
                 ) : col.id === 'strategy' ? (
                   <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} />
                 ) : col.id === 'divergence' ? (
-                  <span className={cn("text-[8px] font-black uppercase", globalUseDivergence && display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : globalUseDivergence && display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {globalUseDivergence && display.rsiDivergence === 'bullish' ? 'DIV+' : globalUseDivergence && display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
+                  <span className={cn("text-[8px] font-black uppercase", display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {display.rsiDivergence === 'bullish' ? 'DIV+' : display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
                   </span>
                 ) : col.id === 'vwapDiff' ? (
                   <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseVwap && (val as number) > 0 ? "text-[#39FF14]" : globalUseVwap && (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
@@ -1349,16 +1408,16 @@ const ScreenerCard = memo(function ScreenerCard({
                     {globalUseBb && typeof val === 'number' ? `$${formatPrice(val)}` : '—'}
                   </span>
                 ) : col.id === 'macdHistogram' ? (
-                  <span className={cn("text-[9px] font-bold tabular-nums", globalUseMacd && (val as number) > 0 ? "text-[#39FF14]" : globalUseMacd && (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {globalUseMacd && typeof val === 'number' ? val.toFixed(4) : '—'}
+                  <span className={cn("text-[9px] font-bold tabular-nums", (val as number) > 0 ? "text-[#39FF14]" : (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {typeof val === 'number' ? val.toFixed(4) : '—'}
                   </span>
                 ) : col.id === 'confluence' ? (
-                  <span className={cn("text-[9px] font-bold tabular-nums", globalUseConfluence && display.confluence >= 15 ? "text-[#39FF14]" : globalUseConfluence && display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {globalUseConfluence ? display.confluenceLabel : '—'}
+                  <span className={cn("text-[9px] font-bold tabular-nums", display.confluence >= 15 ? "text-[#39FF14]" : display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {display.confluenceLabel || '—'}
                   </span>
                 ) : col.id === 'emaCross' ? (
-                  <span className={cn("text-[9px] font-bold uppercase", globalUseEma && display.emaCross === 'bullish' ? "text-[#39FF14]" : globalUseEma && display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {globalUseEma && display.emaCross !== 'none' ? (display.emaCross === 'bullish' ? 'BULL' : 'BEAR') : '—'}
+                  <span className={cn("text-[9px] font-bold uppercase", display.emaCross === 'bullish' ? "text-[#39FF14]" : display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {display.emaCross !== 'none' ? (display.emaCross === 'bullish' ? 'BULL' : 'BEAR') : '—'}
                   </span>
                 ) : col.id === 'stochK' ? (
                   <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseStoch && (val as number) > 80 ? "text-[#FF4B5C]" : globalUseStoch && (val as number) < 20 ? "text-[#39FF14]" : "text-slate-300")}>
@@ -1505,13 +1564,28 @@ export default function ScreenerDashboard() {
   const [sortKey, setSortKey] = useState<SortKey>('strategyScore');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [refreshInterval, setRefreshInterval] = useState(30);
-  const [pairCount, setPairCount] = useState(500);
+  const [pairCount, setPairCount] = useState(100);
+  const [entitlements, setEntitlements] = useState<DashboardEntitlements>(DEFAULT_ENTITLEMENTS);
   const [smartMode, setSmartMode] = useState(smartModeDefault);
   const [showHeader, setShowHeader] = useState(true);
   const useAnimations = pairCount <= 600; // Disable heavy layout animations for large lists
   const [rsiPeriod, setRsiPeriod] = useState(14);
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastSuccessfulFetchAt, setLastSuccessfulFetchAt] = useState<number | null>(null);
+  const [staleSince, setStaleSince] = useState<number | null>(null);
+  const [backoffUntil, setBackoffUntil] = useState<number | null>(null);
+  const [consecutiveFetchFailures, setConsecutiveFetchFailures] = useState(0);
+  const [latencyStats, setLatencyStats] = useState<{ lastMs: number | null; p50Ms: number | null; p95Ms: number | null }>({
+    lastMs: null,
+    p50Ms: null,
+    p95Ms: null,
+  });
+  const [autoLoadShedding, setAutoLoadShedding] = useState<{ active: boolean; fromCount: number | null; toCount: number | null }>({
+    active: false,
+    fromCount: null,
+    toCount: null,
+  });
   const [globalThresholdsEnabled, setGlobalThresholdsEnabled] = useState(false);
   const [globalOverbought, setGlobalOverbought] = useState(90);
   const [globalOversold, setGlobalOversold] = useState(15);
@@ -1538,8 +1612,17 @@ export default function ScreenerDashboard() {
   const coinConfigsRef = useRef<Record<string, any>>({});
   const [selectedCoinForConfig, setSelectedCoinForConfig] = useState<string | null>(null);
   const fetchingRef = useRef(false);
+  const activeFetchControllerRef = useRef<AbortController | null>(null);
+  const fetchTokenRef = useRef(0);
   const dataLenRef = useRef(0);
   const visibleSymbolsRef = useRef<Set<string>>(new Set());
+  const failureCountRef = useRef(0);
+  const backoffUntilRef = useRef<number | null>(null);
+  const circuitRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const staleSinceRef = useRef<number | null>(null);
+  const latencyHistoryRef = useRef<number[]>([]);
+  const adaptiveDownshiftRef = useRef<{ active: boolean; original: number | null }>({ active: false, original: null });
+  const stableSuccessCountRef = useRef(0);
 
   // Use a refined mount-aware hydration strategy for client-only defaults
   const [hasMounted, setHasMounted] = useState(false);
@@ -1560,8 +1643,7 @@ export default function ScreenerDashboard() {
     const pairs = localStorage.getItem('crypto-rsi-pairs');
     if (pairs) {
       const p = Number(pairs);
-      // Migration: if they had 100 (the old default), bump them to 500 (the new standard)
-      setPairCount(p === 100 ? 500 : Math.min(Math.max(p, 10), 1200));
+      setPairCount(Math.min(Math.max(p, 100), 500));
     }
 
     const smart = localStorage.getItem('crypto-rsi-smart-mode');
@@ -1642,6 +1724,73 @@ export default function ScreenerDashboard() {
     }
   }, []);
 
+  const handleUpgradeRequired = useCallback((requestedCount: number) => {
+    toast.error(`Upgrade required for ${requestedCount} records. Your current limit is ${entitlements.maxRecords}.`, {
+      description: 'Visit subscription to unlock 200 / 300 / 500 record modes.',
+    });
+    router.push('/subscription?required=1');
+  }, [entitlements.maxRecords, router]);
+
+  const handlePairCountChange = useCallback((nextCount: number) => {
+    if (nextCount > entitlements.maxRecords) {
+      handleUpgradeRequired(nextCount);
+      return;
+    }
+    setPairCount(nextCount);
+  }, [entitlements.maxRecords, handleUpgradeRequired]);
+
+  useEffect(() => {
+    if (!session?.user?.id) return;
+
+    const loadEntitlements = async () => {
+      try {
+        const res = await fetch('/api/entitlements', { cache: 'no-store' });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json?.entitlements) {
+          setEntitlements(json.entitlements);
+        }
+      } catch (error) {
+        console.warn('[screener] failed to load entitlements', error);
+      }
+    };
+
+    loadEntitlements();
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (pairCount > entitlements.maxRecords) {
+      setPairCount(entitlements.maxRecords);
+    }
+  }, [pairCount, entitlements.maxRecords]);
+
+  useEffect(() => {
+    if (!entitlements.features.enableAlerts && alertsEnabled) {
+      setAlertsEnabled(false);
+    }
+
+    if (!entitlements.features.enableAdvancedIndicators) {
+      setGlobalUseMacd(false);
+      setGlobalUseBb(false);
+      setGlobalUseStoch(false);
+      setGlobalUseEma(false);
+      setGlobalUseVwap(false);
+      setGlobalUseConfluence(false);
+      setGlobalUseDivergence(false);
+      setGlobalUseMomentum(false);
+    }
+
+    if (!entitlements.features.enableCustomSettings && globalThresholdsEnabled) {
+      setGlobalThresholdsEnabled(false);
+    }
+  }, [
+    entitlements.features.enableAlerts,
+    entitlements.features.enableAdvancedIndicators,
+    entitlements.features.enableCustomSettings,
+    alertsEnabled,
+    globalThresholdsEnabled,
+  ]);
+
   // Column visibility
   const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(
     new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
@@ -1660,6 +1809,7 @@ export default function ScreenerDashboard() {
     // Pre-flight sharding: warm up sockets with majors while waiting for API
     return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
   }, [data]);
+  const liveThrottleMs = pairCount <= 100 ? 120 : pairCount <= 300 ? 220 : 320;
   const { 
     livePrices, 
     isConnected, 
@@ -1669,7 +1819,7 @@ export default function ScreenerDashboard() {
     setExchange, 
     updateSymbols, 
     postToWorker 
-  } = useLivePrices(symbolSet, 300);
+  } = useLivePrices(symbolSet, liveThrottleMs);
 
   const syncStates = useCallback((p: any) => {
     baseSyncStates({
@@ -1872,7 +2022,7 @@ export default function ScreenerDashboard() {
 
   // Removed old duplicate processedData block
 
-  const { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext } = useAlertEngine(
+  const { alerts, clearAlertHistory, resumeAudioContext } = useAlertEngine(
     processedData, 
     coinConfigs, 
     alertsEnabled, 
@@ -2022,6 +2172,7 @@ export default function ScreenerDashboard() {
         headers: {
           'Content-Type': 'application/json',
         },
+        cache: 'no-store',
         body: JSON.stringify({ symbol, exchange, ...newConfig }),
       });
       if (res.ok) {
@@ -2140,25 +2291,71 @@ export default function ScreenerDashboard() {
 
   // ── Fetch data ──
   const fetchData = useCallback(async (background = false) => {
-    if (fetchingRef.current) return;
+    if (background && backoffUntilRef.current && Date.now() < backoffUntilRef.current) {
+      return;
+    }
+
+    const fetchToken = ++fetchTokenRef.current;
+    activeFetchControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeFetchControllerRef.current = controller;
+
     fetchingRef.current = true;
 
     // Show spinner for all fetches except initial load
     const isInitial = !background && dataLenRef.current === 0;
     if (!isInitial) setRefreshing(true);
 
+    let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+    const requestStartedAt = Date.now();
     try {
       if (!background) setError(null);
       const timeoutMs = pairCount >= 800 ? 60_000 : pairCount >= 500 ? 55_000 : pairCount >= 300 ? 40_000 : 25_000;
+      timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
 
       const prioritySymbols = Array.from(visibleSymbolsRef.current).join(',');
-      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}`;
+      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}&ts=${Date.now()}`;
 
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: controller.signal,
+        cache: 'no-store',
+        headers: {
+          'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+          pragma: 'no-cache',
+        },
       });
 
-      const json: ScreenerResponse = await res.json();
+      if (fetchToken !== fetchTokenRef.current) return;
+
+      const retryAfterRaw = res.headers.get('retry-after');
+      const retryAfterSec = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+      const retryAfterMs = Number.isFinite(retryAfterSec) && retryAfterSec > 0 ? retryAfterSec * 1000 : null;
+
+      const json: ScreenerResponse = await res.json().catch(() => ({ data: [], meta: null } as any));
+
+      if (res.status === 429) {
+        const waitMs = retryAfterMs ?? 10_000;
+        const until = Date.now() + waitMs;
+        backoffUntilRef.current = until;
+        setBackoffUntil(until);
+        throw new Error(`Rate limited (429). Retrying in ${Math.ceil(waitMs / 1000)}s.`);
+      }
+
+      if (!res.ok && res.status === 403 && (json as any).errorCode === 'UPGRADE_REQUIRED') {
+        const limit = (json as any)?.entitlements?.maxRecords;
+        if (typeof limit === 'number') setPairCount(limit);
+        handleUpgradeRequired((json as any)?.requestedCount ?? pairCount);
+
+        // Recover immediately after limit clamp so UI is repopulated without waiting
+        // for the next auto-refresh cycle.
+        if (typeof limit === 'number' && limit !== pairCount) {
+          setTimeout(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            fetchDataRef.current(true);
+          }, 120);
+        }
+        return;
+      }
 
       // 503 with data means partial result — still usable
       if (!res.ok && !(res.status === 503 && json.data?.length > 0)) {
@@ -2170,8 +2367,41 @@ export default function ScreenerDashboard() {
       setMeta(json.meta);
       setError(null);
       setLoading(false);
+      const now = Date.now();
+      setLastSuccessfulFetchAt(now);
+      setStaleSince(null);
+      staleSinceRef.current = null;
+      setBackoffUntil(null);
+      setConsecutiveFetchFailures(0);
+      failureCountRef.current = 0;
+      backoffUntilRef.current = null;
+      stableSuccessCountRef.current += 1;
+      if (circuitRetryTimerRef.current) {
+        clearTimeout(circuitRetryTimerRef.current);
+        circuitRetryTimerRef.current = null;
+      }
 
-      // PERFECT COUPLING: Sync indicator baselines for shadowing engine
+      const tookMs = Math.max(1, now - requestStartedAt);
+      const nextHistory = [...latencyHistoryRef.current, tookMs].slice(-25);
+      latencyHistoryRef.current = nextHistory;
+      const sorted = [...nextHistory].sort((a, b) => a - b);
+      const p50 = sorted[Math.floor((sorted.length - 1) * 0.5)] ?? null;
+      const p95 = sorted[Math.floor((sorted.length - 1) * 0.95)] ?? null;
+      setLatencyStats({ lastMs: tookMs, p50Ms: p50, p95Ms: p95 });
+
+      // Automatically restore user-selected row count after feed stabilizes.
+      if (adaptiveDownshiftRef.current.active && stableSuccessCountRef.current >= 3) {
+        const original = adaptiveDownshiftRef.current.original;
+        if (typeof original === 'number' && original <= entitlements.maxRecords) {
+          setPairCount(original);
+        }
+        adaptiveDownshiftRef.current = { active: false, original: null };
+        setAutoLoadShedding({ active: false, fromCount: null, toCount: null });
+        stableSuccessCountRef.current = 0;
+      }
+
+      // PERFECT COUPLING: Sync all indicator baselines for the shadowing engine so
+      // the worker can compute accurate real-time strategy scores immediately after fetch.
       const rsiStates: Record<string, any> = {};
       json.data.forEach((e: any) => {
         if (e.rsi1m !== null) {
@@ -2188,9 +2418,16 @@ export default function ScreenerDashboard() {
             macdSignalState: e.macdSignalState,
             bbUpper: e.bbUpper,
             bbLower: e.bbLower,
+            bbPosition: e.bbPosition,
             avgBarSize1m: e.avgBarSize1m,
             avgVolume1m: e.avgVolume1m,
             confluence: e.confluence,
+            stochK: e.stochK,
+            stochD: e.stochD,
+            vwapDiff: e.vwapDiff,
+            volumeSpike: e.volumeSpike,
+            rsiDivergence: e.rsiDivergence,
+            momentum: e.momentum,
             lastClose: e.price,
             open1m: e.open1m,
             volStart1m: e.volStart1m
@@ -2199,25 +2436,107 @@ export default function ScreenerDashboard() {
       });
       syncStates({ rsiStates, configs: coinConfigsRef.current });
     } catch (err) {
+      // If a newer fetch started, this one was intentionally cancelled — discard silently.
+      if (fetchToken !== fetchTokenRef.current) return;
+      if (controller.signal.aborted) {
+        // Client-side timeout (not an intentional cancel, since token still matches).
+        // Show an error so the user knows why the table is empty.
+        if (dataLenRef.current === 0) {
+          setError('Connection timed out — server is slow or unreachable. Tap to retry.');
+        }
+        return;
+      }
       if (dataLenRef.current === 0) {
         setError(err instanceof Error ? err.message : 'Failed to fetch data');
       }
+
+      const now = Date.now();
+      if (!staleSinceRef.current) {
+        staleSinceRef.current = now;
+        setStaleSince(now);
+      }
+      failureCountRef.current += 1;
+      setConsecutiveFetchFailures(failureCountRef.current);
+      stableSuccessCountRef.current = 0;
+
+      // Backoff background retries to avoid API storm during degraded upstream/network periods.
+      if (background) {
+        const delayMs = Math.min(30_000, 1000 * (2 ** Math.max(0, failureCountRef.current - 1)));
+        const until = now + delayMs;
+        backoffUntilRef.current = until;
+        setBackoffUntil(until);
+
+        if (circuitRetryTimerRef.current) clearTimeout(circuitRetryTimerRef.current);
+        circuitRetryTimerRef.current = setTimeout(() => {
+          if (typeof document !== 'undefined' && document.hidden) return;
+          fetchDataRef.current(true);
+        }, delayMs);
+
+        // Adaptive load shedding: step down row count during sustained failures
+        // to reduce API and processing pressure, then auto-restore on stability.
+        if (failureCountRef.current >= 4 && !adaptiveDownshiftRef.current.active && pairCount > 100) {
+          const options = (entitlements.availableRecordOptions?.length
+            ? entitlements.availableRecordOptions
+            : PAIR_COUNTS).filter((v) => v <= entitlements.maxRecords).sort((a, b) => a - b);
+          const lower = [...options].reverse().find((v) => v < pairCount) ?? null;
+          if (lower && lower >= 100) {
+            adaptiveDownshiftRef.current = { active: true, original: pairCount };
+            setAutoLoadShedding({ active: true, fromCount: pairCount, toCount: lower });
+            setPairCount(lower);
+          }
+        }
+      }
     } finally {
-      fetchingRef.current = false;
-      setRefreshing(false);
-      setLoading(false);
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      if (fetchToken === fetchTokenRef.current) {
+        fetchingRef.current = false;
+        setRefreshing(false);
+        setLoading(false);
+      }
     }
-  }, [pairCount, smartMode, rsiPeriod, search, exchange]);
+  }, [pairCount, smartMode, rsiPeriod, search, exchange, handleUpgradeRequired, entitlements.maxRecords, entitlements.availableRecordOptions]);
+
+  // ── Stable ref so all async effects always call the latest fetchData
+  // without adding `fetchData` to their dependency arrays (which causes race conditions).
+  const fetchDataRef = useRef(fetchData);
+  useEffect(() => { fetchDataRef.current = fetchData; }, [fetchData]);
+
+  useEffect(() => {
+    return () => {
+      activeFetchControllerRef.current?.abort();
+      if (circuitRetryTimerRef.current) {
+        clearTimeout(circuitRetryTimerRef.current);
+        circuitRetryTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle priority syncs from worker for fast-moving coins
   useEffect(() => {
     const handlePrioritySync = (e: Event) => {
       const symbol = (e as CustomEvent).detail;
-      // Sync triggered for mover
-
-      // Add immediately to visible to force precision data fetch
       visibleSymbolsRef.current.add(symbol);
-      fetchData(true);
+
+      if (typeof document !== 'undefined' && document.hidden) return;
+
+      const now = Date.now();
+      const cooldownMs = pairCount >= 300 ? 3500 : 2200;
+
+      if (!fetchingRef.current && now - lastPrioritySyncRef.current >= cooldownMs) {
+        lastPrioritySyncRef.current = now;
+        fetchDataRef.current(true);
+        return;
+      }
+
+      if (prioritySyncTimerRef.current) {
+        clearTimeout(prioritySyncTimerRef.current);
+      }
+      prioritySyncTimerRef.current = setTimeout(() => {
+        if (!fetchingRef.current) {
+          lastPrioritySyncRef.current = Date.now();
+          fetchDataRef.current(true);
+        }
+      }, cooldownMs);
     };
 
     if (typeof window !== 'undefined') {
@@ -2225,17 +2544,23 @@ export default function ScreenerDashboard() {
       if (engine) engine.addEventListener('priority-sync', handlePrioritySync);
       return () => {
         if (engine) engine.removeEventListener('priority-sync', handlePrioritySync);
+        if (prioritySyncTimerRef.current) {
+          clearTimeout(prioritySyncTimerRef.current);
+          prioritySyncTimerRef.current = null;
+        }
       };
     }
-  }, [fetchData]);
+  }, [pairCount]);
 
   // ── Initial fetch with auto-retry and Hydration ──
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const prioritySyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastPrioritySyncRef = useRef(0);
 
   // Load coin configurations on mount
   useEffect(() => {
-    fetch('/api/config')
+    fetch('/api/config', { cache: 'no-store' })
       .then(res => res.json())
       .then(json => setCoinConfigs(json))
       .catch(err => console.error('[screener] Failed to load configs:', err));
@@ -2251,19 +2576,16 @@ export default function ScreenerDashboard() {
   }, [alertsEnabled]);
 
   useEffect(() => {
-    // Attempt hydration from localStorage
+    // Stale-first hydration: load any cached data immediately so the table is
+    // visible while the live fetch runs. Exchange mismatch is fine here —
+    // the live fetch will overwrite with correct exchange data within seconds.
     const saved = localStorage.getItem('crypto-rsi-last-data');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        // Only hydrate if data is:
-        // 1. Relatively fresh (less than 1 hour old)
-        // 2. Correctly formatted as an array
-        // 3. Matches the current exchange (prevents stale cross-exchange data)
-        const savedExchange = parsed.exchange || 'binance';
-        if (Date.now() - parsed.ts < 3600_000 && Array.isArray(parsed.data) && savedExchange === exchange) {
+        if (Date.now() - parsed.ts < 3600_000 && Array.isArray(parsed.data) && parsed.data.length > 0) {
           setData(parsed.data);
-          setMeta(parsed.meta);
+          if (parsed.meta) setMeta(parsed.meta);
           setLoading(false);
           dataLenRef.current = parsed.data.length;
         }
@@ -2274,9 +2596,9 @@ export default function ScreenerDashboard() {
 
     retryCountRef.current = 0;
     const doFetch = async () => {
-      await fetchData();
+      await fetchDataRef.current();
       try {
-        const configRes = await fetch('/api/config');
+        const configRes = await fetch('/api/config', { cache: 'no-store' });
         if (configRes.ok) {
           const cfg = await configRes.json();
           setCoinConfigs(cfg);
@@ -2292,7 +2614,7 @@ export default function ScreenerDashboard() {
     };
     doFetch();
     return () => clearTimeout(retryTimerRef.current);
-  }, [fetchData]);
+  }, []); // mount-only: fetchDataRef always points to latest fetchData
 
   // ── Auto-refresh (skips when tab is hidden) ──
   useEffect(() => {
@@ -2301,7 +2623,7 @@ export default function ScreenerDashboard() {
     setCountdown(refreshInterval);
     const refetchTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
-      fetchData(true);
+      fetchDataRef.current(true);
       setCountdown(refreshInterval);
     }, refreshInterval * 1000);
 
@@ -2313,11 +2635,11 @@ export default function ScreenerDashboard() {
       clearInterval(refetchTimer);
       clearInterval(tickTimer);
     };
-  }, [refreshInterval, fetchData]);
+  }, [refreshInterval]); // fetchDataRef is stable so no dep needed
 
   // ── Trigger refetch on RSI Period change (debounced) ──
   useEffect(() => {
-    // Gap 4b: Immediately push the new period to the worker so custom RSI
+    // Immediately push the new period to the worker so custom RSI
     // alert evaluations use the correct period without waiting for a data refresh
     if (typeof window !== 'undefined') {
       const eng = (window as any).__priceEngine;
@@ -2327,32 +2649,41 @@ export default function ScreenerDashboard() {
     }
 
     const timer = setTimeout(() => {
-      fetchData();
+      fetchDataRef.current();
     }, 400); // 400ms debounce to avoid spamming while dragging slider
     return () => clearTimeout(timer);
-  }, [rsiPeriod, fetchData]);
+  }, [rsiPeriod]); // fetchDataRef is stable so no dep needed
 
   // ── Trigger refetch on Exchange change ──
+  // Uses prevExchangeRef to fire ONLY on real exchange changes, not on every
+  // fetchData reference change (which happens whenever any fetchData dep changes).
+  const prevExchangeRef = useRef<string | null>(null);
   useEffect(() => {
-    if (hasMounted && dataLenRef.current > 0) {
-      // Clear data for visual feedback that a full reload is happening
-      setData([]);
-      dataLenRef.current = 0;
-      setLoading(true);
-      // Force-reset fetchingRef to prevent race with in-flight background fetch
-      fetchingRef.current = false;
-      fetchData();
+    if (!hasMounted) return;
+    if (prevExchangeRef.current === null) {
+      // First time after mount: record current exchange but don't re-fetch
+      // (initial-fetch effect already handles the first load).
+      prevExchangeRef.current = exchange;
+      return;
     }
-  }, [exchange, fetchData, hasMounted]);
+    if (prevExchangeRef.current === exchange) return;
+    prevExchangeRef.current = exchange;
+    // Real exchange switch: clear stale data and reload
+    setData([]);
+    dataLenRef.current = 0;
+    setLoading(true);
+    fetchingRef.current = false;
+    fetchDataRef.current();
+  }, [exchange, hasMounted]); // removed fetchData dep — use fetchDataRef instead
 
   // ── Debounced Server-side Search ──
   useEffect(() => {
     if (!search) return;
     const timer = setTimeout(() => {
-      fetchData();
+      fetchDataRef.current();
     }, 600); // 600ms debounce for typing
     return () => clearTimeout(timer);
-  }, [search, fetchData]);
+  }, [search]); // fetchDataRef is stable so no dep needed
 
   // ── Sorting ──
   const handleSort = useCallback(
@@ -2461,7 +2792,7 @@ export default function ScreenerDashboard() {
 
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
-        fetchData();
+        fetchDataRef.current();
       } else if (e.key === 'Escape') {
         setSelectedCoinForConfig(null);
         setShowAlertPanel(false);
@@ -2479,7 +2810,7 @@ export default function ScreenerDashboard() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [fetchData]);
+  }, []); // mount-only: fetchDataRef always points to latest fetchData
 
   // ── CSV export ──
   const handleExportCsv = useCallback(() => {
@@ -2647,18 +2978,7 @@ export default function ScreenerDashboard() {
 
                   <div className="h-4 w-px bg-white/5 mx-1" />
 
-                  <motion.button
-                    onClick={triggerTestAlert}
-                    whileTap={{ scale: 0.9 }}
-                    className="group relative flex items-center gap-2 px-3 h-9 rounded-xl border border-[#39FF14]/30 bg-[#39FF14]/5 text-[#39FF14] hover:bg-[#39FF14]/10 transition-all shadow-sm"
-                    title="Test Alert System & Unlock Audio"
-                  >
-                    <ShieldCheck size={14} className="animate-pulse" />
-                    <span className="text-[9px] font-black uppercase tracking-widest hidden xl:inline">Test Sound</span>
-                  </motion.button>
                 </div>
-
-                <div className="h-4 w-px bg-white/5 mx-1" />
 
                 {/* Fear/Greed Gauge */}
                 <div className="flex flex-col items-center min-w-[80px]">
@@ -2985,6 +3305,35 @@ export default function ScreenerDashboard() {
             Header
           </button>
 
+          <div className="flex items-center gap-1.5 rounded-2xl border border-white/5 bg-slate-900/40 p-1 shrink-0">
+            <span className="px-2 text-[8px] font-black uppercase tracking-widest text-slate-600">Rows</span>
+            {PAIR_COUNTS.map((cnt) => {
+              const locked = cnt > entitlements.maxRecords;
+              return (
+                <button
+                  key={cnt}
+                  onClick={() => {
+                    if (locked) {
+                      handleUpgradeRequired(cnt);
+                      return;
+                    }
+                    handlePairCountChange(cnt);
+                  }}
+                  className={cn(
+                    "px-2.5 py-1.5 text-[9px] font-black uppercase tracking-widest rounded-xl border transition-all whitespace-nowrap",
+                    pairCount === cnt
+                      ? "bg-white text-black border-white"
+                      : "bg-white/[0.02] text-slate-500 border-white/10 hover:text-slate-300",
+                    locked && "opacity-50 text-rose-300 border-rose-500/30"
+                  )}
+                  title={locked ? `Upgrade required for ${cnt} rows` : `Show ${cnt} rows`}
+                >
+                  {cnt}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="relative group shrink-0" ref={colPickerRef}>
             <button
               onClick={() => setShowColPicker(!showColPicker)}
@@ -3093,6 +3442,55 @@ export default function ScreenerDashboard() {
           </div>
         </div>
       </div>
+
+      {(error || staleSince || (backoffUntil && backoffUntil > Date.now())) && (
+        <div className={cn(
+          "mb-4 rounded-2xl border px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3",
+          error ? "border-rose-500/30 bg-rose-500/10" : "border-amber-500/30 bg-amber-500/10"
+        )}>
+          <div className="flex flex-col gap-1">
+            <span className={cn(
+              "text-[10px] font-black uppercase tracking-[0.18em]",
+              error ? "text-rose-300" : "text-amber-300"
+            )}>
+              {error ? 'Feed Degraded' : 'Using Last Good Snapshot'}
+            </span>
+            <span className="text-[11px] text-slate-200">
+              {error || 'Live updates are delayed. Displaying last successfully fetched dataset.'}
+            </span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+              {lastSuccessfulFetchAt ? `Last success ${formatTimeAgo(lastSuccessfulFetchAt)} ago` : 'No successful fetch yet'}
+              {staleSince ? ` • stale ${formatTimeAgo(staleSince)} ago` : ''}
+              {consecutiveFetchFailures > 0 ? ` • failures ${consecutiveFetchFailures}` : ''}
+              {latencyStats.lastMs ? ` • last ${latencyStats.lastMs}ms` : ''}
+              {latencyStats.p50Ms ? ` • p50 ${latencyStats.p50Ms}ms` : ''}
+              {latencyStats.p95Ms ? ` • p95 ${latencyStats.p95Ms}ms` : ''}
+            </span>
+            {autoLoadShedding.active && autoLoadShedding.fromCount && autoLoadShedding.toCount && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                Auto load shedding: rows {autoLoadShedding.fromCount} to {autoLoadShedding.toCount} until feed stabilizes
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {backoffUntil && backoffUntil > Date.now() && (
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                Retry in {Math.max(1, Math.ceil((backoffUntil - Date.now()) / 1000))}s
+              </span>
+            )}
+            <button
+              onClick={() => {
+                backoffUntilRef.current = null;
+                setBackoffUntil(null);
+                fetchData();
+              }}
+              className="px-3 py-2 rounded-xl border border-white/15 bg-white/5 text-[10px] font-black uppercase tracking-widest text-slate-200 hover:bg-white/10 transition-all"
+            >
+              Retry Now
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Top Movers ── */}
       {!loading && topMovers.gainers.length > 0 && (
@@ -3344,7 +3742,12 @@ export default function ScreenerDashboard() {
               try {
                 const res = await fetch('/api/config', {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+                    pragma: 'no-cache',
+                  },
+                  cache: 'no-store',
                   body: JSON.stringify({ symbol: selectedCoinForConfig, exchange, ...newConfig }),
                 });
                 if (res.ok) {
@@ -3408,7 +3811,12 @@ export default function ScreenerDashboard() {
             refreshInterval={refreshInterval}
             setRefreshInterval={setRefreshInterval}
             pairCount={pairCount}
-            setPairCount={setPairCount}
+            setPairCount={handlePairCountChange}
+            maxRecords={entitlements.maxRecords}
+            canUseAlerts={entitlements.features.enableAlerts}
+            canUseAdvancedIndicators={entitlements.features.enableAdvancedIndicators}
+            canUseCustomSettings={entitlements.features.enableCustomSettings}
+            onUpgrade={() => handleUpgradeRequired(200)}
             alertsEnabled={alertsEnabled}
             setAlertsEnabled={setAlertsEnabled}
             soundEnabled={soundEnabled}
@@ -4255,6 +4663,11 @@ function GlobalSettingsModal({
   setRefreshInterval,
   pairCount,
   setPairCount,
+  maxRecords,
+  canUseAlerts,
+  canUseAdvancedIndicators,
+  canUseCustomSettings,
+  onUpgrade,
   alertsEnabled,
   setAlertsEnabled,
   soundEnabled,
@@ -4306,6 +4719,11 @@ function GlobalSettingsModal({
   setRefreshInterval: (v: number) => void;
   pairCount: number;
   setPairCount: (v: number) => void;
+  maxRecords: number;
+  canUseAlerts: boolean;
+  canUseAdvancedIndicators: boolean;
+  canUseCustomSettings: boolean;
+  onUpgrade: () => void;
   alertsEnabled: boolean;
   setAlertsEnabled: (v: boolean) => void;
   soundEnabled: boolean;
@@ -4421,15 +4839,21 @@ function GlobalSettingsModal({
                 </div>
                 <button
                   onClick={async () => {
+                    if (!canUseAlerts) {
+                      onUpgrade();
+                      return;
+                    }
                     const next = !alertsEnabled;
                     if (next && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
                       await Notification.requestPermission();
                     }
                     setAlertsEnabled(next);
                   }}
+                  disabled={!canUseAlerts}
                   className={cn(
                     "w-12 h-6 rounded-full p-1 transition-all flex items-center",
-                    alertsEnabled ? "bg-[#39FF14]" : "bg-slate-800"
+                    alertsEnabled ? "bg-[#39FF14]" : "bg-slate-800",
+                    !canUseAlerts && "opacity-40 cursor-not-allowed"
                   )}
                 >
                   <div className={cn(
@@ -4449,13 +4873,19 @@ function GlobalSettingsModal({
                 </div>
                 <button
                   onClick={() => {
+                    if (!canUseAlerts) {
+                      onUpgrade();
+                      return;
+                    }
                     const next = !soundEnabled;
                     setSoundEnabled(next);
                     if (next) resumeAudioContext();
                   }}
+                  disabled={!canUseAlerts}
                   className={cn(
                     "w-12 h-6 rounded-full p-1 transition-all flex items-center",
-                    soundEnabled ? "bg-[#39FF14]" : "bg-slate-800"
+                    soundEnabled ? "bg-[#39FF14]" : "bg-slate-800",
+                    !canUseAlerts && "opacity-40 cursor-not-allowed"
                   )}
                 >
                   <div className={cn(
@@ -4491,10 +4921,11 @@ function GlobalSettingsModal({
                 
                 <button
                   onClick={togglePush}
-                  disabled={pushLoading}
+                  disabled={pushLoading || !canUseAlerts}
                   className={cn(
                     "absolute top-4 right-4 w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 shadow-sm",
-                    pushStatus === 'active' ? "bg-[#39FF14]" : "bg-slate-800"
+                    pushStatus === 'active' ? "bg-[#39FF14]" : "bg-slate-800",
+                    !canUseAlerts && "opacity-40 cursor-not-allowed"
                   )}
                 >
                   <div className={cn(
@@ -4538,10 +4969,18 @@ function GlobalSettingsModal({
                   ].map(ind => (
                     <button
                       key={ind.id}
-                      onClick={() => ind.setter(!ind.state)}
+                      onClick={() => {
+                        if (!canUseAdvancedIndicators && ind.id !== 'rsi') {
+                          onUpgrade();
+                          return;
+                        }
+                        ind.setter(!ind.state);
+                      }}
+                      disabled={!canUseAdvancedIndicators && ind.id !== 'rsi'}
                       className={cn(
                         "flex items-center gap-2 px-2.5 py-2.5 rounded-xl border transition-all text-left",
-                        ind.state ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/[0.02] border-white/5 text-slate-600 opacity-60"
+                        ind.state ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/[0.02] border-white/5 text-slate-600 opacity-60",
+                        !canUseAdvancedIndicators && ind.id !== 'rsi' && "opacity-40 cursor-not-allowed"
                       )}
                     >
                       <div className={cn("p-1.5 rounded-lg border", ind.state ? "bg-[#39FF14] border-[#39FF14] text-black" : "bg-slate-900 border-slate-800 text-slate-700")}>
@@ -4589,8 +5028,14 @@ function GlobalSettingsModal({
                     ].map(opt => (
                       <button
                         key={opt.id}
-                        disabled={!globalShowSignalTags}
-                        onClick={() => setGlobalSignalThresholdMode(opt.id as any)}
+                        disabled={!globalShowSignalTags || !canUseCustomSettings}
+                        onClick={() => {
+                          if (!canUseCustomSettings) {
+                            onUpgrade();
+                            return;
+                          }
+                          setGlobalSignalThresholdMode(opt.id as any);
+                        }}
                         className={cn(
                           "px-3 py-2.5 rounded-xl text-[9px] font-black uppercase border transition-all tracking-wider",
                           globalSignalThresholdMode === opt.id
@@ -4635,10 +5080,18 @@ function GlobalSettingsModal({
                 </div>
 
                 <button
-                  onClick={() => setGlobalThresholdsEnabled(!globalThresholdsEnabled)}
+                  onClick={() => {
+                    if (!canUseCustomSettings) {
+                      onUpgrade();
+                      return;
+                    }
+                    setGlobalThresholdsEnabled(!globalThresholdsEnabled);
+                  }}
+                  disabled={!canUseCustomSettings}
                   className={cn(
                     "absolute top-5 right-5 w-12 h-6 rounded-full p-1 transition-all flex items-center shrink-0 shadow-lg",
-                    globalThresholdsEnabled ? "bg-purple-500" : "bg-slate-800"
+                    globalThresholdsEnabled ? "bg-purple-500" : "bg-slate-800",
+                    !canUseCustomSettings && "opacity-40 cursor-not-allowed"
                   )}
                 >
                   <div className={cn(
@@ -4821,17 +5274,25 @@ function GlobalSettingsModal({
             </div>
             <div className="space-y-3">
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Pairs</h3>
+              <p className="text-[8px] font-black uppercase tracking-widest text-slate-600 ml-1">Plan limit: {maxRecords} records</p>
               <div className="grid grid-cols-1 gap-1.5">
                 {PAIR_COUNTS.map((cnt) => (
                   <button
                     key={cnt}
-                    onClick={() => setPairCount(cnt)}
+                    onClick={() => {
+                      if (cnt > maxRecords) {
+                        onUpgrade();
+                        return;
+                      }
+                      setPairCount(cnt);
+                    }}
                     className={cn(
                       "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
-                      pairCount === cnt ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500"
+                      pairCount === cnt ? "bg-white text-black border-white" : "bg-white/5 border-white/5 text-slate-500",
+                      cnt > maxRecords && "opacity-40 border-rose-500/30 text-rose-300"
                     )}
                   >
-                    {cnt} Units
+                    {cnt > maxRecords ? `${cnt} Records (Upgrade)` : `${cnt} Records`}
                   </button>
                 ))}
               </div>

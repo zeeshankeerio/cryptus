@@ -22,9 +22,41 @@ model User {
   sessions      Session[]
   pushSubscriptions PushSubscription[]
   coinConfigs       CoinConfig[]
+  alertLogs         AlertLog[]
   alertTemplates    AlertTemplate[]
+  subscriptions     Subscription[]
 
   @@map("user")
+}
+
+model Subscription {
+  id                   String    @id
+  userId               String
+  referenceId          String
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  status               String
+  plan                 String
+  billingInterval      String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  trialStart           DateTime?
+  trialEnd             DateTime?
+  cancelAtPeriodEnd    Boolean?  @default(false)
+  canceledAt           DateTime?
+  cancelAt             DateTime?
+  endedAt              DateTime?
+  seats                Int?
+  invoiceRef           String?
+  renewalNotes         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([referenceId])
+  @@index([status])
+  @@map("subscription")
 }
 
 model Session {
@@ -114,6 +146,7 @@ model CoinConfig {
 
 model AlertLog {
   id        String   @id @default(uuid())
+  userId    String?
   symbol    String
   exchange  String?
   timeframe String
@@ -121,6 +154,10 @@ model AlertLog {
   type      String
   priority  String   @default("medium")
   createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([userId, createdAt])
 
   @@map("alert_log")
 }

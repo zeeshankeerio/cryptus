@@ -99,7 +99,7 @@ const FALLBACK_SYMBOLS = [
 ];
 
 // ── Multi-Market definitions ──
-const BINANCE_NATIVE_SPECIAL = ['PAXGUSDT', 'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'USDJPY'];
+const BINANCE_NATIVE_SPECIAL = ['PAXGUSDT', 'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT'];
 const YAHOO_MARKET_MAP: Record<string, string> = {
   'SPX': '^GSPC',    // S&P 500
   'NDAQ': '^IXIC',   // NASDAQ
@@ -121,7 +121,7 @@ function getMarketType(symbol: string): ScreenerEntry['market'] {
 
 // ── Ticker cache for price + change data ──
 const tickerCache = new Map<string, { data: Map<string, BinanceTicker>; ts: number }>();
-const TICKER_CACHE_TTL = 30_000; // 30 seconds
+const TICKER_CACHE_TTL = 15_000; // 15 seconds — faster price overlay freshness
 const TRAFFIC_WARM_COOLDOWN_MS = 45_000;
 
 // ── Result cache to avoid re-computing on rapid refreshes ──
@@ -176,8 +176,8 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean, exchange: str
 }
 
 // ── Per-symbol indicator cache to avoid refetch/recompute on every refresh ──
-const INDICATOR_CACHE_TTL = 120_000; // 2 min — standard symbols
-const INDICATOR_CACHE_TTL_ALERT = 60_000; // 1 min — alert-active symbols (tighter accuracy)
+const INDICATOR_CACHE_TTL = 60_000; // 1 min — standard symbols (halved for fresher indicators)
+const INDICATOR_CACHE_TTL_ALERT = 30_000; // 30s — alert-active symbols (tighter accuracy)
 const INDICATOR_CACHE_MAX = 5000;
 const indicatorCache = new LRUCache<string, { entry: ScreenerEntry; ts: number }>(INDICATOR_CACHE_MAX);
 
@@ -250,8 +250,8 @@ export function invalidateExchangeCache(exchange: string) {
 function pruneIndicatorCache() {
   const now = Date.now();
   // TTL-based cleanup: remove stale entries. LRU handles size eviction automatically.
-  for (const [key, value] of indicatorCache.entries()) {
-    if (now - value.ts > INDICATOR_CACHE_TTL) {
+  for (const [key, cacheEntry] of indicatorCache.entries()) {
+    if (now - cacheEntry.value.ts > INDICATOR_CACHE_TTL) {
       indicatorCache.delete(key);
     }
   }
@@ -376,8 +376,8 @@ function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: nu
     return null;
   }
 
-  // Don't serve data older than 10 minutes
-  if (Date.now() - cache.ts > 600_000) return null;
+  // Don't serve data older than 2 minutes (stale-first should be brief)
+  if (Date.now() - cache.ts > 120_000) return null;
   const sliced = cache.data.data.slice(0, symbolCount);
   return {
     data: sliced,
@@ -466,10 +466,12 @@ async function fetchBybitApiWithRetry<T>(
         headers: FETCH_HEADERS,
         cache: 'no-store' as RequestCache,
       });
-      if (res.status === 429 || res.status === 403 || res.status === 451) {
-        if (res.status !== 429) {
-          debugWarn(`[bybit] ${label} blocked by region (${res.status}). Ensure Vercel is not in US region.`);
-        }
+      if (res.status === 403 || res.status === 451) {
+        // Permanent geo-block — retrying other endpoints won't help, fail fast
+        debugWarn(`[bybit] ${label} permanently geo-blocked (${res.status}). Failing fast.`);
+        throw new Error(`${label}: geo-blocked (${res.status})`);
+      }
+      if (res.status === 429) {
         const wait = Math.min(2000 * (attempt + 1), 8000);
         await new Promise((r) => setTimeout(r, wait));
         continue;
@@ -690,6 +692,12 @@ async function fetchWithRetry(
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
+      if (res.status === 451) {
+        // Geo-restriction is enforced at the symbol level across all Binance
+        // endpoints — trying the remaining endpoints won't help, fail fast.
+        debugWarn(`[kline] ${label}: HTTP 451 geo-restricted from ${base}, failing fast`);
+        throw new Error(`${label}: HTTP 451 from ${base}`);
+      }
       
       const weightHeader = res.headers.get('x-mbx-used-weight-1m');
       if (weightHeader) {
@@ -703,6 +711,8 @@ async function fetchWithRetry(
       return res.json();
     } catch (err) {
       lastError = err;
+      // 451 geo-restriction is permanent — don't retry across other endpoints
+      if (err instanceof Error && err.message.includes('451')) throw err;
       if (attempt === retries) {
         debugWarn(`[kline] ${label}: all ${retries + 1} attempts failed:`, err instanceof Error ? err.message : String(err));
         throw err;

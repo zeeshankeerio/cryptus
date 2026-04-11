@@ -110,11 +110,15 @@ export async function POST(request: Request) {
     });
     const cooldownMap = new Map<string, boolean>();
     recentAlerts.forEach(a => {
+      const uid = a.userId || 'global';
       // Legacy format: "BTCUSDT-5m"
       cooldownMap.set(`${a.symbol}-${a.timeframe}`, true);
+      // Tenant-aware format: "userId:BTCUSDT-5m"
+      cooldownMap.set(`${uid}:${a.symbol}-${a.timeframe}`, true);
       // New format: "BTCUSDT:binance:5m:OVERSOLD"
       if (a.exchange && a.type) {
         cooldownMap.set(`${a.symbol}:${a.exchange}:${a.timeframe}:${a.type}`, true);
+        cooldownMap.set(`${uid}:${a.symbol}:${a.exchange}:${a.timeframe}:${a.type}`, true);
       }
     });
     console.log(`[cron-alerts:${requestId}] Recent alerts in cooldown: ${recentAlerts.length}`);
@@ -192,7 +196,8 @@ export async function POST(request: Request) {
           if (isFirstSeen) {
             // Check Cooldown (uses normalized labels now — matches foreground)
             const cooldownKey = `${config.symbol}-${tf.label}`;
-            if (cooldownMap.has(cooldownKey)) {
+            const tenantCooldownKey = `${userId}:${config.symbol}-${tf.label}`;
+            if (cooldownMap.has(tenantCooldownKey) || cooldownMap.has(cooldownKey)) {
               zoneStateCache.set(stateKey, zone);
               continue;
             }
@@ -226,7 +231,8 @@ export async function POST(request: Request) {
 
           if (prevStrat !== undefined && prevStrat !== currentStrat) {
             const cooldownKey = `${config.symbol}-STRAT`;
-            if (!cooldownMap.has(cooldownKey)) {
+            const tenantCooldownKey = `${userId}:${config.symbol}-STRAT`;
+            if (!cooldownMap.has(tenantCooldownKey) && !cooldownMap.has(cooldownKey)) {
               triggered.push({
                 type: currentStrat === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
                 timeframe: 'STRATEGY',
@@ -282,6 +288,7 @@ export async function POST(request: Request) {
         // Log to DB for cooldown tracking across invocations
         await prisma.alertLog.create({
           data: {
+            userId: alertInfo.userId && alertInfo.userId !== 'global' ? alertInfo.userId : undefined,
             symbol: alertInfo.symbol,
             exchange: alertInfo.exchange,
             timeframe: alert.timeframe,

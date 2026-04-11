@@ -25,6 +25,7 @@ export function usePushNotifications() {
 
     try {
       const registration = await navigator.serviceWorker.ready;
+      await registration.update().catch(() => {});
       const subscription = await registration.pushManager.getSubscription();
       
       if (Notification.permission === 'denied') {
@@ -93,7 +94,12 @@ export function usePushNotifications() {
 
       const res = await fetch('/api/push-subscription', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+          pragma: 'no-cache',
+        },
+        cache: 'no-store',
         body: JSON.stringify({ subscription }),
       });
 
@@ -124,7 +130,12 @@ export function usePushNotifications() {
         await subscription.unsubscribe();
         await fetch('/api/push-subscription', {
           method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+            pragma: 'no-cache',
+          },
+          cache: 'no-store',
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         });
       }

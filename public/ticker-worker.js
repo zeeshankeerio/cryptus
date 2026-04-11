@@ -78,7 +78,7 @@ function getSymbolAlias(symbol) {
   if (symbol === 'EURUSDT') return 'EUR/USD';
   if (symbol === 'GBPUSDT') return 'GBP/USD';
   if (symbol === 'AUDUSDT') return 'AUD/USD';
-  if (symbol === 'USDJPY') return 'USD/JPY';
+  if (symbol === 'USDJPY' || symbol === 'JPYUSDT') return 'USD/JPY';
   
   let clean = symbol.replace('USDT', '');
   if (clean.endsWith('USD') && clean.length > 3) clean = clean.replace('USD', '');
@@ -489,7 +489,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
 
   // ── Real-time Indicator Shadowing ──
   const state = rsiStates.get(t.s); 
-  const config = coinConfigs.get(t.s);
+  const config = coinConfigs.get(t.s) || {};
 
   // ── Live Candle & Volume Detector ──
   // Use synced open1m and volStart1m if candleState is fresh/not yet established
@@ -527,7 +527,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     avgVolume1m: state ? state.avgVolume1m : null
   };
 
-  if (state && config) {
+  if (state) {
     const r1mP = config.rsi1mPeriod || 14;
     const r5mP = config.rsi5mPeriod || 14;
     const r15mP = config.rsi15mPeriod || 14;
@@ -567,6 +567,14 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition = range > 0 ? (curC - state.bbLower) / range : 0.5;
     }
 
+    const strategyVolMult =
+      (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0)
+        ? config.volumeSpikeThreshold
+        : globalVolumeSpikeThreshold;
+    const liveVolumeSpike =
+      state.avgVolume1m > 0 &&
+      curCandleVol > state.avgVolume1m * strategyVolMult;
+
     const currentStrategy = computeWorkerStrategyScore({
       symbol: t.s,
       price: curC,
@@ -576,7 +584,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       stochK: state.stochK,
       stochD: state.stochD,
       vwapDiff: state.vwapDiff,
-      volumeSpike: state.volumeSpike,
+      volumeSpike: liveVolumeSpike || state.volumeSpike,
       emaCross,
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
@@ -584,17 +592,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       globalLongCandleThreshold,
       globalVolumeSpikeThreshold,
       globalVolatilityEnabled,
-      enabledIndicators: {
-        rsi: globalUseRsi,
-        macd: globalUseMacd,
-        bb: globalUseBb,
-        stoch: globalUseStoch,
-        ema: globalUseEma,
-        vwap: globalUseVwap,
-        confluence: globalUseConfluence,
-        divergence: globalUseDivergence,
-        momentum: globalUseMomentum
-      },
+      enabledIndicators: globalEnabledIndicators,
       globalSignalThresholdMode
     });
 
@@ -605,6 +603,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition,
       strategyScore: currentStrategy.score,
       strategySignal: currentStrategy.signal,
+      volumeSpike: liveVolumeSpike || state.volumeSpike,
       avgBarSize1m: state.avgBarSize1m,
       avgVolume1m: state.avgVolume1m
     });
@@ -613,9 +612,10 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     const candleMult = (config.longCandleThreshold != null && config.longCandleThreshold > 0) 
       ? config.longCandleThreshold 
       : (globalVolatilityEnabled ? globalLongCandleThreshold : 10);
-    const volMult = (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0) 
-      ? config.volumeSpikeThreshold 
+    const alertVolMult = (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0)
+      ? config.volumeSpikeThreshold
       : (globalVolatilityEnabled ? globalVolumeSpikeThreshold : 10);
+    
     const candleAlertEnabled = config.alertOnLongCandle || globalVolatilityEnabled;
     const volumeAlertEnabled = config.alertOnVolumeSpike || globalVolatilityEnabled;
     const candleDirection = curC >= candleState.open ? 'bullish' : 'bearish';
@@ -639,7 +639,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       }
     }
 
-    if (volumeAlertEnabled && state.avgVolume1m > 0 && curCandleVol > state.avgVolume1m * volMult) {
+    if (volumeAlertEnabled && state.avgVolume1m > 0 && curCandleVol > state.avgVolume1m * alertVolMult) {
       const alertKey = `${t.s}-VOLATILITY-VOLUME`;
       if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
         lastTriggered.set(alertKey, now);
@@ -1342,9 +1342,9 @@ function computeWorkerStrategyScore(params) {
     else if (params.vwapDiff > 2) score -= 40 * 0.5;
   }
 
-  if (enabled.confluence !== false && params.confluence) {
-    factors += 1;
-    score += (params.confluence === 'bullish' ? 50 : -50) * 1;
+  if (enabled.confluence !== false && typeof params.confluence === 'number' && Math.abs(params.confluence) >= 20) {
+    factors += 2;
+    score += params.confluence * 2;
   }
 
   if (enabled.divergence !== false && params.rsiDivergence && params.rsiDivergence !== 'none') {

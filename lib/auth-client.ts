@@ -1,6 +1,7 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
+import { stripeClient } from "@better-auth/stripe/client";
 
 function getAuthBaseURL(): string {
   // Client-side: always use the current browser origin — this is always correct
@@ -15,6 +16,11 @@ function getAuthBaseURL(): string {
 
 export const authClient = createAuthClient({
   baseURL: getAuthBaseURL(),
+  plugins: [
+    stripeClient({
+      subscription: true,
+    }),
+  ],
 });
 
 export const { signIn, signUp, signOut, useSession } = authClient;
