@@ -7,7 +7,10 @@ type Session = typeof auth.$Infer.Session;
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isPublicRoute = pathname === "/" || pathname.startsWith("/login") || pathname.startsWith("/register");
+  const publicPrefixes = ["/login", "/register", "/about", "/services", "/subscription"];
+  const isPublicRoute =
+    pathname === "/" ||
+    publicPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   // Check for session cookies with support for all common variations
   const hasSessionCookie =
