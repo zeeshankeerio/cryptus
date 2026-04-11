@@ -24,9 +24,14 @@ import {
   Download,
   Wifi,
   Star,
+  Building2,
+  MessageCircle,
+  Handshake,
+  ExternalLink,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
+import { MINDSCAPE_LINKS, withUTM } from '@/lib/mindscape-links';
 
 export default function LandingPage() {
   const { data: session, isPending } = useSession();
@@ -72,6 +77,11 @@ export default function LandingPage() {
             <a href="#features" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Features</a>
             <a href="#logic" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">The Logic</a>
             <a href="#mobile" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Mobile</a>
+            <a href="#services" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Services</a>
+            <a href="#about" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">About</a>
+            <a href="#connect" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Connect</a>
+            <Link href="/services" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Services Page</Link>
+            <Link href="/about" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">About Page</Link>
           </div>
 
           {/* Desktop CTA + Mobile Menu Toggle */}
@@ -106,6 +116,11 @@ export default function LandingPage() {
                 <a href="#features" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Features</a>
                 <a href="#logic" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">The Logic</a>
                 <a href="#mobile" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Mobile</a>
+                <a href="#services" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Services</a>
+                <a href="#about" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">About</a>
+                <a href="#connect" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Connect</a>
+                <Link href="/services" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Services Page</Link>
+                <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">About Page</Link>
                 <div className="my-2 border-t border-white/5" />
                 <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white hover:bg-white/5 transition-all">Login</Link>
                 <Link href="/register" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3.5 rounded-xl bg-[#39FF14] text-black text-[11px] font-black uppercase tracking-[0.2em] text-center mt-1">Start Free Trial</Link>
@@ -444,6 +459,109 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── Services Section ─── */}
+      <section id="services" className="py-20 sm:py-32 md:py-36 px-4 sm:px-6 border-t border-white/5 bg-[#060b14]">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.45em] text-[#39FF14]">Mindscape Services</p>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">Build More Than A Scanner</h2>
+            <p className="mt-4 text-sm sm:text-base text-slate-400 max-w-3xl mx-auto">
+              Turn RSIQ Pro into your growth engine with productized AI automation, SaaS engineering, and managed infrastructure from Mindscape Analytics.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+            <LeadServiceCard
+              icon={<Cpu size={18} />}
+              title="AI Agents & Voice"
+              desc="Automate lead qualification, customer response, and bookings with agentic AI + voice systems."
+              href={withUTM(MINDSCAPE_LINKS.aiGenAi, { content: 'landing_services_ai_voice' })}
+            />
+            <LeadServiceCard
+              icon={<Layers size={18} />}
+              title="SaaS Development"
+              desc="High-performance Next.js SaaS builds with enterprise auth, billing, and multi-tenant architecture."
+              href={withUTM(MINDSCAPE_LINKS.enterpriseSoftware, { content: 'landing_services_saas' })}
+            />
+            <LeadServiceCard
+              icon={<Activity size={18} />}
+              title="Cloud & Data Ops"
+              desc="Managed cloud hosting, query optimization, backup automation, and long-term reliability engineering."
+              href={withUTM(MINDSCAPE_LINKS.cloudInfrastructure, { content: 'landing_services_cloud_data' })}
+            />
+            <LeadServiceCard
+              icon={<Handshake size={18} />}
+              title="Automation Partnerships"
+              desc="Monthly build-operate-optimize plans for teams shipping automation quickly without in-house overhead."
+              href={withUTM(MINDSCAPE_LINKS.services, { content: 'landing_services_automation_partner' })}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── About Section ─── */}
+      <section id="about" className="py-20 sm:py-28 md:py-32 px-4 sm:px-6 border-t border-white/5 bg-white/[0.01]">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-stretch">
+          <div className="rounded-3xl border border-white/10 bg-[#0a0f1a] p-7 sm:p-10">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">About Mindscape</p>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Systems-First Engineering Partner</h3>
+            <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed">
+              Mindscape Analytics builds AI systems that replace manual work. From sales automation and voice AI to full SaaS platforms and cloud operations, the team focuses on measurable business outcomes, not feature clutter.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">40-70% Cost Reduction</span>
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">24/7 Operations</span>
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Long-Term Managed Support</span>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[#39FF14]/30 bg-[#101a12] p-7 sm:p-10">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Lead Actions</p>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Turn Interest Into Projects</h3>
+            <p className="mt-5 text-sm sm:text-base text-slate-300 leading-relaxed">
+              Running RSIQ Pro and need custom workflows, client automation, or white-label SaaS delivery? Use direct Mindscape channels below to open a strategy call or request a proposal.
+            </p>
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <a
+                href={withUTM(MINDSCAPE_LINKS.whatsappStrategyCall, { content: 'landing_about_strategy_call' })}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#39FF14] text-black text-[11px] font-black uppercase tracking-[0.2em]"
+              >
+                <MessageCircle size={15} /> Book Strategy Call
+              </a>
+              <a
+                href={withUTM(MINDSCAPE_LINKS.contact, { content: 'landing_about_request_proposal' })}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/20 text-slate-100 text-[11px] font-black uppercase tracking-[0.2em]"
+              >
+                <Building2 size={15} /> Request Proposal
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Connect Section ─── */}
+      <section id="connect" className="py-16 sm:py-20 px-4 sm:px-6 border-t border-white/5 bg-[#05080F]">
+        <div className="max-w-7xl mx-auto rounded-3xl border border-white/10 bg-[#0a0f1a] p-6 sm:p-8 md:p-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Mindscape Analytics Connection</p>
+              <h3 className="mt-3 text-2xl sm:text-3xl font-black text-white tracking-tight">Lead Pipeline Links</h3>
+              <p className="mt-3 text-sm text-slate-400">Direct channels for SaaS builds, automation projects, managed cloud, and AI deployment engagements.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto">
+              <a href={withUTM(MINDSCAPE_LINKS.about, { content: 'landing_connect_about' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">About <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.services, { content: 'landing_connect_services' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">Services <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.projects, { content: 'landing_connect_case_studies' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">Case Studies <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.linkedin, { content: 'landing_connect_linkedin' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">LinkedIn <ExternalLink size={14} /></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ─── Final CTA ─── */}
       <section className="py-28 sm:py-40 md:py-60 px-4 sm:px-6 relative overflow-hidden bg-gradient-to-b from-transparent to-[#0A0E17]">
         <div className="absolute inset-0 bg-[#39FF14]/[0.02] [mask-image:radial-gradient(circle_at_center,black,transparent)] pointer-events-none" />
@@ -458,6 +576,14 @@ export default function LandingPage() {
               Create Your Terminal
               <ArrowUpRight size={18} className="inline ml-2 sm:ml-3 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
             </Link>
+            <a
+              href={withUTM(MINDSCAPE_LINKS.whatsappStrategyCall, { content: 'landing_final_cta_strategy_call' })}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto px-10 sm:px-10 py-5 sm:py-6 rounded-2xl border border-white/20 text-white font-black uppercase tracking-[0.2em] text-xs text-center"
+            >
+              Book Automation Call
+            </a>
           </div>
           <div className="pt-20 sm:pt-40 opacity-20 flex flex-col items-center gap-3 sm:gap-4">
             <span className="text-base sm:text-xl font-black text-white">MINDSCAPE ANALYTICS LLC</span>
@@ -523,6 +649,39 @@ function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: stri
       </div>
       <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-3 sm:mb-5 relative z-10">{title}</h3>
       <p className="text-slate-500 text-sm font-medium leading-relaxed relative z-10 group-hover:text-slate-400 transition-colors">{desc}</p>
+    </motion.div>
+  );
+}
+
+function LeadServiceCard({
+  icon,
+  title,
+  desc,
+  href,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  href: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -6 }}
+      className="rounded-3xl border border-white/10 bg-[#0a0f1a] p-6 sm:p-7 flex flex-col"
+    >
+      <div className="w-11 h-11 rounded-xl border border-[#39FF14]/30 bg-[#39FF14]/10 text-[#39FF14] flex items-center justify-center">
+        {icon}
+      </div>
+      <h3 className="mt-5 text-xl font-black tracking-tight text-white">{title}</h3>
+      <p className="mt-3 text-sm text-slate-400 leading-relaxed flex-1">{desc}</p>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-6 inline-flex items-center gap-2 text-[#39FF14] text-[11px] font-black uppercase tracking-[0.2em]"
+      >
+        Explore Service <ArrowUpRight size={14} />
+      </a>
     </motion.div>
   );
 }
