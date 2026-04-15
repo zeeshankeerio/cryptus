@@ -287,7 +287,7 @@ export function useAlertEngine(
   }, [resumeAudioContext]);
 
   // ── Audio: Play enterprise chime (with background fallback) ──
-  const playAlertSound = useCallback(async (isVolatility = false) => {
+  const playAlertSound = useCallback(async (isVolatility = false, priority: AlertPriority = 'medium') => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
       if (!audioCtxRef.current) {
@@ -349,18 +349,24 @@ export function useAlertEngine(
 
       const now = ctx.currentTime;
 
-      if (isVolatility) {
-        // High-tension alert for volatility (Rapid staccato)
-        playTone(2093.00, now, 0.1, 0.08, 'square');
-        playTone(2093.00, now + 0.12, 0.1, 0.08, 'square');
-        playTone(2093.00, now + 0.24, 0.3, 0.1, 'sine');
+      if (isVolatility || priority === 'critical') {
+        // High-tension alert for volatility or critical priority (Rapid staccato)
+        const baseFreq = priority === 'critical' ? 2637.02 : 2093.00; // E7 for critical, C7 for volatility
+        playTone(baseFreq, now, 0.1, 0.1, 'square');
+        playTone(baseFreq, now + 0.12, 0.1, 0.1, 'square');
+        playTone(baseFreq, now + 0.24, 0.4, 0.12, 'square');
+        if (priority === 'critical') {
+            playTone(baseFreq * 1.5, now + 0.4, 0.6, 0.08, 'sine'); // Adding a sharp 5th for critical
+        }
       } else {
         // Elite Enterprise "Harmonic Bloom"
-        playTone(1046.50, now, 0.7, 0.1, 'sine');        // C6 (Primary)
-        playTone(1318.51, now + 0.08, 0.6, 0.07, 'sine'); // E6 (Bright)
-        playTone(1567.98, now + 0.16, 0.5, 0.05, 'sine'); // G6 (High)
-        playTone(523.25, now, 1.0, 0.04, 'sine');         // C5 (Warm Bed)
-        playTone(2093.00, now + 0.24, 0.4, 0.03, 'sine');  // C7 (Airy finish)
+        // Adjust volume based on priority
+        const volMult = priority === 'high' ? 1.5 : (priority === 'low' ? 0.6 : 1.0);
+        playTone(1046.50, now, 0.7, 0.1 * volMult, 'sine');        // C6 (Primary)
+        playTone(1318.51, now + 0.08, 0.6, 0.07 * volMult, 'sine'); // E6 (Bright)
+        playTone(1567.98, now + 0.16, 0.5, 0.05 * volMult, 'sine'); // G6 (High)
+        playTone(523.25, now, 1.0, 0.04 * volMult, 'sine');         // C5 (Warm Bed)
+        playTone(2093.00, now + 0.24, 0.4, 0.03 * volMult, 'sine');  // C7 (Airy finish)
       }
 
     } catch (e) {
@@ -699,10 +705,13 @@ export function useAlertEngine(
                 if (document.visibilityState === 'visible') {
                   toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
                     `${getSymbolAlias(symbol)} ${label} RSI ${currentZone}${isGlobalAlert ? ' [Global]' : ''}`,
-                    { duration: 8000, description: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]` }
+                    { 
+                      duration: behavior.toastDuration, 
+                      description: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]` 
+                    }
                   );
                 }
-                playAlertSoundRef.current();
+                playAlertSoundRef.current(false, alertPriority);
                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
                 
                 triggerNativeRef.current(
@@ -747,13 +756,19 @@ export function useAlertEngine(
                 lastTriggered.current.set(alertKey, now);
                 const isBuy = currentStrat === 'strong-buy';
                 const priceStr = formatPrice(live.price);
+                const alertPriority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
+                const behavior = getAlertBehavior(alertPriority);
+                
                 if (document.visibilityState === 'visible') {
                   toast[isBuy ? 'success' : 'error'](
                     `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
-                    { duration: 8000, description: `Strategy Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}` }
+                    { 
+                      duration: behavior.toastDuration, 
+                      description: `Strategy Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}` 
+                    }
                   );
                 }
-                playAlertSoundRef.current();
+                playAlertSoundRef.current(false, alertPriority);
                 logAlertRef.current({
                   symbol,
                   exchange: getExchange(),
@@ -815,7 +830,6 @@ export function useAlertEngine(
           lastTriggered.current.set(alertKey, now);
           alertCoordinator.setCooldown(coordinatorKey);
 
-          const isVolatility = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
           const isStrat = timeframe === 'STRATEGY';
           const alias = getSymbolAlias(symbol);
           const exchangeLabel = exchange ? ` [${exchange.charAt(0).toUpperCase() + exchange.slice(1)}]` : '';
@@ -844,14 +858,22 @@ export function useAlertEngine(
                : `RSI: ${value.toFixed(1)} ${priceStr ? `@ $${priceStr}` : ''}`;
           }
 
+          const alertPriority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
+          const behavior = getAlertBehavior(alertPriority);
+
           if (document.visibilityState === 'visible') {
-            toast[type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || isVolatility ? 'success' : 'error'](
+            const isPositive = type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || isVolatility;
+            
+            toast[isPositive ? 'success' : 'error'](
               title,
-              { duration: 8000, description: desc }
+              { 
+                duration: behavior.toastDuration, 
+                description: desc 
+              }
             );
           }
 
-          playAlertSoundRef.current(isVolatility);
+          playAlertSoundRef.current(isVolatility, alertPriority);
           logAlertRef.current({ symbol, exchange, timeframe, value, type: type as Alert['type'] });
           triggerNativeRef.current(title, desc);
         }

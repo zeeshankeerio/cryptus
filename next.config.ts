@@ -18,14 +18,19 @@ const withPWA = withPWAInit({
     skipWaiting: true,
     clientsClaim: true,
     navigateFallback: '/offline',
-    navigateFallbackDenylist: [/^\/api/, /^\/login/, /^\/register/, /^\/auth/],
+    // 2026 Resilience: Ensure subresources (JS/CSS) never fallback to HTML shell
+    navigateFallbackDenylist: [/^\/api/, /^\/login/, /^\/register/, /^\/auth/, /\.js$/, /\.css$/, /\.png$/, /\.jpg$/],
+    
+    // Performance: Don't cache-bust fingerprinted assets (they are immutable)
+    dontCacheBustURLsMatching: /\.[0-9a-f]{8}\./,
+
     runtimeCaching: [
       {
         urlPattern: /^https:\/\/fonts\.googleapis\.com/,
         handler: 'CacheFirst',
         options: {
           cacheName: 'google-fonts-stylesheets',
-          expiration: { maxAgeSeconds: 604800 }, // 1 week
+          expiration: { maxAgeSeconds: 604800 },
         },
       },
       {
@@ -33,7 +38,15 @@ const withPWA = withPWAInit({
         handler: 'CacheFirst',
         options: {
           cacheName: 'google-fonts-webfonts',
-          expiration: { maxAgeSeconds: 31536000 }, // 1 year
+          expiration: { maxAgeSeconds: 31536000 },
+        },
+      },
+      // Hardened Static Assets Strategy
+      {
+        urlPattern: /\.(?:js|css|woff2?)$/,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'static-resources',
         },
       },
     ],
@@ -57,6 +70,7 @@ const nextConfig: NextConfig = {
         source: "/(manifest.json|sw.js|offline)",
         headers: [
           { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+          // Force correct types for PWA core files
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
         ],

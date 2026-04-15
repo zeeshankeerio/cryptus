@@ -11,6 +11,8 @@ import {
   LogOut, User as UserIcon, Minus, Plus
 } from 'lucide-react';
 import { useSession, signOut } from '@/lib/auth-client';
+import { AUTH_CONFIG } from '@/lib/config';
+import { UserProfileDropdown } from './user-profile-dropdown';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -128,12 +130,17 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
 function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
   if (!market || market === 'Crypto') return null;
   const styles: Record<string, string> = {
-    Metal: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-    Forex: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-    Index: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    Metal: 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_5px_rgba(245,158,11,0.1)]',
+    Forex: 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_5px_rgba(59,130,246,0.1)]',
+    Index: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[0_0_5px_rgba(99,102,241,0.1)]',
+    // 2026 Resilience: Dynamic support for Global Indices
+    FTSE: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    DAX: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    DOW: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    NKY: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
   };
   return (
-    <span className={cn("px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.2em] rounded-sm border shrink-0 shadow-sm", styles[market])}>
+    <span className={cn("px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.2em] rounded-sm border shrink-0 shadow-sm transition-colors", styles[market] || styles['Index'])}>
       {market}
     </span>
   );
@@ -335,9 +342,9 @@ const ScreenerRow = memo(function ScreenerRow({
       strategyLabel: tick.strategyScore !== undefined
         ? (tick.strategyScore >= 50 ? 'Strong Buy'
           : tick.strategyScore >= 20 ? 'Buy'
-          : tick.strategyScore <= -50 ? 'Strong Sell'
-          : tick.strategyScore <= -20 ? 'Sell'
-          : 'Neutral')
+            : tick.strategyScore <= -50 ? 'Strong Sell'
+              : tick.strategyScore <= -20 ? 'Sell'
+                : 'Neutral')
         : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
@@ -572,7 +579,10 @@ const ScreenerRow = memo(function ScreenerRow({
         </td>
       )}
       {visibleCols.has('emaCross') && (
-        <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] font-black uppercase transition-opacity duration-300",
+          !globalUseEma && "opacity-20 grayscale"
+        )}>
           {display.emaCross !== 'none' && (
             <span className={cn(
               "px-2 py-1 rounded border",
@@ -589,7 +599,8 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('macdHistogram') && (
         <td className={cn(
-          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono",
+          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono transition-opacity duration-300",
+          !globalUseMacd && "opacity-20 grayscale",
           display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
           {formatNum(display.macdHistogram, 4)}
@@ -615,15 +626,19 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('bbPosition') && (
         <td className={cn(
-          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          !globalUseBb || display.bbPosition === null ? "text-slate-700" : display.bbPosition < 0.2 ? "text-[#39FF14]" : display.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
+          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono transition-opacity duration-300",
+          !globalUseBb && "opacity-20 grayscale",
+          display.bbPosition === null ? "text-slate-700" : display.bbPosition < 0.2 ? "text-[#39FF14]" : display.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
         )}>
           {globalUseBb ? formatNum(display.bbPosition) : '—'}
         </td>
       )}
 
       {visibleCols.has('stochK') && (
-        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono">
+        <td className={cn(
+          "px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono transition-opacity duration-300",
+          !globalUseStoch && "opacity-20 grayscale"
+        )}>
           {globalUseStoch ? (
             <>
               <span className={getRsiColor(display.stochK)}>{formatRsi(display.stochK)}</span>
@@ -651,8 +666,9 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('vwapDiff') && (
         <td className={cn(
-          "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono",
-            display.vwapDiff === null ? "text-slate-700" : display.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+          "px-3 py-4 text-right text-xs tabular-nums font-bold font-mono transition-opacity duration-300",
+          !globalUseVwap && "opacity-20 grayscale",
+          display.vwapDiff === null ? "text-slate-700" : display.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
         )}>
           {globalUseVwap ? formatPct(display.vwapDiff) : '—'}
         </td>
@@ -669,9 +685,9 @@ const ScreenerRow = memo(function ScreenerRow({
                 <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
               )}
               {(display.curCandleSize / display.avgBarSize1m) >= (globalLongCandleThreshold * 0.8) && (
-                 <span className={cn("text-[8px]", display.candleDirection === 'bullish' ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-                   {display.candleDirection === 'bullish' ? '🟢' : '🔴'}
-                 </span>
+                <span className={cn("text-[8px]", display.candleDirection === 'bullish' ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                  {display.candleDirection === 'bullish' ? '🟢' : '🔴'}
+                </span>
               )}
               <span>{Number.isFinite(display.curCandleSize / display.avgBarSize1m) ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '0.0x'}</span>
             </div>
@@ -696,8 +712,9 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('momentum') && (
         <td className={cn(
-          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono",
-          !globalUseMomentum || display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
+          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono transition-opacity duration-300",
+          !globalUseMomentum && "opacity-20 grayscale",
+          display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
         )}>
           {globalUseMomentum ? formatPct(display.momentum) : '—'}
         </td>
@@ -1209,9 +1226,9 @@ const ScreenerCard = memo(function ScreenerCard({
       strategyLabel: tick.strategyScore !== undefined
         ? (tick.strategyScore >= 50 ? 'Strong Buy'
           : tick.strategyScore >= 20 ? 'Buy'
-          : tick.strategyScore <= -50 ? 'Strong Sell'
-          : tick.strategyScore <= -20 ? 'Sell'
-          : 'Neutral')
+            : tick.strategyScore <= -50 ? 'Strong Sell'
+              : tick.strategyScore <= -20 ? 'Sell'
+                : 'Neutral')
         : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
       lastPriceChange: tick.tickDelta || 0,
@@ -1546,6 +1563,8 @@ export default function ScreenerDashboard() {
   const router = useRouter();
   const { data: session } = useSession();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileRef = useRef<HTMLDivElement>(null);
 
   // ── Theme State ──
   const smartModeDefault = process.env.NEXT_PUBLIC_SMART_MODE_DEFAULT !== '0';
@@ -1626,6 +1645,44 @@ export default function ScreenerDashboard() {
 
   // Use a refined mount-aware hydration strategy for client-only defaults
   const [hasMounted, setHasMounted] = useState(false);
+  
+  const handleSignOut = async () => {
+    setIsLoggingOut(true);
+    try {
+      await signOut({
+        fetchOptions: {
+          onSuccess: () => {
+            router.push('/login');
+            // Hard reload safety for institutional lag
+            if (typeof window !== 'undefined') {
+              setTimeout(() => { window.location.href = '/login'; }, 500);
+            }
+          }
+        }
+      });
+    } catch (e) {
+      if (typeof window !== 'undefined') window.location.href = '/login';
+    }
+  };
+
+  const isOwner = session?.user?.email === AUTH_CONFIG.SUPER_ADMIN_EMAIL || (session?.user as any)?.role === 'owner' || (session?.user as any)?.role === 'admin';
+
+  useEffect(() => {
+    setHasMounted(true);
+    
+    // User Profile Click-Outside Orchestration
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isProfileOpen]);
 
   useEffect(() => {
     setHasMounted(true);
@@ -1810,15 +1867,15 @@ export default function ScreenerDashboard() {
     return new Set(['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'ADAUSDT', 'AVAXUSDT']);
   }, [data]);
   const liveThrottleMs = pairCount <= 100 ? 120 : pairCount <= 300 ? 220 : 320;
-  const { 
-    livePrices, 
-    isConnected, 
-    isMaster, 
-    syncStates: baseSyncStates, 
-    exchange, 
-    setExchange, 
-    updateSymbols, 
-    postToWorker 
+  const {
+    livePrices,
+    isConnected,
+    isMaster,
+    syncStates: baseSyncStates,
+    exchange,
+    setExchange,
+    updateSymbols,
+    postToWorker
   } = useLivePrices(symbolSet, liveThrottleMs);
 
   const syncStates = useCallback((p: any) => {
@@ -1832,7 +1889,7 @@ export default function ScreenerDashboard() {
       globalSignalThresholdMode
     });
   }, [
-    baseSyncStates, globalVolatilityEnabled, globalThresholdsEnabled, 
+    baseSyncStates, globalVolatilityEnabled, globalThresholdsEnabled,
     globalOverbought, globalOversold, globalThresholdTimeframes, globalSignalThresholdMode
   ]);
 
@@ -1926,8 +1983,8 @@ export default function ScreenerDashboard() {
       return merged;
     });
   }, [
-    data, livePrices, rsiPeriod, 
-    globalShowSignalTags, globalUseRsi, globalSignalThresholdMode, 
+    data, livePrices, rsiPeriod,
+    globalShowSignalTags, globalUseRsi, globalSignalThresholdMode,
     coinConfigs, globalThresholdsEnabled, globalOverbought, globalOversold
   ]);
 
@@ -1988,9 +2045,9 @@ export default function ScreenerDashboard() {
           volStart1m: entry.volStart1m
         };
       });
-      syncStates({ 
-        configs: coinConfigs, 
-        rsiStates: states, 
+      syncStates({
+        configs: coinConfigs,
+        rsiStates: states,
         alertsEnabled,
         globalThresholdsEnabled,
         globalLongCandleThreshold,
@@ -2013,9 +2070,9 @@ export default function ScreenerDashboard() {
     return () => clearTimeout(timer);
   }, [
     processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker,
-    globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma, 
+    globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
-    alertsEnabled, globalThresholdsEnabled, globalLongCandleThreshold, 
+    alertsEnabled, globalThresholdsEnabled, globalLongCandleThreshold,
     globalVolumeSpikeThreshold, globalVolatilityEnabled, globalShowSignalTags,
     globalSignalThresholdMode, globalOverbought, globalOversold
   ]);
@@ -2023,9 +2080,9 @@ export default function ScreenerDashboard() {
   // Removed old duplicate processedData block
 
   const { alerts, clearAlertHistory, resumeAudioContext } = useAlertEngine(
-    processedData, 
-    coinConfigs, 
-    alertsEnabled, 
+    processedData,
+    coinConfigs,
+    alertsEnabled,
     soundEnabled,
     globalThresholdsEnabled,
     globalOverbought,
@@ -2883,27 +2940,32 @@ export default function ScreenerDashboard() {
                     <span>Mindscape Analytics LLC</span>
                   </div>
                   {session && (
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-1 group/auth transition-all hover:bg-white/10">
-                      <div className="w-4 h-4 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
-                        <UserIcon size={10} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-300 pr-1 truncate">
-                        {session.user.name || session.user.email}
-                      </span>
-                      <button
-                        onClick={async () => {
-                          setIsLoggingOut(true);
-                          await signOut({
-                            fetchOptions: {
-                              onSuccess: () => { router.push('/login'); }
-                            }
-                          });
-                        }}
-                        disabled={isLoggingOut}
-                        className="p-1 rounded-full hover:bg-[#FF4B5C]/20 text-slate-400 hover:text-[#FF4B5C] transition-colors"
+                    <div className="relative" ref={profileRef}>
+                      <button 
+                        onClick={() => setIsProfileOpen(!isProfileOpen)}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-1 group/auth transition-all hover:bg-white/10 active:scale-95"
                       >
-                        <LogOut size={10} />
+                        <div className="w-4 h-4 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
+                          <UserIcon size={10} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
+                        </div>
+                        <span className="text-[9px] font-bold text-slate-300 pr-1 truncate max-w-[100px]">
+                          {session.user.name || session.user.email}
+                        </span>
+                        <ChevronDown size={8} className={cn("text-slate-500 transition-transform", isProfileOpen && "rotate-180")} />
                       </button>
+
+                      <AnimatePresence>
+                        {isProfileOpen && (
+                          <UserProfileDropdown 
+                            session={session} 
+                            isOwner={isOwner} 
+                            onLogout={handleSignOut} 
+                            isLoggingOut={isLoggingOut}
+                            onClose={() => setIsProfileOpen(false)}
+                            onShowGlobalSettings={() => setShowGlobalSettings(true)}
+                          />
+                        )}
+                      </AnimatePresence>
                     </div>
                   )}
                 </div>
@@ -2912,9 +2974,9 @@ export default function ScreenerDashboard() {
 
               <Link href="/" className="inline-block mt-3 hover:opacity-80 transition-opacity">
                 <div className="relative w-[180px] h-[45px]">
-                  <Image 
-                    src="/logo/rsiq-mindscapeanalytics.png" 
-                    alt="RSIQ Pro" 
+                  <Image
+                    src="/logo/rsiq-mindscapeanalytics.png"
+                    alt="RSIQ Pro"
                     fill
                     className="object-contain"
                   />
@@ -2960,13 +3022,13 @@ export default function ScreenerDashboard() {
                   >
                     <Zap size={14} fill={soundEnabled ? "currentColor" : "none"} />
                   </motion.button>
-                  <motion.button 
-                    onClick={() => setShowAlertPanel(!showAlertPanel)} 
-                    whileTap={{ scale: 0.9 }} 
+                  <motion.button
+                    onClick={() => setShowAlertPanel(!showAlertPanel)}
+                    whileTap={{ scale: 0.9 }}
                     className={cn(
                       "w-9 h-9 rounded-xl border flex items-center justify-center shadow-sm transition-all",
-                      showAlertPanel 
-                        ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" 
+                      showAlertPanel
+                        ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]"
                         : "border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5"
                     )}
                   >
@@ -3037,14 +3099,14 @@ export default function ScreenerDashboard() {
                 </div>
 
                 {isMaster && (
-                   <motion.div 
+                  <motion.div
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     className="inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/30 bg-gradient-to-r from-[#39FF14]/20 to-transparent px-3 py-2 shadow-[0_0_20px_rgba(57,255,20,0.1)] backdrop-blur-md"
-                   >
-                     <ShieldCheck size={12} className="text-[#39FF14] animate-pulse" />
-                     <span className="font-black tracking-widest uppercase text-[9px] text-white">Master Hub</span>
-                   </motion.div>
+                  >
+                    <ShieldCheck size={12} className="text-[#39FF14] animate-pulse" />
+                    <span className="font-black tracking-widest uppercase text-[9px] text-white">Master Hub</span>
+                  </motion.div>
                 )}
 
                 <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-slate-400">
@@ -3093,9 +3155,9 @@ export default function ScreenerDashboard() {
             <div className="flex items-center justify-between">
               <Link href="/" className="flex items-center gap-3 active:scale-95 transition-transform">
                 <div className="relative w-28 h-8">
-                  <Image 
-                    src="/logo/rsiq-mindscapeanalytics.png" 
-                    alt="RSIQ Pro" 
+                  <Image
+                    src="/logo/rsiq-mindscapeanalytics.png"
+                    alt="RSIQ Pro"
                     fill
                     className="object-contain"
                   />
@@ -3122,31 +3184,31 @@ export default function ScreenerDashboard() {
                   </div>
                 </div>
               </Link>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 relative" ref={isMobile ? profileRef : null}>
                 {session && (
-                  <button
-                    onClick={async () => {
-                      setIsLoggingOut(true);
-                      try {
-                        await signOut({ 
-                          fetchOptions: { 
-                            onSuccess: () => {
-                              router.push('/login');
-                              // Force reload if router push is sluggish on some mobile devices
-                              setTimeout(() => { window.location.href = '/login'; }, 500);
-                            } 
-                          } 
-                        });
-                      } catch (e) {
-                        window.location.href = '/login';
-                      }
-                    }}
-                    disabled={isLoggingOut}
-                    className="w-10 h-10 rounded-2xl bg-[#FF4B5C]/10 border border-[#FF4B5C]/20 flex items-center justify-center shadow-lg active:scale-90 transition-all text-[#FF4B5C]"
-                    title="Logout"
-                  >
-                    <LogOut size={18} className={cn(isLoggingOut && "animate-spin")} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => setIsProfileOpen(!isProfileOpen)}
+                      className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-lg active:scale-90 transition-all text-slate-400"
+                      title="Profile"
+                    >
+                      <UserIcon size={18} />
+                    </button>
+                    
+                    <AnimatePresence>
+                      {isProfileOpen && (
+                        <UserProfileDropdown 
+                          session={session} 
+                          isOwner={isOwner} 
+                          onLogout={handleSignOut} 
+                          isLoggingOut={isLoggingOut}
+                          onClose={() => setIsProfileOpen(false)}
+                          onShowGlobalSettings={() => setShowGlobalSettings(true)}
+                          isMobile
+                        />
+                      )}
+                    </AnimatePresence>
+                  </>
                 )}
               </div>
             </div>
@@ -3194,13 +3256,13 @@ export default function ScreenerDashboard() {
                 >
                   <Zap size={14} fill={soundEnabled ? "currentColor" : "none"} />
                 </motion.button>
-                <motion.button 
-                  onClick={() => setShowAlertPanel(!showAlertPanel)} 
-                  whileTap={{ scale: 0.9 }} 
+                <motion.button
+                  onClick={() => setShowAlertPanel(!showAlertPanel)}
+                  whileTap={{ scale: 0.9 }}
                   className={cn(
                     "w-9 h-9 rounded-xl border flex items-center justify-center relative transition-all",
-                    showAlertPanel 
-                      ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" 
+                    showAlertPanel
+                      ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]"
                       : "border-transparent bg-transparent text-slate-500 hover:bg-white/5"
                   )}
                 >
@@ -3989,32 +4051,32 @@ function CoinSettingsModal({
           <div className="p-3 sm:p-6 space-y-3 sm:space-y-4">
             {/* RSI Periods Grid - Consolidated for Vertical Efficiency */}
             <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
-              <NumericAdjuster 
-                label="RSI 1m Period" 
-                value={config.rsi1mPeriod} 
-                onChange={(v: number) => setConfig({ ...config, rsi1mPeriod: v })} 
-                min={2} max={50} 
+              <NumericAdjuster
+                label="RSI 1m Period"
+                value={config.rsi1mPeriod}
+                onChange={(v: number) => setConfig({ ...config, rsi1mPeriod: v })}
+                min={2} max={50}
                 loading={loading}
               />
-              <NumericAdjuster 
-                label="RSI 5m Period" 
-                value={config.rsi5mPeriod} 
-                onChange={(v: number) => setConfig({ ...config, rsi5mPeriod: v })} 
-                min={2} max={50} 
+              <NumericAdjuster
+                label="RSI 5m Period"
+                value={config.rsi5mPeriod}
+                onChange={(v: number) => setConfig({ ...config, rsi5mPeriod: v })}
+                min={2} max={50}
                 loading={loading}
               />
-              <NumericAdjuster 
-                label="RSI 15m Period" 
-                value={config.rsi15mPeriod} 
-                onChange={(v: number) => setConfig({ ...config, rsi15mPeriod: v })} 
-                min={2} max={50} 
+              <NumericAdjuster
+                label="RSI 15m Period"
+                value={config.rsi15mPeriod}
+                onChange={(v: number) => setConfig({ ...config, rsi15mPeriod: v })}
+                min={2} max={50}
                 loading={loading}
               />
-              <NumericAdjuster 
-                label="RSI 1h Period" 
-                value={config.rsi1hPeriod} 
-                onChange={(v: number) => setConfig({ ...config, rsi1hPeriod: v })} 
-                min={2} max={50} 
+              <NumericAdjuster
+                label="RSI 1h Period"
+                value={config.rsi1hPeriod}
+                onChange={(v: number) => setConfig({ ...config, rsi1hPeriod: v })}
+                min={2} max={50}
                 loading={loading}
               />
             </div>
@@ -4023,23 +4085,23 @@ function CoinSettingsModal({
 
             {/* Thresholds Grid */}
             <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
-              <NumericAdjuster 
-                label="Overbought" 
-                value={config.overboughtThreshold} 
-                onChange={(v: number) => setConfig({ ...config, overboughtThreshold: v })} 
-                colorClass="text-[#FF4B5C]" 
-                bgClass="bg-[#722f37]/10" 
-                borderClass="border-[#722f37]/30" 
+              <NumericAdjuster
+                label="Overbought"
+                value={config.overboughtThreshold}
+                onChange={(v: number) => setConfig({ ...config, overboughtThreshold: v })}
+                colorClass="text-[#FF4B5C]"
+                bgClass="bg-[#722f37]/10"
+                borderClass="border-[#722f37]/30"
                 description="Sell Zone"
                 loading={loading}
               />
-              <NumericAdjuster 
-                label="Oversold" 
-                value={config.oversoldThreshold} 
-                onChange={(v: number) => setConfig({ ...config, oversoldThreshold: v })} 
-                colorClass="text-[#39FF14]" 
-                bgClass="bg-[#39FF14]/10" 
-                borderClass="border-[#39FF14]/30" 
+              <NumericAdjuster
+                label="Oversold"
+                value={config.oversoldThreshold}
+                onChange={(v: number) => setConfig({ ...config, oversoldThreshold: v })}
+                colorClass="text-[#39FF14]"
+                bgClass="bg-[#39FF14]/10"
+                borderClass="border-[#39FF14]/30"
                 description="Buy Zone"
                 loading={loading}
               />
@@ -4066,24 +4128,24 @@ function CoinSettingsModal({
 
             {/* Volatility Thresholds */}
             <div className="grid grid-cols-2 gap-1.5 sm:gap-4">
-              <NumericAdjuster 
-                label="Long Candle" 
-                value={config.longCandleThreshold} 
-                onChange={(v: number) => setConfig({ ...config, longCandleThreshold: v })} 
-                colorClass="text-amber-400" 
-                bgClass="bg-amber-400/10" 
-                borderClass="border-amber-400/30" 
+              <NumericAdjuster
+                label="Long Candle"
+                value={config.longCandleThreshold}
+                onChange={(v: number) => setConfig({ ...config, longCandleThreshold: v })}
+                colorClass="text-amber-400"
+                bgClass="bg-amber-400/10"
+                borderClass="border-amber-400/30"
                 description="Size Multiplier"
                 min={2} max={50}
                 loading={loading}
               />
-              <NumericAdjuster 
-                label="Vol Spike" 
-                value={config.volumeSpikeThreshold} 
-                onChange={(v: number) => setConfig({ ...config, volumeSpikeThreshold: v })} 
-                colorClass="text-[#39FF14]" 
-                bgClass="bg-[#39FF14]/10" 
-                borderClass="border-[#39FF14]/30" 
+              <NumericAdjuster
+                label="Vol Spike"
+                value={config.volumeSpikeThreshold}
+                onChange={(v: number) => setConfig({ ...config, volumeSpikeThreshold: v })}
+                colorClass="text-[#39FF14]"
+                bgClass="bg-[#39FF14]/10"
+                borderClass="border-[#39FF14]/30"
                 description="Vol Multiplier"
                 min={2} max={50}
                 loading={loading}
@@ -4097,7 +4159,7 @@ function CoinSettingsModal({
               <label className="text-[7px] font-black uppercase tracking-widest text-slate-400 ml-0.5 flex items-center gap-1.5">
                 <Flame size={10} className="text-orange-400" /> Alert Priority & Sound
               </label>
-              
+
               <div className="grid grid-cols-2 gap-2">
                 {/* Priority Selection */}
                 <div className="space-y-1.5">
@@ -4213,14 +4275,14 @@ function CoinSettingsModal({
             {/* 2026 Intelligent 24/7 Background Push - HIGH VISIBILITY POSITION */}
             <div className={cn(
               "p-3 rounded-2xl border transition-all relative overflow-hidden group/push",
-              pushStatus === 'active' 
-                ? "bg-[#39FF14]/[0.08] border-[#39FF14]/30 shadow-[0_0_25px_-5px_#39FF1444]" 
+              pushStatus === 'active'
+                ? "bg-[#39FF14]/[0.08] border-[#39FF14]/30 shadow-[0_0_25px_-5px_#39FF1444]"
                 : "bg-white/[0.02] border-white/5 shadow-inner"
             )}>
               <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover/push:opacity-[0.1] transition-opacity duration-500">
                 <Zap size={32} className="text-[#39FF14]" />
               </div>
-              
+
               <div className="flex flex-col mb-2">
                 <span className={cn(
                   "text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5",
@@ -4233,7 +4295,7 @@ function CoinSettingsModal({
                   Smart Wake: Alerts arrive via Web Push even if app is closed.
                 </span>
               </div>
-              
+
               <button
                 onClick={togglePush}
                 disabled={pushLoading}
@@ -4373,7 +4435,7 @@ const NumericAdjuster = memo(({
     // Only allow digits
     const cleaned = val.replace(/[^0-9]/g, '');
     setLocalValue(cleaned);
-    
+
     // Auto-commit if it's a valid number within bounds
     const parsed = parseInt(cleaned);
     if (!isNaN(parsed) && parsed >= min && parsed <= max) {
@@ -4907,14 +4969,14 @@ function GlobalSettingsModal({
               {/* 2026 Intelligent 24/7 Background Push (Global Access) */}
               <div className={cn(
                 "p-4 rounded-2xl border transition-all relative overflow-hidden group/push",
-                pushStatus === 'active' 
-                  ? "bg-[#39FF14]/[0.08] border-[#39FF14]/30 shadow-[0_0_25px_-5px_#39FF1444]" 
+                pushStatus === 'active'
+                  ? "bg-[#39FF14]/[0.08] border-[#39FF14]/30 shadow-[0_0_25px_-5px_#39FF1444]"
                   : "bg-white/[0.02] border-white/5 shadow-inner"
               )}>
                 <div className="absolute top-0 right-0 p-3 opacity-[0.03] group-hover/push:opacity-[0.1] transition-opacity duration-500">
                   <Zap size={32} className="text-[#39FF14]" />
                 </div>
-                
+
                 <div className="flex flex-col mb-2">
                   <span className={cn(
                     "text-[10px] font-black uppercase tracking-widest flex items-center gap-2",
@@ -4927,7 +4989,7 @@ function GlobalSettingsModal({
                     System-wide Background Support. Alerts arrive even if the app or browser is closed.
                   </span>
                 </div>
-                
+
                 <button
                   onClick={togglePush}
                   disabled={pushLoading || !canUseAlerts}
@@ -5057,8 +5119,8 @@ function GlobalSettingsModal({
                     ))}
                   </div>
                   <p className="text-[7px] text-slate-600 font-bold uppercase leading-relaxed px-1">
-                    {globalSignalThresholdMode === 'default' 
-                      ? "Tags always use industry standard 70/30 levels." 
+                    {globalSignalThresholdMode === 'default'
+                      ? "Tags always use industry standard 70/30 levels."
                       : "Tags respect per-coin custom thresholds or global extreme settings."}
                   </p>
                 </div>
@@ -5067,8 +5129,8 @@ function GlobalSettingsModal({
               {/* Global Extreme RSI Activation */}
               <div className={cn(
                 "p-5 rounded-3xl border transition-all relative overflow-hidden group/extreme",
-                globalThresholdsEnabled 
-                  ? "bg-purple-500/[0.08] border-purple-500/30 shadow-[0_0_40px_-10px_#A855F733]" 
+                globalThresholdsEnabled
+                  ? "bg-purple-500/[0.08] border-purple-500/30 shadow-[0_0_40px_-10px_#A855F733]"
                   : "bg-white/[0.02] border-white/5"
               )}>
                 <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover/extreme:opacity-[0.1] transition-opacity duration-700">
@@ -5168,8 +5230,8 @@ function GlobalSettingsModal({
               {/* Global Volatility Activation */}
               <div className={cn(
                 "p-5 rounded-3xl border transition-all relative overflow-hidden group/vol",
-                globalVolatilityEnabled 
-                  ? "bg-amber-500/[0.08] border-amber-500/30 shadow-[0_0_40px_-10px_#F59E0B33]" 
+                globalVolatilityEnabled
+                  ? "bg-amber-500/[0.08] border-amber-500/30 shadow-[0_0_40px_-10px_#F59E0B33]"
                   : "bg-white/[0.02] border-white/5"
               )}>
                 <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover/vol:opacity-[0.1] transition-opacity duration-700">

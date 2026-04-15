@@ -761,8 +761,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
                 type: 'ALERT_NOTIFICATION',
                 payload: {
                   title: `${alias} ${zoneLabel}`,
-                  body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] ${tf.label} RSI reached ${tf.rsi.toFixed(1)}`,
-                  exchange: exchangeName
+                  body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] ${tf.label} RSI reached ${tf.rsi.toFixed(1)} @ $${curC.toLocaleString()}`,
+                  exchange: exchangeName,
+                  priority: config.priority || 'medium'
                 }
               });
             }
@@ -803,8 +804,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
               type: 'ALERT_NOTIFICATION',
               payload: {
                 title: `${alias} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Strategy shift detected. Score: ${currentStrategy.score.toFixed(0)}`,
-                exchange: exchangeName
+                body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Strategy shift detected. Score: ${currentStrategy.score.toFixed(0)} @ $${curC.toLocaleString()}`,
+                exchange: exchangeName,
+                priority: config.priority || 'medium'
               }
             });
           }

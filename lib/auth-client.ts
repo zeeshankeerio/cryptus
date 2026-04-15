@@ -23,4 +23,18 @@ export const authClient = createAuthClient({
   ],
 });
 
+// 2026 Resilience: Eager session hydration for workers/extensions
+if (typeof window !== "undefined") {
+  authClient.getSession().then((res) => {
+    if (res.data) {
+      console.log(`[auth-client] Session synchronized for user: ${res.data.user.email}`);
+    } else {
+      // Trace-only log to avoid cluttering but assist in debugging auth lag
+      console.debug("[auth-client] No active session during eager hydration.");
+    }
+  }).catch(() => {
+    /* Silent catch for pre-auth state */
+  });
+}
+
 export const { signIn, signUp, signOut, useSession } = authClient;

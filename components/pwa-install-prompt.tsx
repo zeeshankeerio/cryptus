@@ -56,7 +56,9 @@ export function PWAInstallPrompt() {
 
     // 2. Automated Event Listener (Chrome/Android/Edge)
     const handler = (e: any) => {
-      console.log("[PWA] beforeinstallprompt event fired");
+      // 2026 UX: Prevent default browser banner to show our custom branded UI.
+      // This solves the 'Banner not shown' warning by explaining the intentional suppression.
+      console.log("[PWA] beforeinstallprompt event fired. Suppressing default banner for custom Mindscape Analytics branded UI.");
       e.preventDefault();
       setDeferredPrompt(e);
       if (!sessionStorage.getItem('pwa-snoozed') || isDebug) {

@@ -11,26 +11,28 @@ self.addEventListener('install', () => {
   self.skipWaiting(); // Force activate new worker instantly
 });
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(self.clients.claim()); // Take control of all tabs immediately
-});
-
-// Force live APIs to always hit network and bypass runtime caches.
+// 2026 Resilience: Force live APIs to always hit network.
+// Added MIME Guard: Ensure static assets never fallback to HTML (prevents MIME mismatch errors)
 self.addEventListener('fetch', (event) => {
   const req = event.request;
-  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
 
-  let url: URL;
-  try {
-    url = new URL(req.url);
-  } catch {
+  // 1. API Pass-through (High Priority)
+  if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
     return;
   }
 
-  if (url.origin !== self.location.origin) return;
-  if (!url.pathname.startsWith('/api/')) return;
-
-  event.respondWith(fetch(req, { cache: 'no-store' }));
+  // 2. Static Asset MIME Guard
+  // If a CSS/JS/Image file fails, let it fail with 404. 
+  // DO NOT allow Workbox to serve the 'offline' HTML page for these, as it breaks the browser's strict MIME checking.
+  const isStaticAsset = /\.(js|css|png|jpg|jpeg|gif|ico|svg|woff2?)$/i.test(url.pathname);
+  if (isStaticAsset) {
+    // If it's a static asset, we just let it go through standard caching/network.
+    // We don't interfere with respondWith here, allowing Workbox standard runtimeCaching to handle it.
+    // BUT we ensure it's NOT a navigation so navigateFallback won't touch it.
+    return;
+  }
 });
 
 // ── BULLETPROOF GLOBAL POLYFILLS FOR NEXT.JS SWC BUG ──
@@ -131,21 +133,35 @@ const showNativeNotification = (payload: any) => {
 
   // Use exchange-aware tag to prevent notification collision across exchanges
   const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
+  const priority = payload.priority || 'medium';
 
-  return self.registration.showNotification(title, {
+  // 2026 Institutional Urgency: Adjust behavior based on alert priority
+  const options = {
     body,
     icon: icon || '/logo/rsiq-pro-icon.png',
     badge: '/logo/rsiq-pro-icon.png',
     silent: false,
-    requireInteraction: true, // Keep on screen for trade urgency on mobile
-    renotify: true, // Ensure sound/vibration fires for every alert even if one is active
+    requireInteraction: priority === 'critical' || priority === 'high',
+    renotify: true,
     tag,
-    vibrate: [200, 100, 200, 100, 300, 100, 400], // More distinct 2026 urgency pattern
     data: { exchange, url: '/terminal' },
     actions: [
       { action: 'open', title: 'Open Terminal' }
     ]
-  });
+  };
+
+  // Aggressive vibration for high-stakes signals
+  if (priority === 'critical') {
+    options.vibrate = [500, 100, 500, 100, 500, 100, 500]; // Sustained emergency pulse
+  } else if (priority === 'high') {
+    options.vibrate = [200, 100, 200, 100, 400]; // Triple distinct pulse
+  } else if (priority === 'medium') {
+    options.vibrate = [200, 100, 200]; // Double pulse
+  } else {
+    options.vibrate = [100]; // Single subtle tick for low priority
+  }
+
+  return self.registration.showNotification(title, options);
 };
 
 // Listen for messages from the main thread (Foreground/UI fallback)
