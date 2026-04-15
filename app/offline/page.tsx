@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Wifi, Home, RefreshCw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -33,15 +34,22 @@ export default function OfflinePage() {
       <div className="max-w-md w-full rounded-3xl border border-white/5 bg-[#0d121f] p-8 text-center shadow-2xl relative overflow-hidden group">
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#39FF14]/[0.02] rounded-full -mr-16 -mt-16 group-hover:bg-[#39FF14]/[0.05] transition-colors duration-1000" />
         
-        <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-6">
-          <Wifi className={`${isOnline ? 'text-green-400' : 'text-amber-500'}`} size={32} />
-        </div>
+        <Link href="/" className="inline-flex items-center gap-2 group mb-10 transition-transform hover:scale-[1.02]">
+           <div className="relative w-40 h-10">
+              <Image 
+                src="/logo/rsiq-mindscapeanalytics.png" 
+                alt="RSIQ Pro" 
+                fill
+                className="object-contain"
+              />
+           </div>
+        </Link>
 
-        <h1 className="text-5xl font-black text-white mb-2 tracking-tighter">
+        <h1 className="text-4xl font-black text-white mb-2 tracking-tighter">
           {isOnline ? 'Reconnected' : 'Offline'}
         </h1>
-        <h2 className="text-xl font-bold text-slate-200 mb-4 uppercase tracking-widest text-[12px]">
-          {isOnline ? 'Connection Restored' : 'No Connection'}
+        <h2 className="text-xl font-bold text-slate-200 mb-4 uppercase tracking-widest text-[11px]">
+          {isOnline ? 'System Restored' : 'Signal Lost'}
         </h2>
         <p className="text-slate-400 text-sm mb-8 leading-relaxed">
           {isOnline

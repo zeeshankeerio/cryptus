@@ -2911,9 +2911,14 @@ export default function ScreenerDashboard() {
               </div>
 
               <Link href="/" className="inline-block mt-3 hover:opacity-80 transition-opacity">
-                <h1 className="text-4xl font-black text-white tracking-tighter">
-                  RSIQ <span className="text-[#39FF14]">Pro</span>
-                </h1>
+                <div className="relative w-[180px] h-[45px]">
+                  <Image 
+                    src="/logo/rsiq-mindscapeanalytics.png" 
+                    alt="RSIQ Pro" 
+                    fill
+                    className="object-contain"
+                  />
+                </div>
               </Link>
               <div className="flex flex-wrap items-center gap-5 mt-5">
                 <div className="flex flex-col flex-1 min-w-[120px]">
@@ -3087,12 +3092,16 @@ export default function ScreenerDashboard() {
             {/* Top Row: Logo & Profile */}
             <div className="flex items-center justify-between">
               <Link href="/" className="flex items-center gap-3 active:scale-95 transition-transform">
-                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#39FF14]/20 to-emerald-900/40 border border-[#39FF14]/30 flex items-center justify-center shadow-[0_0_30px_rgba(57,255,20,0.15)] ring-1 ring-[#39FF14]/20">
-                  <Activity size={20} className="text-[#39FF14]" />
+                <div className="relative w-28 h-8">
+                  <Image 
+                    src="/logo/rsiq-mindscapeanalytics.png" 
+                    alt="RSIQ Pro" 
+                    fill
+                    className="object-contain"
+                  />
                 </div>
                 <div>
-                  <h1 className="text-xl font-black text-white tracking-widest leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></h1>
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     <motion.div
                       initial={{ scale: 1, opacity: 0.8 }}
                       animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}

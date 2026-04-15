@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    apple: '/logo/rsiq-pro-icon.png',
+    apple: '/logo/rsiq-mindscapeanalytics.png',
   },
   robots: 'index, follow',
   openGraph: {

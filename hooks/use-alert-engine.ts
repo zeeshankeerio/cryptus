@@ -95,12 +95,19 @@ export function useAlertEngine(
       requestWakeLock();
       // Re-acquire wake lock on visibility change (mobile browsers release it)
       const handleVisibility = () => {
-        if (document.visibilityState === 'visible' && enabled) requestWakeLock();
+        if (document.visibilityState === 'visible' && enabled) {
+          requestWakeLock();
+          // ── 2026 Resilience: Resume audio context immediately on foreground ──
+          resumeAudioContext();
+        }
       };
       document.addEventListener('visibilitychange', handleVisibility);
+      // Also resume on focus to catch OS-level switches
+      window.addEventListener('focus', resumeAudioContext);
       return () => {
         releaseWakeLock();
         document.removeEventListener('visibilitychange', handleVisibility);
+        window.removeEventListener('focus', resumeAudioContext);
       };
     } else {
       releaseWakeLock();
@@ -401,21 +408,25 @@ export function useAlertEngine(
     // Use exchange-aware tag to match Service Worker logic and prevent duplicates
     const tag = `rsiq-${currentExchange}-${title.replace(/\s+/g, '-').toLowerCase()}`;
 
-    try {
-      // Local notification (Foreground optimization)
-      const notification = new Notification(title, {
-        body,
-        icon: '/logo/rsiq-pro-icon.png',
-        badge: '/logo/rsiq-pro-icon.png',
-        silent: false,
-        renotify: true,
-        tag,
-        vibrate: [200, 100, 200, 100, 200], // Strong 5-pulse for trade urgency
-        requireInteraction: false,
-      } as any);
-      setTimeout(() => notification.close(), 8000);
-    } catch {
-      // Notification constructor can fail on some mobile platforms (rely on SW)
+    if (document.visibilityState !== 'visible') {
+      console.log('[alerts] Tab hidden – skipping local notification, relying on Service Worker');
+    } else {
+      try {
+        // Local notification (Foreground optimization)
+        const notification = new Notification(title, {
+          body,
+          icon: '/logo/rsiq-pro-icon.png',
+          badge: '/logo/rsiq-pro-icon.png',
+          silent: false,
+          renotify: true,
+          tag,
+          vibrate: [200, 100, 200, 100, 200], // Strong 5-pulse for trade urgency
+          requireInteraction: false,
+        } as any);
+        setTimeout(() => notification.close(), 8000);
+      } catch {
+        // Notification constructor can fail on some mobile platforms (rely on SW)
+      }
     }
 
     if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {

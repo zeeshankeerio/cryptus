@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -65,9 +66,14 @@ export default function LoginPage() {
         <div className="w-full max-w-md mx-auto">
           <div className="mb-12">
             <Link href="/" className="inline-flex items-center gap-2 group mb-10 transition-transform hover:scale-[1.02]">
-              <span className="text-3xl font-black tracking-tighter text-white">
-                RSIQ <span className="text-[#39FF14]">Pro</span>
-              </span>
+               <div className="relative w-40 h-10">
+                  <Image 
+                    src="/logo/rsiq-mindscapeanalytics.png" 
+                    alt="RSIQ Pro" 
+                    fill
+                    className="object-contain"
+                  />
+               </div>
             </Link>
 
             <h1 className="text-4xl font-bold tracking-tight mb-3">Access Terminal</h1>

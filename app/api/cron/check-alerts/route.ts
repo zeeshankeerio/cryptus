@@ -102,8 +102,7 @@ export async function POST(request: Request) {
       configsByExchange.set(exchange, list);
     }
 
-    // 4. Fetch 3-minute cooldown from DB (consistent across cold starts)
-    // Task 14.1: Build cooldown map with BOTH old and new key formats for backward compatibility
+    // 4. Fetch 3-minute cooldown and latest zone states from DB (consistent across cold starts)
     const THREE_MINUTES_AGO = new Date(Date.now() - 3 * 60 * 1000);
     const recentAlerts = await prisma.alertLog.findMany({
       where: { createdAt: { gte: THREE_MINUTES_AGO } }
@@ -111,17 +110,35 @@ export async function POST(request: Request) {
     const cooldownMap = new Map<string, boolean>();
     recentAlerts.forEach(a => {
       const uid = a.userId || 'global';
-      // Legacy format: "BTCUSDT-5m"
       cooldownMap.set(`${a.symbol}-${a.timeframe}`, true);
-      // Tenant-aware format: "userId:BTCUSDT-5m"
       cooldownMap.set(`${uid}:${a.symbol}-${a.timeframe}`, true);
-      // New format: "BTCUSDT:binance:5m:OVERSOLD"
       if (a.exchange && a.type) {
         cooldownMap.set(`${a.symbol}:${a.exchange}:${a.timeframe}:${a.type}`, true);
         cooldownMap.set(`${uid}:${a.symbol}:${a.exchange}:${a.timeframe}:${a.type}`, true);
       }
     });
-    console.log(`[cron-alerts:${requestId}] Recent alerts in cooldown: ${recentAlerts.length}`);
+
+    // Task 16.1: Cold-start recovery. Fetch the single absolute latest alert for each symbol 
+    // to populate the transition cache if it's currently empty.
+    const latestAlertsAcrossTime = await prisma.alertLog.findMany({
+      where: {
+        symbol: { in: configs.map(c => c.symbol) },
+      },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['symbol', 'timeframe', 'type'], // Get latest of each type
+      take: configs.length * 5, // Approximate coverage for all timeframes
+    });
+
+    latestAlertsAcrossTime.forEach(a => {
+      const uid = a.userId || 'global';
+      const stateKey = `${uid}:${a.symbol}-${a.timeframe}`;
+      if (!zoneStateCache.has(stateKey)) {
+        // Only prime the cache if we don't have a fresher in-memory state
+        zoneStateCache.set(stateKey, a.type);
+      }
+    });
+
+    console.log(`[cron-alerts:${requestId}] Recent alerts in cooldown: ${recentAlerts.length}, Cache primed from DB: ${latestAlertsAcrossTime.length}`);
 
     const triggeredAlerts: any[] = [];
 

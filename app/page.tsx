@@ -62,9 +62,13 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#39FF14]/20 to-emerald-900/40 border border-[#39FF14]/30 flex items-center justify-center shadow-lg shadow-[#39FF14]/10">
-              <TrendingUp size={18} className="text-[#39FF14] sm:hidden" />
-              <TrendingUp size={22} className="text-[#39FF14] hidden sm:block" />
+            <div className="relative w-11 h-11 sm:w-14 sm:h-14 overflow-hidden rounded-xl border border-[#39FF14]/20 shadow-lg shadow-[#39FF14]/10 bg-gradient-to-br from-[#39FF14]/10 to-transparent">
+              <Image 
+                src="/logo/rsiq-mindscapeanalytics.png" 
+                alt="RSIQ Logo" 
+                fill
+                className="object-cover scale-110"
+              />
             </div>
             <div className="flex flex-col">
               <span className="text-lg sm:text-xl font-black text-white tracking-tighter leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></span>
@@ -151,7 +155,7 @@ export default function LandingPage() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-[#39FF14]"></span>
             </span>
-            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] text-[#39FF14]">Enterprise Engine Active — 500+ Pairs</span>
+            <span className="text-[9px] sm:text-[11px] font-black uppercase tracking-[0.15em] sm:tracking-[0.25em] text-[#39FF14]">Enterprise Engine Active — 500+ Live Symbols (Crypto, Forex, Gold & Silver)</span>
           </motion.div>
 
           <motion.h1 
@@ -167,9 +171,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-base sm:text-lg md:text-2xl text-slate-500 max-w-3xl text-center leading-relaxed mb-10 sm:mb-16 font-medium px-2 sm:px-0"
+            className="text-base sm:text-lg md:text-2xl text-slate-400 max-w-4xl text-center leading-relaxed mb-10 sm:mb-16 font-medium px-2 sm:px-0"
           >
-            Institutional-grade crypto scanning. Combining multi-indicator confluence, real-time sentiment analysis, and professional strategy scoring.
+            <strong className="text-white">Stop missing critical setups.</strong> Retail traders lose edge by manually checking charts and relying on delayed, localized data. RSIQ Pro solves this by instantly scanning <span className="text-[#39FF14]">500+ assets (Crypto, Top Forex Pairs, and Metals)</span> in real-time, delivering institutional-grade alerts so you never miss a profitable convergence again.
           </motion.p>
 
           <motion.div 
@@ -254,6 +258,10 @@ export default function LandingPage() {
                   Engineered for <br />
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Winning Execution.</span>
                 </p>
+                <p className="text-slate-400 text-sm sm:text-base leading-relaxed mt-4 max-w-md">
+                  <strong className="text-slate-200">The Problem:</strong> Manual charting leads to missed opportunities and emotional trading. You can&apos;t watch 500 charts at once.<br/><br/>
+                  <strong className="text-[#39FF14]">The Solution:</strong> A unified engine that algorithmically cross-references divergence, momentum, and volume across multiple timeframes simultaneously.
+                </p>
               </div>
 
               <div className="space-y-6 sm:space-y-8">
@@ -262,8 +270,8 @@ export default function LandingPage() {
                   desc="Stop relying on a single data point. RSIQ Pro cross-references RSI, MACD Histogram, Stochastics, and BB Position to find high-probability setups." 
                 />
                 <AnalysisItem 
-                  title="Custom RSI Tuning" 
-                  desc="Fine-tune your edge. Adjust RSI periods from 2 to 50 in real-time. Our custom calculation engine applies your strategy to the entire market instantly." 
+                  title="Deep Customizations" 
+                  desc="Tailor your edge perfectly. Adjust RSI periods (2 to 50), toggle volatility filters, set specific threshold triggers, and watch the entire market re-calculate in absolute real-time." 
                 />
                 <AnalysisItem 
                   title="Real-Time Divergence Detection" 
@@ -423,8 +431,8 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
             <FeatureCard 
               icon={<Zap />} 
-              title="Market Bias Dashboard" 
-              desc="A high-level view of long/short sentiment across the entire crypto ecosystem. Spot trend reversals before they form." 
+              title="Global Market Reach" 
+              desc="Simultaneously track 500+ active symbols including Top Crypto pairs, premier Forex pairs, and precious metals like Gold (XAU) and Silver (XAG)." 
             />
             <FeatureCard 
               icon={<BarChart3 />} 
@@ -432,14 +440,14 @@ export default function LandingPage() {
               desc="Never trade a single indicator again. Our engine combines 5+ technical signals for a unified decision score." 
             />
             <FeatureCard 
-              icon={<Cpu />} 
-              title="Custom Formula Engine" 
-              desc="Input your custom RSI period and watch the entire market re-calculate in absolute real-time (sub-10ms)." 
+              icon={<Bell />} 
+              title="Real-Time Alerts" 
+              desc="Get instant push notifications and desktop sound alerts the second a setup aligns with your exact custom parameters." 
             />
             <FeatureCard 
-              icon={<Lock />} 
-              title="Institutional Security" 
-              desc="Enterprise-grade authentication and data encryption. Your strategy, watchlist, and data remain strictly yours." 
+              icon={<Cpu />} 
+              title="Deep Customization" 
+              desc="Input your custom RSI period, define unique thresholds, and isolate volatile markets to match your exact trading style." 
             />
             <FeatureCard 
               icon={<LineChart />} 
@@ -449,7 +457,36 @@ export default function LandingPage() {
             <FeatureCard 
               icon={<Layers />} 
               title="Multi-Timeframe Sync" 
-              desc="Track 1m, 5m, 15m, and 1h intervals simultaneously. Align your entries with higher timeframe dominance." 
+              desc="Track 1m, 5m, 15m, and 1h intervals simultaneously. Align your micro entries with higher timeframe macro dominance." 
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Coming Soon Section ─── */}
+      <section className="py-20 sm:py-32 md:py-40 border-t border-white/5 bg-[#05080F] px-4 sm:px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-amber-400">Future Roadmap</h2>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Expanding the Alpha Edge.</p>
+            <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-4 font-medium">We are continuously pushing the boundaries of retail trading technology. Here is what is deploying next to your terminal.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            <FeatureCard 
+              icon={<Cpu />} 
+              title="Autonomous Webhooks" 
+              desc="Connect RSIQ Pro directly to your broker or algorithmic trading bots via customizable JSON webhook triggers. Completely automate your execution." 
+            />
+            <FeatureCard 
+              icon={<LineChart />} 
+              title="Advanced Flow & Options Insights" 
+              desc="Incorporate dark pool prints, options delta exposure, and institutional orderbook flow directly into the scanning confluence logic." 
+            />
+            <FeatureCard 
+              icon={<Handshake />} 
+              title="Alpha Syndicates" 
+              desc="Share your customized screening layouts and trigger conditions with your community through private generated share-links." 
             />
           </div>
         </div>
