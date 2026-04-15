@@ -176,8 +176,8 @@ function maybeTrafficWarm(symbolCount: number, smartMode: boolean, exchange: str
 }
 
 // ── Per-symbol indicator cache to avoid refetch/recompute on every refresh ──
-const INDICATOR_CACHE_TTL = 60_000; // 1 min — standard symbols (halved for fresher indicators)
-const INDICATOR_CACHE_TTL_ALERT = 30_000; // 30s — alert-active symbols (tighter accuracy)
+const INDICATOR_CACHE_TTL = 15_000; // 15s — standard symbols (guarantees fresh data)
+const INDICATOR_CACHE_TTL_ALERT = 10_000; // 10s — alert-active symbols (tighter accuracy)
 const INDICATOR_CACHE_MAX = 5000;
 const indicatorCache = new LRUCache<string, { entry: ScreenerEntry; ts: number }>(INDICATOR_CACHE_MAX);
 
@@ -376,8 +376,8 @@ function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: nu
     return null;
   }
 
-  // Don't serve data older than 2 minutes (stale-first should be brief)
-  if (Date.now() - cache.ts > 120_000) return null;
+  // Don't serve stale data to a live trading dashboard to avoid snap-back issues
+  if (Date.now() - cache.ts > getResultCacheTtl(symbolCount)) return null;
   const sliced = cache.data.data.slice(0, symbolCount);
   return {
     data: sliced,
@@ -1464,13 +1464,8 @@ export async function getScreenerData(symbolCount = 500, options: ScreenerOption
     if (cached) return cached;
   }
 
-  // Stale-first: always return cached snapshot instantly.
-  // WebSocket keeps prices live between indicator refreshes.
-  const stale = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
-  if (stale) {
-    void runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, exchange);
-    return stale;
-  }
+  // Removed stale-while-revalidate to ensure the client ALWAYS gets a freshly 
+  // generated baseline indicator state. This eliminates the "snap-back" UI bug.
 
   // No usable stale snapshot available; compute (deduplicated by symbolCount).
   return runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, exchange);

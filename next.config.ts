@@ -6,7 +6,7 @@ const withPWA = withPWAInit({
   disable: process.env.NODE_ENV === "development" && process.env.PWA_DEBUG !== "true",
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
-  reloadOnOnline: true,
+  reloadOnOnline: false,
   fallbacks: {
     document: '/offline',
     image: '/logo/rsiq-pro-icon.png',
@@ -18,7 +18,7 @@ const withPWA = withPWAInit({
     skipWaiting: true,
     clientsClaim: true,
     navigateFallback: '/offline',
-    navigateFallbackDenylist: [/^\/api/, /^\/login$/, /^\/register$/],
+    navigateFallbackDenylist: [/^\/api/, /^\/login/, /^\/register/, /^\/auth/],
     runtimeCaching: [
       {
         urlPattern: /^https:\/\/fonts\.googleapis\.com/,
