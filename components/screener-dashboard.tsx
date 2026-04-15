@@ -8,7 +8,8 @@ import {
   RefreshCcw, Zap, BarChart3, TrendingUp, TrendingDown,
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
-  LogOut, User as UserIcon, Minus, Plus
+  LogOut, User as UserIcon, Minus, Plus, AlertTriangle,
+  ArrowDownCircle, MinusCircle, ArrowUpCircle
 } from 'lucide-react';
 import { useSession, signOut } from '@/lib/auth-client';
 import { AUTH_CONFIG } from '@/lib/config';
@@ -1469,12 +1470,31 @@ const ScreenerCard = memo(function ScreenerCard({
       {/* 3. Market Info (Right) */}
       <div className="flex items-center gap-3 text-right shrink-0">
         <div className="flex flex-col items-end min-w-[65px]">
-          <span
-            className="text-sm font-black font-mono tracking-tighter inline-block"
-            style={{ color: display.lastPriceChange && display.lastPriceChange > 0 ? '#39FF14' : display.lastPriceChange && display.lastPriceChange < 0 ? '#FF4B5C' : '#ffffff' }}
-          >
-            ${formatPrice(display.price)}
-          </span>
+          <div className="flex items-center gap-1">
+            {/* Data Freshness Indicator */}
+            {tick && (
+              <div
+                className={cn(
+                  "w-1.5 h-1.5 rounded-full shrink-0 transition-colors duration-500",
+                  tick.updatedAt && (Date.now() - tick.updatedAt) < 5000
+                    ? "bg-[#39FF14] animate-pulse shadow-[0_0_4px_rgba(57,255,20,0.6)]"
+                    : tick.updatedAt && (Date.now() - tick.updatedAt) < 30000
+                      ? "bg-amber-400"
+                      : "bg-red-500/60"
+                )}
+                title={tick.updatedAt ? `Last tick: ${Math.round((Date.now() - tick.updatedAt) / 1000)}s ago` : 'No data'}
+              />
+            )}
+            <span
+              className={cn(
+                "text-sm font-black font-mono tracking-tighter inline-block transition-opacity duration-500",
+                tick && tick.updatedAt && (Date.now() - tick.updatedAt) > 30000 ? "opacity-40" : "opacity-100"
+              )}
+              style={{ color: display.lastPriceChange && display.lastPriceChange > 0 ? '#39FF14' : display.lastPriceChange && display.lastPriceChange < 0 ? '#FF4B5C' : '#ffffff' }}
+            >
+              ${formatPrice(display.price)}
+            </span>
+          </div>
           <div className={cn("text-[9px] font-black font-mono flex items-center gap-0.5", display.change24h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
             {display.change24h > 0 ? '+' : ''}{display.change24h.toFixed(2)}%
           </div>
@@ -2218,6 +2238,31 @@ export default function ScreenerDashboard() {
     return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias };
   }, [processedData]);
 
+  // ─── Feed Health Aggregation ─────────────────────────────────
+  const feedHealth = useMemo(() => {
+    const now = Date.now();
+    let activeFeeds = 0;
+    let staleFeeds = 0;
+    let totalFeeds = 0;
+    let oldestTickAge = 0;
+
+    livePrices.forEach((tick) => {
+      if (!tick.updatedAt) return;
+      totalFeeds++;
+      const age = now - tick.updatedAt;
+      if (age < 5000) activeFeeds++;
+      else if (age > 30000) staleFeeds++;
+      if (age > oldestTickAge) oldestTickAge = age;
+    });
+
+    const activePercent = totalFeeds > 0 ? (activeFeeds / totalFeeds) * 100 : 0;
+    let status: 'healthy' | 'degraded' | 'critical' = 'healthy';
+    if (activePercent < 50 || staleFeeds > totalFeeds * 0.3) status = 'critical';
+    else if (activePercent < 80 || staleFeeds > 5) status = 'degraded';
+
+    return { activeFeeds, staleFeeds, totalFeeds, activePercent, status, oldestTickAge };
+  }, [livePrices]);
+
   const indicatorReadyCount = useMemo(() => (
     processedData.filter((e) => e.rsi1m !== null || e.rsi5m !== null || e.rsi15m !== null || e.macdHistogram !== null).length
   ), [processedData]);
@@ -2832,6 +2877,26 @@ export default function ScreenerDashboard() {
     setSortKey('strategyScore');
     setSortDir('desc');
   };
+  const showBuys = () => {
+    setSignalFilter('buy');
+    setSortKey('strategyScore');
+    setSortDir('desc');
+  };
+  const showSells = () => {
+    setSignalFilter('sell');
+    setSortKey('strategyScore');
+    setSortDir('desc');
+  };
+  const showStrongSells = () => {
+    setSignalFilter('strong-sell');
+    setSortKey('strategyScore');
+    setSortDir('desc');
+  };
+  const showNeutrals = () => {
+    setSignalFilter('neutral');
+    setSortKey('strategyScore');
+    setSortDir('desc');
+  };
   const resetFilters = () => {
     setSearch('');
     setSignalFilter('all');
@@ -2931,72 +2996,43 @@ export default function ScreenerDashboard() {
           <div className="absolute top-0 right-0 w-96 h-96 bg-[#39FF14]/[0.02] rounded-full -mr-20 -mt-20 group-hover:bg-[#39FF14]/[0.04] transition-colors duration-1000" />
 
           {/* Desktop Header Layout */}
-          <div className="hidden lg:flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5 relative z-10">
-            <div>
-              <div className="flex items-center justify-between w-full">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-[#39FF14]/20 bg-gradient-to-r from-[#39FF14]/10 to-transparent px-3 py-1.2 shadow-[0_0_20px_rgba(57,255,20,0.05)] text-[9px] font-black tracking-widest text-[#39FF14] uppercase backdrop-blur-md transition-all hover:bg-[#39FF14]/20 group/llc">
-                    <Activity size={10} className="text-[#39FF14] animate-pulse" />
-                    <span>Mindscape Analytics LLC</span>
+          <div className="hidden lg:flex flex-col gap-6 relative z-10 w-full">
+            {/* ─── NEW INSTITUTIONAL HEADER ─── */}
+            <div className="flex items-center justify-between gap-6 w-full">
+              {/* Left Side: Brand & Market Bias */}
+              <div className="flex items-center gap-8">
+                <Link href="/" className="flex items-center gap-4 group">
+                  <div className="relative w-36 h-10 transition-transform group-hover:scale-105">
+                    <Image
+                      src="/logo/rsiq-mindscapeanalytics.png"
+                      alt="RSIQ Pro"
+                      fill
+                      priority
+                      className="object-contain"
+                    />
                   </div>
-                  {session && (
-                    <div className="relative" ref={profileRef}>
-                      <button 
-                        onClick={() => setIsProfileOpen(!isProfileOpen)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-1.5 py-1 group/auth transition-all hover:bg-white/10 active:scale-95"
-                      >
-                        <div className="w-4 h-4 rounded-full bg-[#39FF14]/20 flex items-center justify-center">
-                          <UserIcon size={10} className="text-[#39FF14] group-hover/auth:text-[#32e012] transition-colors" />
-                        </div>
-                        <span className="text-[9px] font-bold text-slate-300 pr-1 truncate max-w-[100px]">
-                          {session.user.name || session.user.email}
-                        </span>
-                        <ChevronDown size={8} className={cn("text-slate-500 transition-transform", isProfileOpen && "rotate-180")} />
-                      </button>
+                </Link>
 
-                      <AnimatePresence>
-                        {isProfileOpen && (
-                          <UserProfileDropdown 
-                            session={session} 
-                            isOwner={isOwner} 
-                            onLogout={handleSignOut} 
-                            isLoggingOut={isLoggingOut}
-                            onClose={() => setIsProfileOpen(false)}
-                            onShowGlobalSettings={() => setShowGlobalSettings(true)}
-                          />
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              <Link href="/" className="inline-block mt-3 hover:opacity-80 transition-opacity">
-                <div className="relative w-[180px] h-[45px]">
-                  <Image
-                    src="/logo/rsiq-mindscapeanalytics.png"
-                    alt="RSIQ Pro"
-                    fill
-                    className="object-contain"
-                  />
-                </div>
-              </Link>
-              <div className="flex flex-wrap items-center gap-5 mt-5">
-                <div className="flex flex-col flex-1 min-w-[120px]">
-                  <div className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-1 leading-none">Market Bias</div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden flex max-w-[120px]">
-                      <div className="h-full bg-[#39FF14]" style={{ width: `${Math.max(0, 50 + stats.bias / 2)}%` }} />
-                      <div className="h-full bg-red-500" style={{ width: `${Math.max(0, 50 - stats.bias / 2)}%` }} />
-                    </div>
-                    <span className={cn("text-[11px] font-black tabular-nums tracking-tighter", stats.bias >= 0 ? "text-[#39FF14]" : "text-red-500")}>
-                      {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                <div className="flex flex-col gap-1 min-w-[140px]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Market Bias</span>
+                    <span className={cn("text-[10px] font-black tabular-nums", stats.bias >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                      {stats.bias > 0 ? `+${stats.bias}%` : `${stats.bias}%`}
                     </span>
                   </div>
+                  <div className="h-1 w-full bg-slate-900 rounded-full overflow-hidden border border-white/5 p-[1px]">
+                    <div
+                      className={cn("h-full rounded-full shadow-[0_0_8px_rgba(57,255,20,0.3)] transition-all duration-700", stats.bias >= 0 ? "bg-gradient-to-r from-emerald-500 to-[#39FF14]" : "bg-gradient-to-r from-rose-500 to-[#FF4B5C]")}
+                      style={{ width: `${Math.abs(stats.bias)}%`, marginLeft: stats.bias >= 0 ? '50%' : `${50 - Math.abs(stats.bias)}%` }}
+                    />
+                  </div>
                 </div>
+              </div>
 
-                <div className="flex items-center gap-1.5">
+              {/* Center Group: Combined Operations & Sentiment */}
+              <div className="flex items-center bg-slate-900/40 border border-white/10 rounded-2xl p-1 gap-1 shadow-[0_4px_20px_rgba(0,0,0,0.2)] backdrop-blur-md">
+                {/* System Controls */}
+                <div className="flex items-center gap-1 px-1">
                   <motion.button
                     onClick={async () => {
                       const next = !alertsEnabled;
@@ -3005,11 +3041,11 @@ export default function ScreenerDashboard() {
                         try { await Notification.requestPermission(); } catch (e) { }
                       }
                     }}
-                    whileTap={{ scale: 0.9 }}
-                    className={cn("w-9 h-9 rounded-xl border flex items-center justify-center relative shadow-sm", alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-white/[0.02] border-white/10 text-slate-600")}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", alertsEnabled ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-600 hover:text-slate-400")}
+                    title="Alerts Toggle"
                   >
                     <Bell size={14} fill={alertsEnabled ? "currentColor" : "none"} />
-                    {alerts.length > 0 && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#FF4B5C] rounded-full" />}
                   </motion.button>
                   <motion.button
                     onClick={() => {
@@ -3017,134 +3053,193 @@ export default function ScreenerDashboard() {
                       setSoundEnabled(next);
                       if (next) resumeAudioContext();
                     }}
-                    whileTap={{ scale: 0.9 }}
-                    className={cn("w-9 h-9 rounded-xl border flex items-center justify-center relative shadow-sm", soundEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-white/[0.02] border-white/10 text-slate-600")}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", soundEnabled ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-600 hover:text-slate-400")}
+                    title="Sound Toggle"
                   >
                     <Zap size={14} fill={soundEnabled ? "currentColor" : "none"} />
                   </motion.button>
                   <motion.button
                     onClick={() => setShowAlertPanel(!showAlertPanel)}
-                    whileTap={{ scale: 0.9 }}
-                    className={cn(
-                      "w-9 h-9 rounded-xl border flex items-center justify-center shadow-sm transition-all",
-                      showAlertPanel
-                        ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]"
-                        : "border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5"
-                    )}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", showAlertPanel ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-600 hover:text-slate-400")}
+                    title="History"
                   >
                     <Clock size={14} />
                   </motion.button>
                   <motion.button
                     onClick={() => setShowGlobalSettings(true)}
-                    whileTap={{ scale: 0.9 }}
-                    className="w-9 h-9 rounded-xl border border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/5 hover:text-[#39FF14] flex items-center justify-center shadow-sm transition-all"
-                    title="System Settings"
+                    whileTap={{ scale: 0.95 }}
+                    className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-600 hover:text-[#39FF14] transition-all"
+                    title="Settings"
                   >
                     <Settings size={14} />
                   </motion.button>
-
-                  <div className="h-4 w-px bg-white/5 mx-1" />
-
                 </div>
 
-                {/* Fear/Greed Gauge */}
-                <div className="flex flex-col items-center min-w-[80px]">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-600 mb-0.5">Sentiment</span>
+                <div className="h-4 w-px bg-white/10" />
+
+                {/* Sentiment */}
+                <div className="flex flex-col items-center justify-center px-4 min-w-[100px]">
+                  <span className="text-[7px] font-black uppercase tracking-widest text-slate-600 mb-0.5">Sentiment</span>
                   <div className="flex items-center gap-1.5">
-                    <Gauge size={12} className={fearGreedColor} />
-                    <span className={cn("text-[10px] font-black tabular-nums", fearGreedColor)}>{fearGreedScore}</span>
-                    <span className={cn("text-[8px] font-bold uppercase", fearGreedColor)}>{fearGreedLabel}</span>
+                    <Gauge size={10} className={fearGreedColor} />
+                    <span className={cn("text-[9px] font-black uppercase tracking-tighter", fearGreedColor)}>{fearGreedLabel}</span>
                   </div>
                 </div>
 
-                <div className="h-4 w-px bg-white/5 mx-1" />
-                <div className="flex items-center bg-slate-900/40 rounded-2xl border border-white/5 p-1 shrink-0">
-                  <button
-                    onClick={() => setExchange('binance')}
-                    className={cn(
-                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
-                      exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
-                    )}
-                  >
-                    Binance
-                  </button>
-                  <button
-                    onClick={() => setExchange('bybit')}
-                    className={cn(
-                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
-                      exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
-                    )}
-                  >
-                    Bybit Spot
-                  </button>
-                  <button
-                    onClick={() => setExchange('bybit-linear')}
-                    className={cn(
-                      "px-3 py-1.5 text-[9px] font-black uppercase tracking-widest transition-all rounded-xl whitespace-nowrap",
-                      exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600 hover:text-slate-400"
-                    )}
-                  >
-                    Bybit Perp
-                  </button>
+                <div className="h-4 w-px bg-white/10" />
+
+                {/* Exchange Switcher (Compact Pill) */}
+                <div className="flex items-center p-0.5 gap-0.5">
+                  {[
+                    { id: 'binance', label: 'Binance' },
+                    { id: 'bybit', label: 'Spot' },
+                    { id: 'bybit-linear', label: 'Perp' }
+                  ].map((ex) => (
+                    <button
+                      key={ex.id}
+                      onClick={() => setExchange(ex.id)}
+                      className={cn(
+                        "px-3 py-1.5 text-[8px] font-black uppercase tracking-widest transition-all rounded-xl",
+                        exchange === ex.id ? "bg-[#39FF14]/20 text-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.1)]" : "text-slate-500 hover:text-slate-300"
+                      )}
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="h-4 w-px bg-white/5 mx-1" />
-                <div className={cn("inline-flex items-center gap-2 rounded-2xl border px-3 py-2 transition-all shadow-sm backdrop-blur-md", isConnected ? 'border-[#39FF14]/20 bg-[#39FF14]/5 text-[#39FF14]' : 'border-white/5 bg-white/[0.02] text-slate-600')}>
-                  <motion.div
-                    initial={{ scale: 1, opacity: 0.8 }}
-                    animate={{ scale: [1, 1.3, 1], opacity: [0.8, 1, 0.8] }}
-                    transition={{ duration: 2, repeat: Infinity }}
-                    className={cn("h-1.5 w-1.5 rounded-full", isConnected ? 'bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.6)]' : 'bg-slate-600')}
-                  />
-                  <span className="font-black tracking-widest uppercase text-[9px]">{isConnected ? 'LIVE' : 'OFFLINE'}</span>
+              </div>
+
+              {/* Right Side: Health & Maintenance Cluster */}
+              <div className="flex items-center gap-4">
+                {/* System Health */}
+                <div className="flex items-center bg-slate-900/40 border border-white/10 rounded-2xl p-1 shadow-sm backdrop-blur-md">
+                  <div className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 transition-all text-sm",
+                    isConnected
+                      ? feedHealth.status === 'healthy' ? 'text-[#39FF14]'
+                        : feedHealth.status === 'degraded' ? 'text-amber-400'
+                        : 'text-red-400'
+                      : 'text-slate-600'
+                  )}>
+                    <motion.div
+                      animate={{ opacity: isConnected ? [0.4, 1, 0.4] : 1 }}
+                      transition={{ duration: feedHealth.status === 'critical' ? 0.5 : 2, repeat: Infinity }}
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        isConnected
+                          ? feedHealth.status === 'healthy' ? 'bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.6)]'
+                            : feedHealth.status === 'degraded' ? 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]'
+                            : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]'
+                          : 'bg-slate-600'
+                      )}
+                    />
+                    <span className="font-black tracking-[0.2em] uppercase text-[8px]">
+                      {isConnected ? (feedHealth.status === 'healthy' ? 'Live' : feedHealth.status === 'degraded' ? 'Lagging' : 'Stale') : 'Offline'}
+                    </span>
+                    {isConnected && feedHealth.totalFeeds > 0 && (
+                      <span className="text-[7px] font-mono text-slate-500 tabular-nums">
+                        {feedHealth.activeFeeds}/{feedHealth.totalFeeds}
+                      </span>
+                    )}
+                  </div>
+                  {isMaster && (
+                    <div className="flex items-center gap-2 border-l border-white/10 px-3 py-1.5 bg-gradient-to-r from-[#39FF14]/10 to-transparent">
+                      <ShieldCheck size={12} className="text-[#39FF14]" />
+                      <span className="font-black tracking-[0.2em] uppercase text-[8px] text-white">Master</span>
+                    </div>
+                  )}
+                  {feedHealth.staleFeeds > 0 && (
+                    <div className="flex items-center gap-1.5 border-l border-white/10 px-3 py-1.5 text-red-400/80">
+                      <AlertTriangle size={10} />
+                      <span className="font-black text-[8px] tabular-nums">{feedHealth.staleFeeds} stale</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 border-l border-white/10 px-3 py-1.5 text-slate-500">
+                    <LayoutGrid size={11} />
+                    <span className="font-black text-[9px] tabular-nums">{data.length}</span>
+                  </div>
                 </div>
 
-                {isMaster && (
-                  <motion.div
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/30 bg-gradient-to-r from-[#39FF14]/20 to-transparent px-3 py-2 shadow-[0_0_20px_rgba(57,255,20,0.1)] backdrop-blur-md"
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => fetchData()}
+                    className="group relative flex items-center justify-center w-10 h-10 rounded-2xl border border-white/10 bg-white/5 text-slate-400 hover:text-[#39FF14] hover:bg-white/10 transition-all active:scale-95 shadow-lg"
+                    title="Manual Refresh"
                   >
-                    <ShieldCheck size={12} className="text-[#39FF14] animate-pulse" />
-                    <span className="font-black tracking-widest uppercase text-[9px] text-white">Master Hub</span>
-                  </motion.div>
-                )}
-
-                <div className="inline-flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2 text-slate-400">
-                  <LayoutGrid size={12} className="text-slate-600" />
-                  <span className="font-black tracking-tight text-[9px] tabular-nums">{data.length}</span>
+                    <RefreshCcw size={14} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] font-black text-slate-600 bg-black/40 px-1 rounded">
+                      {countdown}S
+                    </div>
+                  </button>
+                  <button
+                    onClick={handleExportCsv}
+                    className="w-10 h-10 rounded-2xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all active:scale-95 shadow-lg flex items-center justify-center"
+                    title="Export CSV"
+                  >
+                    <Download size={14} />
+                  </button>
+                  
+                  <div className="relative" ref={profileRef}>
+                    <button
+                      onClick={() => setIsProfileOpen(!isProfileOpen)}
+                      className={cn(
+                        "w-10 h-10 rounded-2xl border flex items-center justify-center transition-all bg-slate-900 shadow-xl",
+                        isProfileOpen ? "border-[#39FF14] text-[#39FF14]" : "border-white/10 text-slate-400 hover:text-white hover:border-white/20"
+                      )}
+                    >
+                      <UserIcon size={18} />
+                    </button>
+                    <AnimatePresence>
+                      {isProfileOpen && (
+                        <UserProfileDropdown
+                          session={session}
+                          isOwner={isOwner}
+                          onLogout={handleSignOut}
+                          isLoggingOut={isLoggingOut}
+                          onClose={() => setIsProfileOpen(false)}
+                          onShowGlobalSettings={() => setShowGlobalSettings(true)}
+                        />
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col items-end gap-4 self-center lg:self-end">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => fetchData()}
-                  className="group inline-flex items-center gap-2 rounded-2xl border border-[#39FF14]/30 bg-[#39FF14]/10 px-4 py-2 text-[10px] font-black tracking-widest text-[#39FF14] hover:bg-[#39FF14]/20 transition-all active:scale-95 shadow-[0_0_20px_rgba(57,255,20,0.1)]"
-                >
-                  <RefreshCcw size={12} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
-                  <span>{refreshing ? 'UPDATING' : `${countdown}S`}</span>
-                </button>
-                <button
-                  onClick={handleExportCsv}
-                  className="p-2.5 rounded-2xl border border-white/10 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 transition-all active:scale-90 shadow-sm"
-                  title="Export CSV (Ctrl+E)"
-                >
-                  <Download size={14} />
-                </button>
-              </div>
-
-              <div className="flex items-center justify-between lg:justify-end gap-6 bg-white/[0.02] border border-white/5 rounded-2xl px-5 py-3 shadow-inner">
+            {/* ─── 7-STATE SIGNAL ANALYTICS BAR ─── */}
+            <div className="flex items-center justify-between bg-slate-900/60 border border-white/5 rounded-2xl p-1 shadow-inner backdrop-blur-xl">
+              <div className="flex items-center gap-1 w-full overflow-x-auto no-scrollbar">
                 {[
-                  { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
-                  { label: "Overbought", value: stats.overbought, color: "text-red-400", onClick: showMostOverbought },
-                  { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys }
-                ].map((s) => (
-                  <button key={s.label} onClick={s.onClick} className="flex flex-col items-end group/stat min-w-[70px]">
-                    <span className="text-[9px] font-black uppercase tracking-[0.15em] text-slate-500 mb-1 leading-none transition-colors group-hover/stat:text-slate-300">{s.label}</span>
-                    <span className={cn("text-lg font-black tabular-nums tracking-tighter leading-none", s.color)}><Counter value={s.value} /></span>
-                  </button>
-                ))}
+                  { label: "Oversold", value: stats.oversold, color: "text-emerald-400", bg: "bg-emerald-500/5", border: "border-emerald-500/10", icon: ArrowDownCircle, onClick: showMostOversold },
+                  { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", bg: "bg-blue-500/5", border: "border-blue-500/10", icon: Zap, onClick: showStrongBuys },
+                  { label: "Buy", value: stats.buy, color: "text-emerald-400/80", bg: "bg-emerald-500/5", border: "border-emerald-500/10", icon: TrendingUp, onClick: showBuys },
+                  { label: "Neutral", value: stats.neutral, color: "text-slate-400", bg: "bg-slate-500/5", border: "border-slate-500/10", icon: MinusCircle, onClick: showNeutrals },
+                  { label: "Sell", value: stats.sell, color: "text-rose-400/80", bg: "bg-rose-500/5", border: "border-rose-500/10", icon: TrendingDown, onClick: showSells },
+                  { label: "Strong Sell", value: stats.strongSell, color: "text-red-400", bg: "bg-red-500/5", border: "border-red-500/10", icon: Zap, onClick: showStrongSells },
+                  { label: "Overbought", value: stats.overbought, color: "text-rose-400", bg: "bg-rose-500/5", border: "border-rose-500/10", icon: ArrowUpCircle, onClick: showMostOverbought },
+                ].map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.label}
+                      onClick={s.onClick}
+                      className={cn(
+                        "flex-1 min-w-[100px] flex items-center justify-between px-4 py-2 rounded-xl border transition-all hover:scale-[1.02] active:scale-95 group/stat",
+                        s.bg, s.border, "hover:bg-white/5 hover:border-white/10"
+                      )}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon size={12} className={cn("transition-transform group-hover/stat:rotate-12", s.color)} />
+                        <span className="text-[9px] font-black uppercase tracking-[0.1em] text-slate-500 group-hover/stat:text-slate-300">{s.label}</span>
+                      </div>
+                      <span className={cn("text-sm font-black tabular-nums tracking-tighter", s.color)}>
+                        <Counter value={s.value} />
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -3154,7 +3249,7 @@ export default function ScreenerDashboard() {
             {/* Top Row: Logo & Profile */}
             <div className="flex items-center justify-between">
               <Link href="/" className="flex items-center gap-3 active:scale-95 transition-transform">
-                <div className="relative w-28 h-8">
+                <div className="relative w-24 h-6">
                   <Image
                     src="/logo/rsiq-mindscapeanalytics.png"
                     alt="RSIQ Pro"
@@ -3163,34 +3258,26 @@ export default function ScreenerDashboard() {
                   />
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <motion.div
-                      initial={{ scale: 1, opacity: 0.8 }}
-                      animate={{ scale: [1, 1.2, 1], opacity: [0.8, 1, 0.8] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className={cn("w-1.5 h-1.5 rounded-full shadow-[0_0_8px_rgba(57,255,20,0.5)]", isConnected ? "bg-[#39FF14]" : "bg-slate-700")}
-                    />
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "LIVE" : "OFFLINE"}</span>
-                    {isMaster && (
-                      <>
-                        <div className="w-1 h-1 rounded-full bg-[#39FF14]/40" />
-                        <span className="text-[8px] font-black text-[#39FF14] uppercase tracking-widest flex items-center gap-1">
-                          <ShieldCheck size={8} /> MASTER
-                        </span>
-                      </>
-                    )}
-                    <div className="w-1 h-1 rounded-full bg-slate-800" />
-                    <span className="text-[8px] font-black text-[#39FF14] tabular-nums">{data.length} PAIRS</span>
+                  <div className="flex items-center bg-slate-900/40 border border-white/10 rounded-xl px-2 py-1 gap-2">
+                    <div className="flex items-center gap-1.5">
+                      <motion.div
+                        animate={{ opacity: isConnected ? [0.4, 1, 0.4] : 1 }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className={cn("w-1.5 h-1.5 rounded-full", isConnected ? "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]" : "bg-slate-700")}
+                      />
+                      <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">{isConnected ? "Live" : "Off"}</span>
+                    </div>
+                    <div className="h-3 w-px bg-white/10" />
+                    <span className="text-[7px] font-black text-[#39FF14] tabular-nums whitespace-nowrap">{data.length} QTPS</span>
                   </div>
                 </div>
               </Link>
-              <div className="flex items-center gap-2 relative" ref={isMobile ? profileRef : null}>
+              <div className="flex items-center gap-2 relative" ref={profileRef}>
                 {session && (
                   <>
                     <button
                       onClick={() => setIsProfileOpen(!isProfileOpen)}
                       className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center shadow-lg active:scale-90 transition-all text-slate-400"
-                      title="Profile"
                     >
                       <UserIcon size={18} />
                     </button>
@@ -3214,24 +3301,35 @@ export default function ScreenerDashboard() {
             </div>
 
             {/* Controls Row: Alerts, Toggles, Actions */}
-            <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 rounded-2xl p-1.5 shadow-inner">
-              <div className="flex items-center gap-1.5 bg-white/[0.04] rounded-xl border border-white/10 p-1">
-                <button
-                  onClick={() => setExchange('binance')}
-                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'binance' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
-                >BIN</button>
-                <button
-                  onClick={() => setExchange('bybit')}
-                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
-                >BYB</button>
-                <button
-                  onClick={() => setExchange('bybit-linear')}
-                  className={cn("px-2.5 py-1 text-[8px] font-black uppercase rounded-lg transition-all", exchange === 'bybit-linear' ? "bg-[#39FF14]/20 text-[#39FF14]" : "text-slate-600")}
-                >PRP</button>
+            <div className="flex items-center justify-between bg-slate-900/40 border border-white/10 rounded-2xl p-1 shadow-inner backdrop-blur-md">
+              <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl p-0.5">
+                {[
+                  { id: 'binance', label: 'BIN' },
+                  { id: 'bybit', label: 'BYB' },
+                  { id: 'bybit-linear', label: 'PERP' }
+                ].map((ex) => (
+                  <button
+                    key={ex.id}
+                    onClick={() => setExchange(ex.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all",
+                      exchange === ex.id ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600"
+                    )}
+                  >
+                    {ex.label}
+                  </button>
+                ))}
               </div>
-              <div className="w-px h-6 bg-white/5 mx-1" />
-              <div className="flex items-center gap-1">
-                <motion.button
+              <div className="flex items-center gap-1.5 pr-1">
+                <button
+                  onClick={() => fetchData()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-[#39FF14]/20 bg-[#39FF14]/5 text-[#39FF14] text-[8px] font-black tracking-widest active:scale-95 transition-all"
+                >
+                  <RefreshCcw size={10} className={refreshing ? "animate-spin" : ""} />
+                  {countdown}S
+                </button>
+                <div className="h-4 w-px bg-white/10 mx-1" />
+                <button
                   onClick={async () => {
                     const next = !alertsEnabled;
                     setAlertsEnabled(next);
@@ -3239,45 +3337,45 @@ export default function ScreenerDashboard() {
                       try { await Notification.requestPermission(); } catch (e) { }
                     }
                   }}
-                  whileTap={{ scale: 0.9 }}
-                  className={cn("w-9 h-9 rounded-xl border flex items-center justify-center relative", alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-transparent border-transparent text-slate-500")}
+                  className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", alertsEnabled ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-600")}
                 >
                   <Bell size={14} fill={alertsEnabled ? "currentColor" : "none"} />
-                  {alerts.length > 0 && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-[#FF4B5C] rounded-full" />}
-                </motion.button>
-                <motion.button
-                  onClick={() => {
-                    const next = !soundEnabled;
-                    setSoundEnabled(next);
-                    if (next) resumeAudioContext();
-                  }}
-                  whileTap={{ scale: 0.9 }}
-                  className={cn("w-9 h-9 rounded-xl border flex items-center justify-center relative", soundEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]" : "bg-transparent border-transparent text-slate-500")}
-                >
-                  <Zap size={14} fill={soundEnabled ? "currentColor" : "none"} />
-                </motion.button>
-                <motion.button
+                </button>
+                <button
                   onClick={() => setShowAlertPanel(!showAlertPanel)}
-                  whileTap={{ scale: 0.9 }}
-                  className={cn(
-                    "w-9 h-9 rounded-xl border flex items-center justify-center relative transition-all",
-                    showAlertPanel
-                      ? "bg-[#39FF14]/10 border-[#39FF14]/20 text-[#39FF14]"
-                      : "border-transparent bg-transparent text-slate-500 hover:bg-white/5"
-                  )}
+                  className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", showAlertPanel ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-600")}
                 >
                   <Clock size={14} />
-                </motion.button>
-              </div>
-              <div className="w-px h-5 bg-white/10 mx-1" />
-              <div className="flex items-center gap-1.5">
-                <button onClick={() => fetchData()} className={cn("w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center text-slate-400 active:scale-90 transition-all", refreshing && "animate-spin text-[#39FF14]")}>
-                  <RefreshCcw size={14} />
                 </button>
-                <button onClick={handleExportCsv} className="w-9 h-9 group inline-flex items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] text-slate-400 active:scale-90 transition-all">
+                <button
+                  onClick={handleExportCsv}
+                  className="w-8 h-8 rounded-xl flex items-center justify-center transition-all bg-white/[0.04] text-slate-600 active:bg-white/10"
+                >
                   <Download size={14} />
                 </button>
               </div>
+            </div>
+
+            {/* Signal Stats (Mobile Scrollable) */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+              {[
+                { label: "Oversold", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold },
+                { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys },
+                { label: "Buy", value: stats.buy, color: "text-emerald-400/80", onClick: showBuys },
+                { label: "Neutral", value: stats.neutral, color: "text-slate-400", onClick: showNeutrals },
+                { label: "Sell", value: stats.sell, color: "text-rose-400/80", onClick: showSells },
+                { label: "Strong Sell", value: stats.strongSell, color: "text-red-400", onClick: showStrongSells },
+                { label: "Overbought", value: stats.overbought, color: "text-rose-400", onClick: showMostOverbought },
+              ].map((s) => (
+                <button
+                  key={s.label}
+                  onClick={s.onClick}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-900/60 border border-white/5 rounded-xl shrink-0 active:scale-95 transition-all hover:bg-white/5"
+                >
+                  <span className="text-[7px] font-black uppercase tracking-widest text-slate-500">{s.label}</span>
+                  <span className={cn("text-xs font-black tabular-nums", s.color)}>{s.value}</span>
+                </button>
+              ))}
             </div>
 
             {/* Micro-Stats Grid */}

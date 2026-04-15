@@ -9,6 +9,8 @@ export interface LiveTick {
   volume24h: number;
   updatedAt: number;
   tickDelta?: number;
+  isStale?: boolean;
+  latencyMs?: number;
   // shadowed indicators
   rsi1m?: number;
   rsi5m?: number;
@@ -63,10 +65,10 @@ class PriceTickEngine extends EventTarget {
           this.isMasterTab = true;
           console.log('[PriceEngine] Elected as UI MASTER');
           this.dispatchEvent(new CustomEvent('master-status', { detail: true }));
-          
+
           // Keep the lock as long as the tab is alive
           await new Promise((resolve) => {
-             window.addEventListener('unload', resolve, { once: true });
+            window.addEventListener('unload', resolve, { once: true });
           });
           this.isMasterTab = false;
         });
@@ -106,17 +108,18 @@ class PriceTickEngine extends EventTarget {
       } else {
         const w = new Worker(workerUrl);
         this.worker = w;
-        this.port = w as unknown as MessagePort; // Polyfill-like behavior for dedicated worker
-        console.log('[PriceEngine] Connected via Dedicated Worker (SharedWorker not supported)');
+        this.port = null; // DedicatedWorker doesn't have a port, we use the worker itself
+        console.log('[PriceEngine] Connected via Dedicated Worker (PWA Fallback)');
       }
     } catch (e) {
       console.error('[PriceEngine] Worker initialization failed', e);
       return;
     }
 
-    if (!this.port) return;
+    const messagingEndpoint = this.port || this.worker;
+    if (!messagingEndpoint) return;
 
-    this.port.onmessage = (e) => {
+    (messagingEndpoint as any).onmessage = (e: any) => {
       const { type, payload } = e.data;
       if (type === 'TICKS') {
         const batch = new Map<string, LiveTick>();
@@ -138,9 +141,9 @@ class PriceTickEngine extends EventTarget {
 
     this.postToWorker({
       type: 'START',
-      payload: { 
-        symbols: Array.from(this.symbols), 
-        flushInterval: 300,
+      payload: {
+        symbols: Array.from(this.symbols),
+        flushInterval: 100, // Reduced from 300 to 100 for PWA smoothness
         exchange: this.exchange
       }
     });
@@ -152,6 +155,17 @@ class PriceTickEngine extends EventTarget {
         if (visible) {
           console.log('[PriceEngine] App visible, signaling worker to resume...');
           this.postToWorker({ type: 'RESUME' });
+          // PWA CRITICAL: Force an immediate warm-up flush from cached prices
+          // When the app was backgrounded, React state may be stale even though
+          // the worker kept receiving ticks. Push the latest state immediately.
+          const warmBatch = new Map<string, LiveTick>();
+          this.prices.forEach((tick, sym) => {
+            warmBatch.set(sym, tick);
+            this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
+          });
+          if (warmBatch.size > 0) {
+            this.dispatchEvent(new CustomEvent('ticks', { detail: warmBatch }));
+          }
         }
         this.postToWorker({ type: 'VISIBILITY_CHANGE', payload: { visible } });
       };
@@ -161,16 +175,27 @@ class PriceTickEngine extends EventTarget {
       handleVisibility();
     }
 
+    // ── Network Recovery Logic (PWA Critical) ──
+    // When PWA loses network silently, WebSocket dies but no error fires.
+    // On network restore, force-reconnect the worker.
+    if (typeof window !== 'undefined') {
+      const handleOnline = () => {
+        console.log('[PriceEngine] Network restored, force-resuming worker...');
+        this.postToWorker({ type: 'RESUME' });
+      };
+      window.addEventListener('online', handleOnline);
+    }
+
     this.startVirtualPolling();
   }
 
   private startVirtualPolling() {
     if (this.virtualPollInterval) return;
-    
+
     this.virtualPollInterval = setInterval(async () => {
       // Yahoo symbols: poll for indices that don't have a WebSocket source (Binance only)
       if (this.exchange === 'binance') {
-        const yahooSymbols = Array.from(this.symbols).filter(s => 
+        const yahooSymbols = Array.from(this.symbols).filter(s =>
           ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
         );
         if (yahooSymbols.length > 0) {
@@ -188,19 +213,19 @@ class PriceTickEngine extends EventTarget {
           if (!res.ok) return;
           const payload = await res.json();
           const rows = payload.result?.list ?? [];
-          
+
           for (const row of rows) {
             if (!row.symbol.endsWith('USDT')) continue;
             if (!this.symbols.has(row.symbol)) continue;
-            
+
             const price = parseFloat(row.lastPrice);
             if (!Number.isFinite(price) || price <= 0) continue;
-            
+
             // Only inject for symbols NOT already covered by WebSocket
             const existing = this.prices.get(row.symbol);
             const staleMs = existing ? Date.now() - existing.updatedAt : Infinity;
             if (staleMs < 3000) continue; // Skip if WS data is fresh
-            
+
             this.postToWorker({
               type: 'VIRTUAL_TICKET',
               payload: {
@@ -218,7 +243,7 @@ class PriceTickEngine extends EventTarget {
       }
     }, 5000); // 5s poll cycle
   }
-  
+
   private async pollSymbolsViaRest(symbols: string[], exchange: string) {
     try {
       const count = Math.max(100, this.symbols.size);
@@ -229,7 +254,7 @@ class PriceTickEngine extends EventTarget {
           'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
           pragma: 'no-cache',
         },
-      }); 
+      });
       if (!res.ok) return;
       const json = await res.json();
       const data = json.data as any[];
@@ -266,10 +291,10 @@ class PriceTickEngine extends EventTarget {
     if (this.exchange === exchange) return;
     const prevExchange = this.exchange;
     this.exchange = exchange;
-    
+
     // Clear UI-side price cache to avoid "flash" of previous exchange data
     this.prices.clear();
-    
+
     localStorage.setItem('crypto-rsi-exchange', exchange);
     this.postToWorker({
       type: 'SET_EXCHANGE',
@@ -304,9 +329,9 @@ class PriceTickEngine extends EventTarget {
     return next;
   }
 
-  syncStates(data: { 
-    configs?: Record<string, any>, 
-    rsiStates?: Record<string, any>, 
+  syncStates(data: {
+    configs?: Record<string, any>,
+    rsiStates?: Record<string, any>,
     alertsEnabled?: boolean,
     globalLongCandleThreshold?: number,
     globalVolumeSpikeThreshold?: number,
@@ -318,8 +343,12 @@ class PriceTickEngine extends EventTarget {
 
   /** Post any typed message directly to the worker (for fast-path updates like SYNC_CONFIG_FAST, UPDATE_PERIOD) */
   postToWorker(message: { type: string; payload?: any }) {
-    if (this.port) {
-      this.port.postMessage(message);
+    // this.port is always set for SharedWorker (MessagePort), null for DedicatedWorker
+    // this.worker for DedicatedWorker is a Worker (has postMessage)
+    // We never call postMessage on a raw SharedWorker — only on its .port
+    const endpoint: MessagePort | Worker | null = this.port || (this.worker instanceof Worker ? this.worker : null);
+    if (endpoint) {
+      endpoint.postMessage(message);
     }
   }
 
@@ -382,12 +411,12 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     const handleBatch = (e: Event) => {
       if (!mountedRef.current) return;
       const detail = (e as CustomEvent).detail as Map<string, LiveTick>;
-      
+
       // Accumulate
       detail.forEach((tick, sym) => {
         const prevPrice = previousPricesObj.get(sym);
         let tickDelta = prevPrice ? tick.price - prevPrice : 0;
-        
+
         if (tick.price !== prevPrice) {
           previousPricesObj.set(sym, tick.price);
         } else {
@@ -432,16 +461,19 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     };
 
     engine.addEventListener('ticks', handleBatch);
-    if ((engine as any).worker) {
-        (engine as any).worker.addEventListener('message', handleWorkerMessage);
+
+    // Attach message listener for alerts/sync regardless of SharedWorker status
+    const messaging = (engine as any).port || (engine as any).worker;
+    if (messaging) {
+      messaging.addEventListener('message', handleWorkerMessage);
     }
 
     return () => {
       mountedRef.current = false;
       clearInterval(flushTimer);
       engine.removeEventListener('ticks', handleBatch);
-      if ((engine as any).worker) {
-          (engine as any).worker.removeEventListener('message', handleWorkerMessage);
+      if (messaging) {
+        messaging.removeEventListener('message', handleWorkerMessage);
       }
     };
   }, []);
@@ -460,10 +492,10 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 1000) {
     return () => engine.removeEventListener('master-status', handleMaster);
   }, []);
 
-  return { 
-    isConnected, 
+  return {
+    isConnected,
     isMaster,
-    livePrices, 
+    livePrices,
     syncStates: (d: any) => engine.syncStates(d),
     exchange,
     setExchange: (e: string) => {

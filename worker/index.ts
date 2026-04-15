@@ -17,7 +17,13 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  // 1. API Pass-through (High Priority)
+  // 1. API & Worker Bypass (High Priority)
+  // We explicitly bypass ticker-worker.js to ensure the browser always fetches the latest 
+  // real-time engine script without Service Worker interference.
+  if (url.pathname === '/ticker-worker.js') {
+    return; // Let the browser handle this naturally
+  }
+
   if (url.origin === self.location.origin && url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(req, { cache: 'no-store' }));
     return;

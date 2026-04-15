@@ -890,8 +890,9 @@ function handleMessage(e, port = null) {
         // Task 2.5: Confirm baseline sync is ready — open1m/volStart1m will arrive via SYNC_STATES
         console.log('[worker] Cold-start baseline sync ready — awaiting SYNC_STATES with open1m/volStart1m');
       });
-
-      startFlushing(payload.flushInterval || 300);
+      
+      // Institutional Latency: Default to 100ms for "smooth" real-time experience
+      startFlushing(payload.flushInterval || 100);
       startZombieWatchdog();
       startStalenessCheck(); // Task 2.3: begin periodic staleness detection
       // Task 2.7: Start REST polling fallback for Bybit Spot stale symbols
@@ -903,15 +904,34 @@ function handleMessage(e, port = null) {
     case 'RESUME': {
       const now = Date.now();
       const silenceMs = now - lastDataReceived;
-      if (silenceMs > 10000) {
-        console.log(`[worker] Checking health (Away for ${Math.round(silenceMs/1000)}s)`);
+      
+      // PWA CRITICAL: Lower threshold to 3s. PWA containers can background
+      // WebSockets almost instantly; 10s was too lenient and left the UI stale.
+      if (silenceMs > 3000) {
+        console.log(`[worker] Health check on resume (silence: ${Math.round(silenceMs/1000)}s)`);
         activeAdapters.forEach((adapter, name) => {
-          if (!adapter.socket || adapter.socket.readyState !== WebSocket.OPEN) {
+          // Force reconnect if socket is closed, closing, OR stuck in CONNECTING
+          // (zombie CONNECTING state happens when OS kills the TCP connection
+          // without a proper close frame — common on mobile PWA sleep)
+          if (!adapter.socket || 
+              adapter.socket.readyState === WebSocket.CLOSED ||
+              adapter.socket.readyState === WebSocket.CLOSING ||
+              (adapter.socket.readyState === WebSocket.CONNECTING && silenceMs > 10000)) {
+            console.log(`[worker] Force-reconnecting ${name} (state: ${adapter.socket?.readyState})`);
             adapter.disconnect();
+            activeAdapters.delete(name);
             ensureExchange(name);
           }
         });
         lastDataReceived = now;
+      }
+      
+      // PWA CRITICAL: Immediately flush any buffered ticks to the UI
+      // so the user sees fresh data the moment they switch back to the app.
+      if (tickerBuffer.size > 0) {
+        const payload = Array.from(tickerBuffer.entries());
+        broadcast({ type: 'TICKS', payload });
+        tickerBuffer.clear();
       }
       break;
     }
@@ -1435,7 +1455,7 @@ function startFlushing(interval) {
       persistToDB(payload);
       tickerBuffer.clear();
     }
-  }, interval || 300);
+  }, interval || 100);
 }
 
 function stopFlushing() { if (flushInterval) clearInterval(flushInterval); }

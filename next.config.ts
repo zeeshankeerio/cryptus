@@ -25,6 +25,24 @@ const withPWA = withPWAInit({
     dontCacheBustURLsMatching: /\.[0-9a-f]{8}\./,
 
     runtimeCaching: [
+      // ── CRITICAL: Real-time trading data MUST NEVER be cached ──
+      // These endpoints power the live screener and alerts — serving stale data
+      // from the PWA cache causes the "no price updates" bug on installed apps.
+      {
+        urlPattern: /\/api\/(screener|alerts|config|entitlements|health)/,
+        handler: 'NetworkOnly',
+        options: {
+          cacheName: 'live-data-bypass',
+        },
+      },
+      // External exchange APIs (Binance/Bybit REST fallback) — always fresh
+      {
+        urlPattern: /^https:\/\/api\.(binance\.com|bybit\.com)\//,
+        handler: 'NetworkOnly',
+        options: {
+          cacheName: 'exchange-api-bypass',
+        },
+      },
       {
         urlPattern: /^https:\/\/fonts\.googleapis\.com/,
         handler: 'CacheFirst',

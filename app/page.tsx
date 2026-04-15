@@ -305,56 +305,56 @@ export default function LandingPage() {
           <div className="flex flex-col xl:flex-row items-center gap-10 sm:gap-16 xl:gap-32">
 
             {/* Highly Polished Mobile Mockup Image */}
-            <div className="flex-shrink-0 w-full flex justify-center order-2 xl:order-1">
+            <div className="flex-shrink-0 w-full flex justify-center order-2 xl:order-1 relative px-4">
               <motion.div 
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="relative"
+                transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
+                className="relative group"
               >
-                {/* Glow behind phone */}
-                <div className="absolute inset-0 -z-10 blur-[80px] bg-[#39FF14]/10 rounded-full scale-110 translate-y-10" />
-
-                <div className="relative w-[280px] sm:w-[320px] md:w-[380px] xl:w-[440px]">
+                {/* Dynamic Aura */}
+                <div className="absolute -inset-20 -z-10 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.15),transparent_70%)] blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                
+                <div className="relative w-[280px] sm:w-[320px] md:w-[420px] xl:w-[480px]">
+                  {/* Premium Shadow Casting */}
+                  <div className="absolute inset-x-10 bottom-0 h-10 bg-black/40 blur-[40px] rounded-full scale-x-150 translate-y-20 opacity-50" />
+                  
                   <Image 
                     src="/images/rsi-mindscapeanalytics.png" 
                     alt="RSIQ Pro Mobile Terminal" 
-                    width={1000} 
-                    height={2000}
-                    className="w-full h-auto drop-shadow-[0_35px_60px_rgba(0,0,0,0.8)]"
+                    width={1200} 
+                    height={2400}
+                    className="w-full h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative z-10"
                     priority
                   />
 
-                  {/* PWA Badge — Re-aligned to new frame */}
+                  {/* Glassmorph Badges */}
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
-                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.4, duration: 0.5 }}
-                    className="absolute -right-4 sm:-right-8 top-[15%] bg-[#39FF14] text-black rounded-2xl p-3 sm:p-4 shadow-[0_16px_40px_rgba(57,255,20,0.4)] z-20 border border-black/10"
+                    animate={{ y: [0, -10, 0] }}
+                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute -right-6 top-[20%] bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-20 hidden md:block"
                   >
-                    <div className="flex flex-col items-center gap-1.5 text-center">
-                      <Smartphone size={18} className="sm:w-5 sm:h-5" />
-                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.12em] leading-tight">PWA<br/>NATIVE<br/>READY</span>
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center">
+                        <Smartphone className="text-[#39FF14]" size={20} />
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">PWA Native</span>
                     </div>
                   </motion.div>
 
-                  {/* Stars Badge — Re-aligned to new frame */}
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.8, x: -20 }}
-                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.55, duration: 0.5 }}
-                    className="absolute -left-4 sm:-left-8 bottom-[15%] bg-[#0a0f1a]/90 backdrop-blur-md border border-white/10 text-white rounded-2xl px-3 py-2 sm:px-4 sm:py-3 shadow-2xl z-20"
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                    className="absolute -left-6 bottom-[25%] bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-20 hidden md:block"
                   >
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex gap-0.5">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex gap-1">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={8} className="text-[#39FF14] fill-[#39FF14]" />
+                          <Star key={i} size={10} className="text-[#39FF14] fill-[#39FF14]" />
                         ))}
                       </div>
-                      <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Pro Grade</p>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Institutional</span>
                     </div>
                   </motion.div>
                 </div>
