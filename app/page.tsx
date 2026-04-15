@@ -304,80 +304,58 @@ export default function LandingPage() {
 
           <div className="flex flex-col xl:flex-row items-center gap-10 sm:gap-16 xl:gap-32">
 
-            {/* Phone Mockup */}
+            {/* Highly Polished Mobile Mockup Image */}
             <div className="flex-shrink-0 w-full flex justify-center order-2 xl:order-1">
               <motion.div 
                 initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, ease: "easeOut" }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
                 className="relative"
               >
-                {/* Phone outer shell */}
-                <div className="relative w-[240px] sm:w-[280px] md:w-[320px] xl:w-[360px]">
-                  {/* Glow behind phone */}
-                  <div className="absolute inset-0 -z-10 blur-[60px] bg-[#39FF14]/15 rounded-full scale-90 translate-y-10" />
+                {/* Glow behind phone */}
+                <div className="absolute inset-0 -z-10 blur-[80px] bg-[#39FF14]/10 rounded-full scale-110 translate-y-10" />
 
-                  {/* Phone frame */}
-                  <div className="relative p-2.5 sm:p-3.5 rounded-[48px] sm:rounded-[56px] bg-gradient-to-b from-white/10 to-white/[0.03] border border-white/10 shadow-[0_36px_90px_rgba(0,0,0,0.75)]">
-                    {/* Notch */}
-                    <div className="absolute top-[18px] sm:top-[22px] left-1/2 -translate-x-1/2 w-20 sm:w-24 h-5 sm:h-6 rounded-full bg-[#05080F] border border-white/5 z-20 flex items-center justify-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-slate-700" />
-                      <div className="w-2.5 h-2.5 rounded-full bg-slate-800 border border-slate-700" />
-                    </div>
+                <div className="relative w-[280px] sm:w-[320px] md:w-[380px] xl:w-[440px]">
+                  <Image 
+                    src="/images/rsi-mindscapeanalytics.png" 
+                    alt="RSIQ Pro Mobile Terminal" 
+                    width={1000} 
+                    height={2000}
+                    className="w-full h-auto drop-shadow-[0_35px_60px_rgba(0,0,0,0.8)]"
+                    priority
+                  />
 
-                    {/* Screen */}
-                    <div className="bg-[#05080F] rounded-[38px] sm:rounded-[44px] overflow-hidden relative aspect-[9/19.5] border border-white/5">
-                      <Image 
-                        src="/images/mobile_view.webp" 
-                        alt="RSIQ Pro Mobile View" 
-                        width={1080} 
-                        height={2280}
-                        className="w-full h-full object-cover object-center"
-                      />
-                      {/* Screen glare overlay */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-white/[0.04] to-transparent pointer-events-none" />
-                    </div>
-
-                    {/* Home indicator */}
-                    <div className="absolute bottom-[14px] left-1/2 -translate-x-1/2 w-20 sm:w-24 h-1 bg-white/20 rounded-full" />
-
-                    {/* Side buttons */}
-                    <div className="absolute -right-[3px] top-24 w-[3px] h-10 bg-white/10 rounded-r-full" />
-                    <div className="absolute -left-[3px] top-20 w-[3px] h-8 bg-white/10 rounded-l-full" />
-                    <div className="absolute -left-[3px] top-32 w-[3px] h-8 bg-white/10 rounded-l-full" />
-                  </div>
-
-                  {/* PWA Badge — properly positioned, no overflow */}
+                  {/* PWA Badge — Re-aligned to new frame */}
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8, x: 20 }}
                     whileInView={{ opacity: 1, scale: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.4, duration: 0.5 }}
-                    className="absolute -right-4 sm:-right-6 top-1/3 bg-[#39FF14] text-black rounded-2xl p-3 sm:p-3.5 shadow-[0_16px_40px_rgba(57,255,20,0.4)] z-20"
+                    className="absolute -right-4 sm:-right-8 top-[15%] bg-[#39FF14] text-black rounded-2xl p-3 sm:p-4 shadow-[0_16px_40px_rgba(57,255,20,0.4)] z-20 border border-black/10"
                   >
                     <div className="flex flex-col items-center gap-1.5 text-center">
                       <Smartphone size={18} className="sm:w-5 sm:h-5" />
-                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.15em] leading-tight">PWA<br/>NATIVE<br/>READY</span>
+                      <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.12em] leading-tight">PWA<br/>NATIVE<br/>READY</span>
                     </div>
                   </motion.div>
 
-                  {/* Stars badge */}
+                  {/* Stars Badge — Re-aligned to new frame */}
                   <motion.div
                     initial={{ opacity: 0, scale: 0.8, x: -20 }}
                     whileInView={{ opacity: 1, scale: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ delay: 0.55, duration: 0.5 }}
-                    className="absolute -left-4 sm:-left-6 bottom-1/3 bg-[#0a0f1a] border border-white/15 text-white rounded-2xl px-3 py-2 sm:px-3.5 sm:py-2.5 shadow-2xl z-20"
+                    className="absolute -left-4 sm:-left-8 bottom-[15%] bg-[#0a0f1a]/90 backdrop-blur-md border border-white/10 text-white rounded-2xl px-3 py-2 sm:px-4 sm:py-3 shadow-2xl z-20"
                   >
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex flex-col items-center gap-1">
                       <div className="flex gap-0.5">
                         {[...Array(5)].map((_, i) => (
                           <Star key={i} size={8} className="text-[#39FF14] fill-[#39FF14]" />
                         ))}
                       </div>
+                      <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-slate-400">Pro Grade</p>
                     </div>
-                    <p className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.1em] text-slate-400 mt-1">Pro Grade</p>
                   </motion.div>
                 </div>
               </motion.div>
