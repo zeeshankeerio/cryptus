@@ -25,14 +25,31 @@ const withPWA = withPWAInit({
     dontCacheBustURLsMatching: /\.[0-9a-f]{8}\./,
 
     runtimeCaching: [
+      // ── CRITICAL: Route Navigation Requests Correctly ──
+      // Since we override the default next-pwa runtimeCaching, we must explicitly
+      // handle HTML navigation requests so they don't immediately drop into the 
+      // navigateFallback (/offline) catch-all.
+      {
+        urlPattern: ({ request, url }) => {
+          const isNavigate = request.mode === 'navigate';
+          const isHtml = request.destination === 'document' || request.headers.get('accept')?.includes('text/html');
+          return isNavigate || isHtml;
+        },
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'html-pages',
+          networkTimeoutSeconds: 5,
+        },
+      },
       // ── CRITICAL: Real-time trading data MUST NEVER be cached ──
       // These endpoints power the live screener and alerts — serving stale data
       // from the PWA cache causes the "no price updates" bug on installed apps.
       {
         urlPattern: /\/api\/(screener|alerts|config|entitlements|health)/,
-        handler: 'NetworkOnly',
+        handler: 'NetworkFirst', // Use NetworkFirst to allow offline graceful failure instead of immediate crash
         options: {
           cacheName: 'live-data-bypass',
+          networkTimeoutSeconds: 3,
         },
       },
       // External exchange APIs (Binance/Bybit REST + Futures) — always fresh

@@ -807,14 +807,14 @@ const ScreenerRow = memo(function ScreenerRow({
           {orderFlowData ? (
             <div className="flex items-center justify-end gap-1">
               <div className="w-10 h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
-                <div className="h-full bg-green-500/60" style={{ width: `${orderFlowData.ratio * 100}%` }} />
-                <div className="h-full bg-red-500/60" style={{ width: `${(1 - orderFlowData.ratio) * 100}%` }} />
+                <div className="h-full bg-[#39FF14]/60" style={{ width: `${orderFlowData.ratio * 100}%` }} />
+                <div className="h-full bg-[#FF4B5C]/60" style={{ width: `${(1 - orderFlowData.ratio) * 100}%` }} />
               </div>
               <span className={cn("text-[8px] font-black",
-                orderFlowData.pressure === 'strong-buy' ? "text-green-400" :
-                  orderFlowData.pressure === 'buy' ? "text-green-400/70" :
-                    orderFlowData.pressure === 'strong-sell' ? "text-red-400" :
-                      orderFlowData.pressure === 'sell' ? "text-red-400/70" : "text-slate-500"
+                orderFlowData.pressure === 'strong-buy' ? "text-[#39FF14]" :
+                  orderFlowData.pressure === 'buy' ? "text-[#39FF14]/70" :
+                    orderFlowData.pressure === 'strong-sell' ? "text-[#FF4B5C]" :
+                      orderFlowData.pressure === 'sell' ? "text-[#FF4B5C]/70" : "text-slate-500"
               )}>
                 {(orderFlowData.ratio * 100).toFixed(0)}%
               </span>
@@ -827,10 +827,10 @@ const ScreenerRow = memo(function ScreenerRow({
           {smartMoneyScore ? (
             <span className={cn(
               "text-[9px] font-black px-1.5 py-0.5 rounded-md",
-              smartMoneyScore.score >= 60 ? "bg-green-500/15 text-green-400" :
-                smartMoneyScore.score >= 30 ? "bg-green-500/10 text-green-400/70" :
-                  smartMoneyScore.score <= -60 ? "bg-red-500/15 text-red-400" :
-                    smartMoneyScore.score <= -30 ? "bg-red-500/10 text-red-400/70" :
+              smartMoneyScore.score >= 60 ? "bg-[#39FF14]/15 text-[#39FF14]" :
+                smartMoneyScore.score >= 30 ? "bg-[#39FF14]/10 text-[#39FF14]/70" :
+                  smartMoneyScore.score <= -60 ? "bg-[#FF4B5C]/15 text-[#FF4B5C]" :
+                    smartMoneyScore.score <= -30 ? "bg-[#FF4B5C]/10 text-[#FF4B5C]/70" :
                       "bg-slate-800 text-slate-500"
             )}>
               {smartMoneyScore.score > 0 ? '+' : ''}{smartMoneyScore.score}
