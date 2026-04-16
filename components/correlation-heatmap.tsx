@@ -20,6 +20,7 @@ import {
   type CorrelationMatrix,
   type AssetReturns,
 } from '@/lib/correlation-engine';
+import { TrendingUp, TrendingDown, Info, Activity } from 'lucide-react';
 
 interface CorrelationHeatmapProps {
   open: boolean;
@@ -30,11 +31,10 @@ interface CorrelationHeatmapProps {
 export function CorrelationHeatmap({ open, onClose, data }: CorrelationHeatmapProps) {
   const [maxAssets, setMaxAssets] = useState(12);
 
-  // Compute correlation matrix from screener data (closes array → returns → Pearson)
+  // Compute correlation matrix from screener data
   const matrix: CorrelationMatrix | null = useMemo(() => {
     if (!open || data.length < 2) return null;
 
-    // Filter to entries that have historical closes (needed for returns)
     const withCloses = data
       .filter(e => e.historicalCloses && e.historicalCloses.length >= 15)
       .slice(0, maxAssets);
@@ -53,103 +53,122 @@ export function CorrelationHeatmap({ open, onClose, data }: CorrelationHeatmapPr
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-          onClick={onClose}
+           initial={{ opacity: 0 }}
+           animate={{ opacity: 1 }}
+           exit={{ opacity: 0 }}
+           className="fixed inset-0 z-[500] flex items-center justify-center p-4 lg:p-8"
+           onClick={onClose}
         >
-          {/* Backdrop */}
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          {/* Deep Institutional Backdrop */}
+          <div className="absolute inset-0 bg-[#04080F]/90 backdrop-blur-md" />
 
-          {/* Panel */}
+          {/* Dynamic Glow Hub */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-violet-600/5 rounded-full blur-[120px] pointer-events-none" />
+
+          {/* Interactive Panel */}
           <motion.div
-            initial={{ scale: 0.92, opacity: 0, y: 20 }}
+            initial={{ scale: 0.95, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.92, opacity: 0, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-4xl max-h-[85vh] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-[#0a0f1e] to-slate-950 shadow-[0_0_80px_rgba(0,0,0,0.6)]"
+            exit={{ scale: 0.95, opacity: 0, y: 30 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 200 }}
+            className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0A0F1B]/95 shadow-[0_40px_100px_rgba(0,0,0,0.8)] backdrop-blur-3xl flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center">
-                  <span className="text-sm">🔗</span>
+            {/* Command Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.05] bg-white/[0.01]">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-violet-500/20 to-fuchsia-600/20 border border-violet-500/30 flex items-center justify-center shadow-lg shadow-violet-500/10">
+                  <span className="text-lg">🔗</span>
                 </div>
                 <div>
-                  <h2 className="text-sm font-black text-white tracking-tight">Correlation Heatmap</h2>
-                  <p className="text-[10px] text-slate-500">Real-time Pearson correlations across your watchlist</p>
+                  <h2 className="text-base font-black text-white tracking-tight uppercase">Correlation Matrix</h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Real-time Pearson Analysis v2.0</p>
+                  </div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                {/* Asset count control */}
-                <select
-                  value={maxAssets}
-                  onChange={e => setMaxAssets(Number(e.target.value))}
-                  className="bg-slate-900/80 border border-white/10 rounded-lg px-2 py-1 text-[10px] font-bold text-slate-300 cursor-pointer"
-                >
-                  <option value={8}>Top 8</option>
-                  <option value={12}>Top 12</option>
-                  <option value={16}>Top 16</option>
-                  <option value={20}>Top 20</option>
-                </select>
+              <div className="flex items-center gap-4">
+                <div className="bg-black/40 border border-white/10 rounded-xl px-1.5 py-1.5 flex items-center gap-1.5">
+                  <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest ml-1.5 mr-1">Sample Size:</span>
+                  {[8, 12, 16, 20].map(val => (
+                    <button
+                      key={val}
+                      onClick={() => setMaxAssets(val)}
+                      className={cn(
+                        "px-2.5 py-1 text-[9px] font-black rounded-lg transition-all",
+                        maxAssets === val ? "bg-white text-black" : "text-slate-500 hover:text-slate-300"
+                      )}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
 
                 <button
                   onClick={onClose}
-                  className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-all"
+                  className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 text-slate-400 hover:text-white flex items-center justify-center transition-all group"
                 >
-                  ✕
+                  <span className="text-xl group-hover:rotate-90 transition-transform">✕</span>
                 </button>
               </div>
             </div>
 
-            {/* Body */}
-            <div className="overflow-auto p-6 max-h-[calc(85vh-80px)]">
+            {/* Operational Body */}
+            <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-white/[0.005]">
               {!matrix ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3">
-                  <span className="text-4xl">📊</span>
-                  <p className="text-sm text-slate-400 font-medium">Insufficient data for correlation analysis</p>
-                  <p className="text-[10px] text-slate-600">Need at least 2 assets with 15+ historical data points</p>
+                <div className="flex flex-col items-center justify-center py-32 gap-6 opacity-40">
+                  <div className="w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center animate-pulse">
+                     <span className="text-4xl text-slate-600">📊</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-slate-400 font-black uppercase tracking-widest">Insufficient Market Context</p>
+                    <p className="text-[10px] text-slate-600 uppercase font-bold mt-2">Requirement: 2+ active assets with 15H+ history</p>
+                  </div>
                 </div>
               ) : (
-                <>
-                  {/* Heatmap Grid */}
-                  <div className="overflow-x-auto">
-                    <table className="border-collapse mx-auto">
+                <div className="max-w-4xl mx-auto">
+                  {/* Heatmap Visualization */}
+                  <div className="overflow-visible mb-12 flex justify-center">
+                    <table className="border-collapse">
                       <thead>
                         <tr>
-                          <th className="w-16" />
+                          <th className="w-20" />
                           {matrix.symbols.map(sym => (
-                            <th key={sym} className="px-1 py-2 text-[8px] font-black text-slate-500 uppercase tracking-wider" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
-                              {getSymbolAlias(sym).slice(0, 6)}
+                            <th key={sym} className="px-1.5 py-4 text-[9px] font-black text-slate-500 uppercase tracking-[0.15em]" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+                              <span className="hover:text-white transition-colors cursor-default">{getSymbolAlias(sym)}</span>
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {matrix.symbols.map((rowSym, i) => (
-                          <tr key={rowSym}>
-                            <td className="pr-2 py-0.5 text-[8px] font-black text-slate-500 text-right uppercase tracking-wider whitespace-nowrap">
-                              {getSymbolAlias(rowSym).slice(0, 6)}
+                          <tr key={rowSym} className="group/row">
+                            <td className="pr-4 py-1 text-[10px] font-black text-slate-500 text-right uppercase tracking-wider whitespace-nowrap group-hover/row:text-white transition-colors">
+                              {getSymbolAlias(rowSym)}
                             </td>
-                            {matrix.symbols.map((colSym, j) => {
-                              const r = matrix.matrix[i][j];
+                            {matrix.matrix[i].map((r, j) => {
                               const isDiagonal = i === j;
                               return (
-                                <td
-                                  key={colSym}
+                                <motion.td
+                                  key={matrix.symbols[j]}
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  transition={{ delay: (i + j) * 0.01, duration: 0.2 }}
                                   className={cn(
-                                    'w-9 h-9 text-center text-[9px] font-black tabular-nums border border-white/5 transition-all',
-                                    isDiagonal ? 'bg-slate-800/60' : getCorrelationColor(r),
-                                    getCorrelationTextColor(r),
-                                    !isDiagonal && 'hover:ring-1 hover:ring-white/30 cursor-help'
+                                    'w-11 h-11 sm:w-12 sm:h-12 text-center text-[11px] font-black tabular-nums border border-[#0A0F1B] transition-all relative overflow-hidden',
+                                    isDiagonal ? 'bg-slate-900/40 text-slate-700' : getCorrelationColor(r),
+                                    !isDiagonal && getCorrelationTextColor(r),
+                                    !isDiagonal && 'hover:scale-[1.12] hover:z-10 hover:shadow-2xl hover:rounded-sm cursor-help active:scale-95'
                                   )}
-                                  title={isDiagonal ? `${getSymbolAlias(rowSym)} vs itself` : `${getSymbolAlias(rowSym)} ↔ ${getSymbolAlias(colSym)}: r = ${r.toFixed(2)}`}
+                                  title={isDiagonal ? `${getSymbolAlias(rowSym)} Identity` : `${getSymbolAlias(rowSym)} ↔ ${getSymbolAlias(matrix.symbols[j])}: ${r.toFixed(3)}`}
                                 >
                                   {isDiagonal ? '—' : r.toFixed(2)}
-                                </td>
+                                  {!isDiagonal && Math.abs(r) > 0.8 && (
+                                    <div className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/20 animate-pulse" />
+                                  )}
+                                </motion.td>
                               );
                             })}
                           </tr>
@@ -158,63 +177,90 @@ export function CorrelationHeatmap({ open, onClose, data }: CorrelationHeatmapPr
                     </table>
                   </div>
 
-                  {/* Legend */}
-                  <div className="flex items-center justify-center gap-2 mt-4">
-                    <span className="text-[8px] text-slate-600 font-bold">-1.0</span>
-                    <div className="flex h-2 rounded-full overflow-hidden w-48">
-                      <div className="flex-1 bg-rose-500" />
-                      <div className="flex-1 bg-rose-500/60" />
-                      <div className="flex-1 bg-rose-500/25" />
-                      <div className="flex-1 bg-slate-700" />
-                      <div className="flex-1 bg-emerald-500/25" />
-                      <div className="flex-1 bg-emerald-500/60" />
-                      <div className="flex-1 bg-emerald-500" />
+                  {/* Pro Intensity Scale */}
+                  <div className="flex flex-col items-center gap-4 mb-12">
+                    <div className="flex items-center gap-10">
+                       <div className="flex flex-col items-center">
+                         <span className="text-[10px] font-black text-rose-500 tracking-tighter">-1.00</span>
+                         <span className="text-[7px] font-black text-slate-600 uppercase mt-1">Inverse</span>
+                       </div>
+                       <div className="relative group">
+                         <div className="flex h-3.5 rounded-full overflow-hidden w-64 border border-white/5 shadow-inner">
+                            <div className="flex-1 bg-gradient-to-r from-rose-500 via-slate-800 to-emerald-500" />
+                         </div>
+                         <div className="absolute top-full left-1/2 -translate-x-1/2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest bg-black/40 px-2 py-1 rounded-lg border border-white/10">Pearson Coefficient Scale</span>
+                         </div>
+                       </div>
+                       <div className="flex flex-col items-center">
+                         <span className="text-[10px] font-black text-emerald-400 tracking-tighter">+1.00</span>
+                         <span className="text-[7px] font-black text-slate-600 uppercase mt-1">Direct</span>
+                       </div>
                     </div>
-                    <span className="text-[8px] text-slate-600 font-bold">+1.0</span>
                   </div>
 
-                  {/* Insights */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                    {/* Top Positive */}
-                    <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-2xl p-4">
-                      <h3 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-3">🔗 Most Correlated</h3>
+                  {/* Institutional Intel Blocks */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Top Clusters */}
+                    <div
+                      className="bg-emerald-500/[0.03] border border-emerald-500/10 rounded-3xl p-6 relative overflow-hidden group hover:bg-emerald-500/[0.05] transition-all"
+                    >
+                      <h3 className="text-[11px] font-black text-emerald-400 uppercase tracking-[0.2em] mb-5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        Dominant Correlations
+                      </h3>
                       {matrix.topPositive.length === 0 ? (
-                        <p className="text-[10px] text-slate-500">No significant positive correlations</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase py-4">Equilibrium state detected</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {matrix.topPositive.map(p => (
-                            <div key={`${p.symbolA}-${p.symbolB}`} className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-300">
-                                {getSymbolAlias(p.symbolA)} ↔ {getSymbolAlias(p.symbolB)}
+                            <div key={`${p.symbolA}-${p.symbolB}`} className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/[0.02] hover:border-emerald-500/20 transition-all">
+                              <span className="text-[11px] font-black text-white uppercase tracking-tight">
+                                {getSymbolAlias(p.symbolA)} <span className="text-slate-600 px-1 opacity-50">/</span> {getSymbolAlias(p.symbolB)}
                               </span>
-                              <span className="text-[10px] font-black text-emerald-400 tabular-nums">{p.coefficient.toFixed(2)}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[12px] font-black text-emerald-400 tabular-nums">{(p.coefficient * 100).toFixed(0)}%</span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Top Negative (Hedging Opportunities) */}
-                    <div className="bg-rose-500/5 border border-rose-500/10 rounded-2xl p-4">
-                      <h3 className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-3">🛡️ Hedge Opportunities</h3>
+                    {/* Hedging Suggestions */}
+                    <div
+                       className="bg-rose-500/[0.03] border border-rose-500/10 rounded-3xl p-6 relative overflow-hidden group hover:bg-rose-500/[0.05] transition-all"
+                    >
+                      <h3 className="text-[11px] font-black text-rose-400 uppercase tracking-[0.2em] mb-5 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                        Counter-Trend Nodes
+                      </h3>
                       {matrix.topNegative.length === 0 ? (
-                        <p className="text-[10px] text-slate-500">No significant negative correlations found</p>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase py-4">High systemic beta found</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {matrix.topNegative.map(p => (
-                            <div key={`${p.symbolA}-${p.symbolB}`} className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-300">
-                                {getSymbolAlias(p.symbolA)} ↔ {getSymbolAlias(p.symbolB)}
+                            <div key={`${p.symbolA}-${p.symbolB}`} className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/[0.02] hover:border-rose-500/20 transition-all">
+                              <span className="text-[11px] font-black text-white uppercase tracking-tight">
+                                {getSymbolAlias(p.symbolA)} <span className="text-slate-600 px-1 opacity-50">/</span> {getSymbolAlias(p.symbolB)}
                               </span>
-                              <span className="text-[10px] font-black text-rose-400 tabular-nums">{p.coefficient.toFixed(2)}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[12px] font-black text-rose-400 tabular-nums">{(p.coefficient * 100).toFixed(0)}%</span>
+                              </div>
                             </div>
                           ))}
                         </div>
                       )}
                     </div>
                   </div>
-                </>
+                </div>
               )}
+            </div>
+
+            {/* Terminal Footer */}
+            <div className="px-8 py-4 border-t border-white/[0.05] flex items-center justify-between opacity-50">
+               <span className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em]">Proprietary Pearson Engine</span>
+               <span className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em] tabular-nums">Refreshed: {new Date().toLocaleTimeString()}</span>
             </div>
           </motion.div>
         </motion.div>

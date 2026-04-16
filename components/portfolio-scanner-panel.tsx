@@ -21,6 +21,7 @@ import {
   type PortfolioPosition,
   type PortfolioRiskReport,
 } from '@/lib/portfolio-scanner';
+import { Target, Shield, AlertTriangle, Trash2, Plus, ArrowUpRight, ArrowDownRight, LayoutGrid, List } from 'lucide-react';
 
 interface PortfolioScannerPanelProps {
   open: boolean;
@@ -73,6 +74,7 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
   }, [positions]);
 
   const handleClear = useCallback(() => {
+    if (!confirm('Purge all portfolio data?')) return;
     setPositions([]);
     clearPortfolio();
   }, []);
@@ -83,9 +85,9 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
     setShowSuggestions(false);
   }, []);
 
-  // Risk score color
-  const riskColor = report.riskScore >= 80 ? 'text-rose-400' : report.riskScore >= 60 ? 'text-orange-400' : report.riskScore >= 40 ? 'text-amber-400' : report.riskScore >= 20 ? 'text-emerald-400' : 'text-[#39FF14]';
-  const riskBg = report.riskScore >= 80 ? 'from-rose-500/20' : report.riskScore >= 60 ? 'from-orange-500/20' : report.riskScore >= 40 ? 'from-amber-500/20' : 'from-emerald-500/20';
+  // Risk Score Visualization Logic
+  const riskColor = report.riskScore >= 80 ? 'text-rose-500' : report.riskScore >= 60 ? 'text-orange-500' : report.riskScore >= 40 ? 'text-amber-500' : report.riskScore >= 20 ? 'text-emerald-500' : 'text-[#39FF14]';
+  const riskBorder = report.riskScore >= 80 ? 'border-rose-500/30' : report.riskScore >= 60 ? 'border-orange-500/30' : report.riskScore >= 40 ? 'border-amber-500/30' : 'border-emerald-500/30';
 
   return (
     <AnimatePresence>
@@ -94,223 +96,264 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          className="fixed inset-0 z-[500] flex items-center justify-center p-4 lg:p-8"
           onClick={onClose}
         >
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-[#04080F]/90 backdrop-blur-md" />
 
           <motion.div
-            initial={{ scale: 0.92, opacity: 0, y: 20 }}
+            initial={{ scale: 0.95, opacity: 0, y: 30 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.92, opacity: 0, y: 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="relative w-full max-w-5xl max-h-[90vh] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-slate-950 via-[#0a0f1e] to-slate-950 shadow-[0_0_80px_rgba(0,0,0,0.6)]"
+            exit={{ scale: 0.95, opacity: 0, y: 30 }}
+            transition={{ type: 'spring', damping: 30, stiffness: 200 }}
+            className="relative w-full max-w-6xl max-h-[90vh] overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0A0F1B]/95 shadow-[0_40px_100px_rgba(0,0,0,0.8)] backdrop-blur-3xl flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-                  <span className="text-sm">🛡️</span>
+            {/* Command Header */}
+            <div className="flex items-center justify-between px-8 py-5 border-b border-white/[0.05] bg-white/[0.01]">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-500/30 flex items-center justify-center shadow-lg shadow-cyan-500/10">
+                  <Shield size={20} className="text-cyan-400" />
                 </div>
                 <div>
-                  <h2 className="text-sm font-black text-white tracking-tight">Portfolio Risk Scanner</h2>
-                  <p className="text-[10px] text-slate-500">Real-time risk analysis, P&L tracking & hedge suggestions</p>
+                  <h2 className="text-base font-black text-white tracking-tight uppercase">Risk Scanner Engine</h2>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <div className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">{positions.length} Positions Under Monitor</p>
+                  </div>
                 </div>
               </div>
-              <button onClick={onClose} className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white flex items-center justify-center transition-all">✕</button>
+
+              <div className="flex items-center gap-4">
+                {positions.length > 0 && (
+                  <button
+                    onClick={handleClear}
+                    className="flex items-center gap-2 px-4 py-2 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl text-[9px] font-black text-rose-400 uppercase tracking-widest transition-all"
+                  >
+                    <Trash2 size={12} />
+                    Purge All
+                  </button>
+                )}
+                <button
+                  onClick={onClose}
+                  className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 hover:border-white/20 text-slate-400 hover:text-white flex items-center justify-center transition-all group"
+                >
+                  <span className="text-xl group-hover:rotate-90 transition-transform">✕</span>
+                </button>
+              </div>
             </div>
 
-            <div className="overflow-auto p-6 max-h-[calc(90vh-80px)]">
-              {/* ── Risk Overview Cards ── */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-                {/* Total Value */}
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-3">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Portfolio Value</span>
-                  <div className="text-lg font-black text-white tabular-nums mt-1">${formatPrice(report.totalValue)}</div>
-                </div>
-
-                {/* P&L */}
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-3">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Unrealized P&L</span>
-                  <div className={cn("text-lg font-black tabular-nums mt-1", report.totalPnl >= 0 ? 'text-[#39FF14]' : 'text-[#FF4B5C]')}>
-                    {report.totalPnl >= 0 ? '+' : ''}{formatPrice(report.totalPnl)}
-                    <span className="text-[10px] ml-1">({report.totalPnlPercent >= 0 ? '+' : ''}{report.totalPnlPercent.toFixed(1)}%)</span>
+            <div className="flex-1 overflow-auto p-8 custom-scrollbar">
+              {/* ── Intelligence HUD ── */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mb-8">
+                {/* Risk Score Hub */}
+                <div className={cn("lg:col-span-4 bg-black/30 border rounded-3xl p-6 flex items-center gap-6", riskBorder)}>
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                     <svg className="w-full h-full transform -rotate-90">
+                       <circle cx="48" cy="48" r="44" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
+                       <circle cx="48" cy="48" r="44" stroke="currentColor" strokeWidth="8" fill="transparent" className={riskColor} strokeDasharray={276} strokeDashoffset={276 - (276 * report.riskScore) / 100} strokeLinecap="round" />
+                     </svg>
+                     <div className="absolute flex flex-col items-center">
+                        <span className={cn("text-2xl font-black tabular-nums", riskColor)}>{report.riskScore}</span>
+                        <span className="text-[7px] font-black text-slate-500 uppercase tracking-widest">Score</span>
+                     </div>
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em]">Current Threat Level</span>
+                    <h3 className={cn("text-xl font-black uppercase tracking-tight mt-1", riskColor)}>{report.riskLabel}</h3>
+                    <p className="text-[10px] text-slate-400 font-medium mt-1 leading-relaxed">{report.concentrationLabel}</p>
                   </div>
                 </div>
 
-                {/* Portfolio RSI */}
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-3">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Portfolio RSI</span>
-                  <div className={cn("text-lg font-black tabular-nums mt-1",
-                    report.portfolioRsi === null ? 'text-slate-600' :
-                    report.portfolioRsi >= 70 ? 'text-[#FF4B5C]' :
-                    report.portfolioRsi <= 30 ? 'text-[#39FF14]' : 'text-slate-300'
-                  )}>
-                    {report.portfolioRsi !== null ? report.portfolioRsi.toFixed(1) : '—'}
-                  </div>
-                </div>
-
-                {/* Risk Score */}
-                <div className={cn("bg-gradient-to-br to-transparent border border-white/5 rounded-2xl p-3", riskBg)}>
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Risk Score</span>
-                  <div className={cn("text-lg font-black tabular-nums mt-1", riskColor)}>
-                    {report.riskScore}
-                    <span className="text-[10px] ml-1 text-slate-400">/ 100</span>
-                  </div>
-                  <span className={cn("text-[8px] font-black uppercase", riskColor)}>{report.riskLabel}</span>
-                </div>
-
-                {/* Concentration */}
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-3">
-                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Concentration</span>
-                  <div className="text-[11px] font-black text-slate-300 mt-1">{report.concentrationLabel}</div>
-                  <span className="text-[8px] text-slate-600 tabular-nums">HHI: {report.concentrationHhi}</span>
+                {/* Financial Summary */}
+                <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {[
+                    { label: 'Net Asset Value', value: `$${formatPrice(report.totalValue)}`, icon: <Target size={14} />, color: 'text-white' },
+                    { 
+                      label: 'Portfolio P&L', 
+                      value: `${report.totalPnl >= 0 ? '+' : ''}${formatPrice(report.totalPnl)}`, 
+                      percent: `${report.totalPnlPercent >= 0 ? '+' : ''}${report.totalPnlPercent.toFixed(2)}%`,
+                      color: report.totalPnl >= 0 ? 'text-[#39FF14]' : 'text-rose-500' 
+                    },
+                    { 
+                      label: 'Aggregate RSI', 
+                      value: report.portfolioRsi !== null ? report.portfolioRsi.toFixed(1) : '—',
+                      color: report.portfolioRsi === null ? 'text-slate-300' : report.portfolioRsi >= 70 ? 'text-rose-500' : report.portfolioRsi <= 30 ? 'text-[#39FF14]' : 'text-slate-300'
+                    },
+                    { label: 'HHI Index', value: report.concentrationHhi, labelExtra: 'Concentration', color: 'text-slate-400' }
+                  ].map((stat, i) => (
+                    <div key={i} className="bg-white/[0.02] border border-white/[0.05] rounded-2xl p-4 flex flex-col justify-between group hover:bg-white/[0.04] transition-all">
+                       <span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{stat.label}</span>
+                       <div className="mt-2">
+                         <div className={cn("text-lg font-black tabular-nums", stat.color)}>{stat.value}</div>
+                         {stat.percent && <div className={cn("text-[9px] font-bold mt-0.5", stat.color)}>{stat.percent}</div>}
+                         {stat.labelExtra && <div className="text-[9px] font-bold text-slate-700 mt-0.5 uppercase tracking-tighter">{stat.labelExtra}</div>}
+                       </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              {/* ── Add Position Form ── */}
-              <div className="bg-slate-900/30 border border-white/5 rounded-2xl p-4 mb-6">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Add Position</h3>
-                <div className="flex items-end gap-3 flex-wrap">
-                  <div className="relative flex-1 min-w-[140px]">
-                    <label className="text-[8px] font-bold text-slate-600 uppercase">Symbol</label>
+              {/* ── Operational Entry ── */}
+              <div className="bg-white/[0.02] border border-white/[0.05] rounded-3xl p-6 mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <Plus size={14} className="text-[#39FF14]" />
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Deploy New Position</h3>
+                </div>
+                <div className="flex items-end gap-4 flex-wrap">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Symbol Identity</label>
                     <input
                       value={newSymbol}
                       onChange={e => { setNewSymbol(e.target.value.toUpperCase()); setShowSuggestions(true); }}
                       onFocus={() => setShowSuggestions(true)}
                       onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                      placeholder="BTCUSDT"
-                      className="w-full mt-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-slate-700 focus:outline-none focus:border-[#39FF14]/50 transition-colors"
+                      placeholder="BTCUSDT / EURUSD..."
+                      className="w-full mt-2 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black text-white placeholder-slate-800 focus:outline-none focus:border-cyan-500/50 transition-all shadow-inner"
                     />
-                    {/* Autocomplete dropdown */}
                     {showSuggestions && suggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 mt-1 bg-slate-900 border border-white/10 rounded-xl overflow-hidden z-10 shadow-2xl">
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-[#0A0F1B] border border-white/10 rounded-2xl overflow-hidden z-[600] shadow-[0_20px_40px_rgba(0,0,0,0.6)] backdrop-blur-xl">
                         {suggestions.map(s => (
                           <button
                             key={s.symbol}
                             onMouseDown={() => handleSelectSuggestion(s.symbol, s.price)}
-                            className="w-full flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+                            className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/[0.03] last:border-0"
                           >
-                            <span className="text-[10px] font-bold text-slate-300">{s.alias}</span>
-                            <span className="text-[10px] font-bold text-slate-500 tabular-nums">${formatPrice(s.price)}</span>
+                            <span className="text-[11px] font-black text-white">{s.alias}</span>
+                            <span className="text-[10px] font-black text-slate-500 tabular-nums">${formatPrice(s.price)}</span>
                           </button>
                         ))}
                       </div>
                     )}
                   </div>
-                  <div className="w-24">
-                    <label className="text-[8px] font-bold text-slate-600 uppercase">Quantity</label>
+                  <div className="w-32">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Volume</label>
                     <input
                       value={newQty}
                       onChange={e => setNewQty(e.target.value)}
-                      placeholder="1.5"
+                      placeholder="0.00"
                       type="number"
-                      step="any"
-                      className="w-full mt-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-slate-700 focus:outline-none focus:border-[#39FF14]/50 transition-colors tabular-nums"
+                      className="w-full mt-2 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black text-white focus:outline-none focus:border-cyan-500/50 transition-all shadow-inner tabular-nums"
                     />
                   </div>
-                  <div className="w-28">
-                    <label className="text-[8px] font-bold text-slate-600 uppercase">Entry Price</label>
+                  <div className="w-40">
+                    <label className="text-[9px] font-black text-slate-600 uppercase tracking-widest ml-1">Execution Price</label>
                     <input
                       value={newEntry}
                       onChange={e => setNewEntry(e.target.value)}
-                      placeholder="65000"
+                      placeholder="0.00"
                       type="number"
-                      step="any"
-                      className="w-full mt-1 bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-white placeholder-slate-700 focus:outline-none focus:border-[#39FF14]/50 transition-colors tabular-nums"
+                      className="w-full mt-2 bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-xs font-black text-white focus:outline-none focus:border-cyan-500/50 transition-all shadow-inner tabular-nums"
                     />
                   </div>
                   <button
                     onClick={handleAdd}
                     disabled={!newSymbol || !newQty || !newEntry}
-                    className="px-4 py-2 bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/30 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#39FF14]/20 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    className="h-[46px] px-8 bg-cyan-500 text-black rounded-xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-cyan-400 disabled:opacity-20 disabled:grayscale transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
                   >
-                    + Add
+                    Commit Entry
                   </button>
-                  {positions.length > 0 && (
-                    <button
-                      onClick={handleClear}
-                      className="px-3 py-2 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500/20 transition-all"
-                    >
-                      Clear All
-                    </button>
-                  )}
                 </div>
               </div>
 
-              {/* ── Positions Table ── */}
-              {report.positions.length > 0 && (
-                <div className="bg-slate-900/30 border border-white/5 rounded-2xl overflow-hidden mb-6">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-white/5">
-                        {['Asset', 'Qty', 'Entry', 'Current', 'Value', 'P&L', 'Weight', 'RSI', 'Risk', ''].map(h => (
-                          <th key={h} className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest text-left">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {report.positions.map(pos => (
-                        <tr key={pos.symbol} className="border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors">
-                          <td className="px-3 py-2.5 text-[11px] font-black text-white">{getSymbolAlias(pos.symbol)}</td>
-                          <td className="px-3 py-2.5 text-[10px] font-bold text-slate-400 tabular-nums">{pos.quantity}</td>
-                          <td className="px-3 py-2.5 text-[10px] font-bold text-slate-500 tabular-nums">${formatPrice(pos.entryPrice)}</td>
-                          <td className="px-3 py-2.5 text-[10px] font-bold text-slate-300 tabular-nums">${formatPrice(pos.currentPrice)}</td>
-                          <td className="px-3 py-2.5 text-[10px] font-black text-white tabular-nums">${formatPrice(pos.marketValue)}</td>
-                          <td className={cn("px-3 py-2.5 text-[10px] font-black tabular-nums", pos.pnl >= 0 ? 'text-[#39FF14]' : 'text-[#FF4B5C]')}>
-                            {pos.pnl >= 0 ? '+' : ''}{formatPrice(pos.pnl)} ({pos.pnlPercent >= 0 ? '+' : ''}{pos.pnlPercent.toFixed(1)}%)
-                          </td>
-                          <td className="px-3 py-2.5 text-[10px] font-bold text-slate-400 tabular-nums">{pos.weight.toFixed(1)}%</td>
-                          <td className={cn("px-3 py-2.5 text-[10px] font-black tabular-nums",
-                            pos.rsi === null ? 'text-slate-700' :
-                            pos.rsi >= 70 ? 'text-[#FF4B5C]' :
-                            pos.rsi <= 30 ? 'text-[#39FF14]' : 'text-slate-400'
-                          )}>
-                            {pos.rsi !== null ? pos.rsi.toFixed(1) : '—'}
-                          </td>
-                          <td className="px-3 py-2.5 text-[10px] font-bold text-slate-500 tabular-nums">{pos.riskContribution}%</td>
-                          <td className="px-3 py-2.5">
-                            <button
-                              onClick={() => handleRemove(pos.symbol)}
-                              className="text-slate-600 hover:text-rose-400 transition-colors text-xs"
-                              title="Remove position"
-                            >✕</button>
-                          </td>
+              {/* ── Active Positions ── */}
+              {report.positions.length > 0 ? (
+                <div className="space-y-6">
+                  <div className="bg-black/20 border border-white/[0.05] rounded-3xl overflow-hidden shadow-2xl">
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-white/[0.02]">
+                          {['Symbol', 'Quantity', 'Entry Basis', 'Price Action', 'Market Value', 'P&L Insight', 'Exposure', 'RSI', ''].map(h => (
+                            <th key={h} className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] text-left border-b border-white/[0.05]">{h}</th>
+                          ))}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* ── Hedge Suggestions ── */}
-              {report.hedgeSuggestions.length > 0 && (
-                <div className="bg-amber-500/5 border border-amber-500/10 rounded-2xl p-4">
-                  <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-3">⚠️ Risk Alerts & Hedge Suggestions</h3>
-                  <div className="space-y-2">
-                    {report.hedgeSuggestions.map((s, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <span className={cn("mt-0.5 text-[8px] font-black px-1.5 py-0.5 rounded uppercase",
-                          s.urgency === 'high' ? 'bg-rose-500/20 text-rose-400' :
-                          s.urgency === 'medium' ? 'bg-amber-500/20 text-amber-400' :
-                          'bg-slate-500/20 text-slate-400'
-                        )}>{s.urgency}</span>
-                        <span className="text-[10px] text-slate-300 leading-relaxed">{s.reason}</span>
-                      </div>
-                    ))}
+                      </thead>
+                      <tbody>
+                        {report.positions.map(pos => (
+                          <tr key={pos.symbol} className="group hover:bg-white/[0.02] transition-all border-b border-white/[0.03] last:border-0">
+                            <td className="px-6 py-5 font-black text-white text-[12px]">{getSymbolAlias(pos.symbol)}</td>
+                            <td className="px-6 py-5 font-bold text-slate-400 text-[11px] tabular-nums">{pos.quantity}</td>
+                            <td className="px-6 py-5 font-bold text-slate-600 text-[11px] tabular-nums">${formatPrice(pos.entryPrice)}</td>
+                            <td className="px-6 py-5 font-black text-slate-300 text-[11px] tabular-nums">
+                               <div className="flex items-center gap-2">
+                                 ${formatPrice(pos.currentPrice)}
+                                 {pos.pnl >= 0 ? <ArrowUpRight size={12} className="text-[#39FF14]" /> : <ArrowDownRight size={12} className="text-rose-500" />}
+                               </div>
+                            </td>
+                            <td className="px-6 py-5 font-black text-white text-[11px] tabular-nums">${formatPrice(pos.marketValue)}</td>
+                            <td className={cn("px-6 py-5 font-black text-[11px] tabular-nums", pos.pnl >= 0 ? 'text-[#39FF14]' : 'text-rose-500')}>
+                              <span className="opacity-90">{pos.pnl >= 0 ? '+' : ''}{formatPrice(pos.pnl)}</span>
+                              <span className="ml-2 px-1.5 py-0.5 rounded-lg bg-current/10 border border-current/20 text-[9px]">{pos.pnlPercent >= 0 ? '+' : ''}{pos.pnlPercent.toFixed(2)}%</span>
+                            </td>
+                            <td className="px-6 py-5">
+                               <div className="flex flex-col gap-1 w-20">
+                                 <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                   <div className="h-full bg-cyan-500" style={{ width: `${pos.weight}%` }} />
+                                 </div>
+                                 <span className="text-[9px] font-black text-slate-600 tabular-nums">{pos.weight.toFixed(1)}%</span>
+                               </div>
+                            </td>
+                            <td className={cn("px-6 py-5 font-black tabular-nums text-[11px]",
+                              pos.rsi === null ? 'text-slate-800' :
+                              pos.rsi >= 70 ? 'text-rose-500' :
+                              pos.rsi <= 30 ? 'text-[#39FF14]' : 'text-slate-500'
+                            )}>
+                              {pos.rsi !== null ? pos.rsi.toFixed(1) : '—'}
+                            </td>
+                            <td className="px-6 py-5">
+                              <button
+                                onClick={() => handleRemove(pos.symbol)}
+                                className="w-8 h-8 rounded-xl bg-rose-500/5 hover:bg-rose-500/20 text-rose-500/40 hover:text-rose-500 flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-              )}
 
-              {/* Empty state */}
-              {positions.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12 gap-3">
-                  <span className="text-4xl">💼</span>
-                  <p className="text-sm text-slate-400 font-medium">No positions added yet</p>
-                  <p className="text-[10px] text-slate-600 max-w-md text-center">Add your crypto, forex, metals, or stock positions above to get real-time risk analysis with RSI-weighted scoring and automated hedge suggestions.</p>
+                  {/* ── Defensive Intelligence (Hedges) ── */}
+                  {report.hedgeSuggestions.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {report.hedgeSuggestions.map((s, i) => (
+                        <div key={i} className="bg-amber-500/[0.03] border border-amber-500/10 rounded-3xl p-5 flex items-start gap-4 hover:bg-amber-500/[0.05] transition-all group">
+                          <div className={cn("mt-1 p-2 rounded-xl bg-amber-500/10 text-amber-500", s.urgency === 'high' && 'animate-pulse')}>
+                             <AlertTriangle size={16} />
+                          </div>
+                          <div className="flex-1">
+                             <div className="flex items-center gap-2 mb-1">
+                               <span className={cn("text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded",
+                                 s.urgency === 'high' ? 'bg-rose-500/20 text-rose-500' : 'bg-amber-500/20 text-amber-500'
+                               )}>{s.urgency} Risk Alert</span>
+                             </div>
+                             <p className="text-[10px] font-black text-slate-300 leading-relaxed uppercase tracking-tight">{s.reason}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-32 opacity-30">
+                  <div className="w-24 h-24 rounded-full bg-slate-900 flex items-center justify-center mb-6">
+                     <Shield size={40} className="text-slate-700" />
+                  </div>
+                  <h4 className="text-xs font-black text-white uppercase tracking-[0.3em] mb-2">No Active Intelligence</h4>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center max-w-sm">Commit positions above to initiate real-time risk modeling and volatility correlation analysis.</p>
                 </div>
               )}
+            </div>
+
+            {/* Terminal Footer */}
+            <div className="px-8 py-4 border-t border-white/[0.05] flex items-center justify-between opacity-50">
+               <span className="text-[8px] font-black text-slate-600 uppercase tracking-[0.4em]">Advanced Risk Matrix v4.1</span>
+               <div className="flex items-center gap-4 text-[8px] font-black text-slate-600 uppercase tracking-[0.4em]">
+                  <span className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-[#39FF14]" /> Neural Latency: 12ms</span>
+                  <span className="tabular-nums">Updated: {new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date())}</span>
+               </div>
             </div>
           </motion.div>
         </motion.div>

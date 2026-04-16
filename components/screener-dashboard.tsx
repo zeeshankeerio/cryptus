@@ -3367,7 +3367,7 @@ export default function ScreenerDashboard() {
     <div className="w-full px-4 lg:px-8 pt-4 pb-32 lg:py-6">
       {/* ── Sticky Institutional Command Center (4-Row Architecture) ── */}
       {showHeader && (
-        <header className="sticky top-0 z-[1000] mb-6 rounded-b-3xl border-b border-x border-white/10 bg-[#080F1B]/90 backdrop-blur-3xl px-4 py-3 sm:px-6 shadow-[0_30px_60px_rgba(0,0,0,0.6)] transition-all duration-300">
+        <header className="sticky top-0 z-[40] mb-6 rounded-b-3xl border-b border-x border-white/10 bg-[#080F1B]/95 backdrop-blur-3xl px-4 py-2 sm:px-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300">
           {/* Subtle Dynamic Hub Glow */}
           <div className="absolute inset-0 overflow-hidden rounded-b-3xl pointer-events-none">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#39FF14]/[0.03] rounded-full -mr-32 -mt-32 blur-[100px]" />
@@ -3375,17 +3375,91 @@ export default function ScreenerDashboard() {
 
           <div className="flex flex-col gap-3.5 relative z-10 w-full">
 
-            {/* ROW 1: CORE NAVIGATION & MASTER STATUS */}
-            <div className="hidden lg:flex items-center justify-between gap-4 h-11">
-              {/* Left Side: Brand, Trial & Asset Dock */}
-              <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-2xl p-1 pl-4 pr-1 shadow-inner h-full">
-                <Link href="/" className="flex items-center gap-4 group shrink-0">
-                  <div className="relative w-32 h-7 transition-all group-hover:scale-105 active:scale-95">
+             {/* ROW 1: STRATEGIC IDENTITY & COMMAND SEARCH */}
+            <div className="hidden lg:flex items-center justify-between gap-4 h-10">
+              <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-2xl p-0.5 pl-3 pr-0.5 shadow-inner h-full shrink-0">
+                <Link href="/" className="flex items-center gap-3 group">
+                  <div className="relative w-24 h-5 transition-all group-hover:scale-105 active:scale-95">
                     <Image src="/logo/rsiq-mindscapeanalytics.png" alt="RSIQ Pro" fill priority className="object-contain" />
                   </div>
                 </Link>
                 <div className="h-4 w-px bg-white/10" />
-                <div className="flex items-center gap-1">
+                <div className="flex bg-slate-900/60 rounded-xl p-0.5 border border-white/5">
+                  {[
+                    { id: 'binance', label: 'BIN' },
+                    { id: 'bybit', label: 'BYB' },
+                    { id: 'bybit-linear', label: 'PRP' }
+                  ].map((ex) => (
+                    <button
+                      key={ex.id}
+                      onClick={() => setExchange(ex.id)}
+                      className={cn(
+                        "px-2.5 py-1 text-[7px] font-black uppercase rounded-lg transition-all",
+                        exchange === ex.id ? "bg-white/10 text-white shadow-sm" : "text-slate-600 hover:text-slate-400"
+                      )}
+                    >
+                      {ex.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="relative flex-1 max-w-[480px] h-full">
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="COMMAND SEARCH (SYM, ASSET, CLASS)..."
+                  className="w-full h-full pl-10 pr-4 py-1.5 text-[10px] font-black uppercase tracking-[0.2em] bg-black/40 border border-white/10 rounded-2xl text-[#39FF14] placeholder:text-slate-800 focus:outline-none focus:border-[#39FF14]/40 focus:bg-black/60 transition-all shadow-inner"
+                />
+                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700" />
+              </div>
+
+              <div className="flex items-center gap-2 h-full">
+                <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-0.5 h-full shadow-inner">
+                  <div className="flex items-center gap-2 px-3 h-full border-r border-white/5">
+                    <motion.div animate={{ opacity: isConnected ? [1, 0.4, 1] : 1 }} transition={{ duration: 2, repeat: Infinity }} className={cn("w-1.5 h-1.5 rounded-full", isConnected ? "bg-[#39FF14] shadow-[0_0_8px_#39FF14]" : "bg-slate-700")} />
+                    <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-600">{isConnected ? "Live" : "Offline"}</span>
+                  </div>
+                  <button onClick={() => fetchData()} className="w-10 h-full flex flex-col items-center justify-center rounded-xl hover:bg-white/5 text-slate-500 hover:text-[#39FF14] transition-all group">
+                    <RefreshCcw size={12} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
+                    <span className="text-[6px] font-black mt-0.5 tabular-nums text-slate-600 font-mono tracking-tighter">{countdown}S</span>
+                  </button>
+                </div>
+
+                <div className="h-4 w-px bg-white/10 mx-1" />
+
+                <div className="flex items-center gap-1.5 h-full">
+                  <button
+                    onClick={() => setAlertsEnabled(!alertsEnabled)}
+                    className={cn(
+                      "h-full px-3 rounded-2xl border transition-all",
+                      alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.1)]" : "bg-white/5 border-white/10 text-slate-500 hover:text-white"
+                    )}
+                    title={alertsEnabled ? "Global Alerts Enabled" : "Global Alerts Muted"}
+                  >
+                    {alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                  </button>
+                  <button onClick={() => setShowGlobalSettings(true)} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-[#39FF14] hover:bg-[#39FF14]/5 transition-all" title="Institutional Interface Settings"><Settings size={14} /></button>
+                  <div className="relative h-full" ref={profileRef}>
+                    <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="h-full w-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center hover:border-[#39FF14]/30 transition-all text-slate-500 hover:text-white group">
+                      <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
+                    </button>
+                    <AnimatePresence>
+                      {isProfileOpen && session && (
+                        <UserProfileDropdown session={session} isOwner={isOwner} onLogout={handleSignOut} isLoggingOut={isLoggingOut} onClose={() => setIsProfileOpen(false)} onShowGlobalSettings={() => setShowGlobalSettings(true)} />
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+
+            {/* ROW 2: STRATEGIC PULSE & INTEL RIBBON */}
+            <div className="hidden lg:flex items-center gap-3 h-10 mb-1.5">
+              {/* Asset Class Dock Integrated */}
+              <div className="flex items-center gap-1.5 bg-black/40 border border-white/5 rounded-2xl p-1 px-3 shadow-inner h-full shrink-0">
                   {[
                     { id: 'crypto' as const, icon: '₿', count: assetClassCounts.crypto },
                     { id: 'forex' as const, icon: '💱', count: assetClassCounts.forex },
@@ -3396,217 +3470,133 @@ export default function ScreenerDashboard() {
                       key={ac.id}
                       onClick={() => setActiveAssetClass(ac.id)}
                       className={cn(
-                        "relative px-3 py-1.5 text-[8px] font-black uppercase tracking-widest rounded-xl transition-all flex items-center gap-2",
+                        "relative px-2 py-1 text-[7px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5",
                         activeAssetClass === ac.id
-                          ? "bg-[#39FF14]/20 text-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.15)] border border-[#39FF14]/30"
-                          : ac.count > 0 ? "text-slate-500 hover:text-white hover:bg-white/5" : "text-slate-700 pointer-events-none opacity-20"
+                          ? "bg-white/10 text-white shadow-sm"
+                          : ac.count > 0 ? "text-slate-500 hover:text-slate-300" : "text-slate-800 pointer-events-none opacity-20"
                       )}
                     >
-                      <span className="text-xs">{ac.icon}</span>
-                      <span className="tabular-nums">{ac.count}</span>
+                      <span>{ac.icon}</span>
+                      <span className="tabular-nums opacity-60">{ac.count}</span>
                     </button>
                   ))}
-                </div>
-                {activeAssetClass === 'crypto' && (
-                  <>
-                    <div className="h-4 w-px bg-white/10 mx-1" />
-                    <div className="flex bg-slate-900/60 rounded-xl p-0.5 border border-white/5">
-                      {[
-                        { id: 'binance', label: 'BIN' },
-                        { id: 'bybit', label: 'BYB' },
-                        { id: 'bybit-linear', label: 'PRP' }
-                      ].map((ex) => (
-                        <button
-                          key={ex.id}
-                          onClick={() => setExchange(ex.id)}
-                          className={cn(
-                            "px-3 py-1 text-[7px] font-black uppercase rounded-lg transition-all",
-                            exchange === ex.id ? "bg-white/10 text-white shadow-sm" : "text-slate-600 hover:text-slate-400"
-                          )}
-                        >
-                          {ex.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
               </div>
 
-              {/* Right Side: Maintenance & Profile Cluster */}
-              <div className="flex items-center gap-3 h-full">
-                <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-1 h-full shadow-inner">
-                  <div className="flex items-center gap-2 px-4 h-full border-r border-white/5">
-                    <motion.div animate={{ opacity: isConnected ? [1, 0.4, 1] : 1 }} transition={{ duration: 2, repeat: Infinity }} className={cn("w-1.5 h-1.5 rounded-full", isConnected ? "bg-[#39FF14] shadow-[0_0_8px_#39FF14]" : "bg-slate-700")} />
-                    <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-500">{isConnected ? "Live" : "Offline"}</span>
-                  </div>
-                  <button onClick={() => fetchData()} className="w-10 h-full flex flex-col items-center justify-center rounded-xl hover:bg-white/5 text-slate-500 hover:text-[#39FF14] transition-all group">
-                    <RefreshCcw size={13} className={cn("transition-transform duration-700", refreshing && "animate-spin")} />
-                    <span className="text-[6px] font-black mt-0.5 tabular-nums text-slate-600 font-mono tracking-tighter">{countdown}S</span>
-                  </button>
-                </div>
-
-                <button
-                  onClick={() => setAlertsEnabled(!alertsEnabled)}
-                  className={cn(
-                    "h-full px-3 rounded-2xl border transition-all",
-                    alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.1)]" : "bg-white/5 border-white/10 text-slate-500 hover:text-white"
-                  )}
-                  title={alertsEnabled ? "Global Alerts Enabled" : "Global Alerts Muted"}
-                >
-                  {alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
-                </button>
-                <button onClick={handleExportCsv} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-white hover:bg-white/10 active:scale-95 transition-all" title="Export Market Data (CSV)"><Download size={14} /></button>
-                <button onClick={() => setShowGlobalSettings(true)} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-[#39FF14] transition-all" title="Institutional Interface Settings"><Settings size={14} /></button>
-                <div className="relative h-full" ref={profileRef}>
-                  <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="h-full w-11 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center hover:border-[#39FF14]/30 transition-all text-slate-500 hover:text-white group">
-                    <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
-                  </button>
-                  <AnimatePresence>
-                    {isProfileOpen && session && (
-                      <UserProfileDropdown session={session} isOwner={isOwner} onLogout={handleSignOut} isLoggingOut={isLoggingOut} onClose={() => setIsProfileOpen(false)} onShowGlobalSettings={() => setShowGlobalSettings(true)} />
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            </div>
-
-
-            {/* ROW 2: INTELLIGENCE HUB & DERIVATIVES PULSE */}
-            <div className="hidden lg:flex items-center gap-4 h-11 mb-2">
-              <div className="relative flex-1 max-w-[320px] h-full">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="COMMAND SEARCH (SYM, ASSET, CLASS)..."
-                  className="w-full h-full pl-10 pr-4 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] bg-black/40 border border-white/10 rounded-2xl text-[#39FF14] placeholder:text-slate-700 focus:outline-none focus:border-[#39FF14]/30 transition-all shadow-inner"
-                />
-                <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600" />
-              </div>
-
-              {/* Real-time Intel promotion (Derivatives) */}
               <div className="flex-1 flex items-center bg-black/40 border border-white/5 rounded-2xl px-4 gap-6 h-full shadow-inner backdrop-blur-md">
-                <div className="flex items-center gap-3 group cursor-help" title="5-Minute Aggregated Liquidation Data">
-                  <Flame size={14} className="text-orange-500 animate-pulse" />
+                {/* Liquidation Signal Heat */}
+                <div className="flex items-center gap-2 group cursor-help shrink-0" title="5-Minute Aggregated Liquidation Data">
+                  <Flame size={13} className="text-orange-500 animate-pulse" />
                   <div className="flex flex-col">
-                    <span className="text-[7px] font-black text-slate-600 uppercase leading-none tracking-widest mb-1">Liq Flux (5M)</span>
-                    <div className="flex items-center gap-3 text-[10px] font-mono font-black tabular-nums">
-                      <span className="text-red-500/90">-${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
-                      <span className="text-emerald-500/90">+${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Buy' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                    <span className="text-[6px] font-black text-slate-600 uppercase leading-none tracking-widest mb-0.5">Liq Flux</span>
+                    <div className="flex items-center gap-2 text-[9px] font-mono font-black tabular-nums">
+                      <span className="text-red-500">-${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                      <span className="text-emerald-500">+${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Buy' ? l.valueUsd : 0), 0)) / 1000)}K</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="h-5 w-px bg-white/10" />
+                <div className="h-4 w-px bg-white/10" />
 
-                <div className="flex flex-col gap-1.5 flex-1 max-w-[140px]" title="Smart Money Orderflow vs Retail Dispersion">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest leading-none">Pressure</span>
-                    <span className="text-[9px] font-black tabular-nums text-slate-400">84%</span>
+                {/* Combined Pressure & Bias Indicators */}
+                <div className="flex items-center gap-6 flex-1 max-w-[300px]">
+                  <div className="flex-1 flex flex-col gap-1" title="Smart Money Orderflow vs Retail Dispersion">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none">Pressure</span>
+                      <span className="text-[8px] font-black tabular-nums text-slate-400">84%</span>
+                    </div>
+                    <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden flex shadow-inner">
+                      <div className="h-full bg-red-500/70" style={{ width: '22%' }} />
+                      <div className="h-full bg-slate-800" style={{ width: '40%' }} />
+                      <div className="h-full bg-[#39FF14]/70" style={{ width: '38%' }} />
+                    </div>
                   </div>
-                  <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden flex shadow-inner">
-                    <div className="h-full bg-red-500/70" style={{ width: '22%' }} />
-                    <div className="h-full bg-slate-800" style={{ width: '40%' }} />
-                    <div className="h-full bg-[#39FF14]/70" style={{ width: '38%' }} />
+
+                  <div className="flex flex-col items-center min-w-[40px]">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Bias</span>
+                    <span className={cn("text-[9px] font-black tabular-nums font-mono", stats.bias >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
+                      {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-center min-w-[50px]">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Sentiment</span>
+                    <div className="flex items-center gap-1.5">
+                      <Gauge size={10} className={fearGreedColor} />
+                      <span className={cn("text-[9px] font-black tabular-nums", fearGreedColor)}>{fearGreedScore}</span>
+                    </div>
+                  </div>
+
+                  <div className="h-4 w-px bg-white/5" />
+
+                  <div className="flex flex-col items-center min-w-[35px]">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Vol</span>
+                    <span className="text-[9px] font-black tabular-nums text-[#39FF14] animate-pulse">HIGH</span>
                   </div>
                 </div>
 
-                <div className="h-5 w-px bg-white/10" />
-
-                <div className="flex flex-col gap-1 items-center min-w-[70px]">
-                  <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest leading-none">Bias</span>
-                  <span className={cn("text-[10px] font-black tabular-nums font-mono", stats.bias >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
-                    {stats.bias > 0 ? '+' : ''}{stats.bias}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Modular Action Cluster */}
-              <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-1 h-full shadow-inner">
-                <button onClick={() => setShowWatchlistOnly(!showWatchlistOnly)} className={cn("h-full px-4 rounded-xl flex items-center gap-2 transition-all group", showWatchlistOnly ? "bg-yellow-500/10 text-yellow-400" : "text-slate-500 hover:text-slate-300")}>
-                  <Star size={13} fill={showWatchlistOnly ? "currentColor" : "none"} className="group-hover:rotate-12 transition-transform" />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Watchlist</span>
-                </button>
                 <div className="h-4 w-px bg-white/10" />
-                <button onClick={() => setShowCorrelation(!showCorrelation)} className={cn("h-full px-4 rounded-xl flex items-center gap-2 transition-all", showCorrelation ? "bg-violet-500/10 text-violet-400" : "text-slate-500 hover:text-slate-300")}>
-                  <LinkIcon size={13} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Correlation</span>
-                </button>
-                <div className="h-4 w-px bg-white/10" />
-                <button onClick={() => setShowPortfolio(true)} className={cn("h-full px-4 rounded-xl flex items-center gap-2 transition-all", showPortfolio ? "bg-cyan-500/10 text-cyan-400" : "text-slate-500 hover:text-slate-300")}>
-                  <Shield size={13} />
-                  <span className="text-[9px] font-black uppercase tracking-widest">Risk Scanner</span>
-                </button>
-              </div>
-            </div>
 
-            {/* ROW 3: SIGNAL PULSE RIBBON (7-STATE ANALYTICS) */}
-            <div className="hidden lg:flex items-center gap-4 bg-black/20 border border-white/5 rounded-2xl p-1 shadow-inner backdrop-blur-xl h-11 mb-2">
-              <div className="flex-1 grid grid-cols-7 gap-1 h-full">
-                {[
-                  { label: "Oversold", value: stats.oversold, color: "text-emerald-400", bg: "bg-emerald-500/5", icon: ArrowDownCircle, onClick: showMostOversold, id: 'oversold' },
-                  { label: "Strong Buy", value: stats.strongBuy, color: "text-blue-400", bg: "bg-blue-500/5", icon: Zap, onClick: showStrongBuys, id: 'strong-buy' },
-                  { label: "Buy", value: stats.buy, color: "text-emerald-400/80", bg: "bg-emerald-500/5", icon: TrendingUp, onClick: showBuys, id: 'buy' },
-                  { label: "Neutral", value: stats.neutral, color: "text-slate-500", bg: "bg-slate-500/5", icon: MinusCircle, onClick: showNeutrals, id: 'neutral' },
-                  { label: "Sell", value: stats.sell, color: "text-rose-400/80", bg: "bg-rose-500/5", icon: TrendingDown, onClick: showSells, id: 'sell' },
-                  { label: "Strong Sell", value: stats.strongSell, color: "text-red-400", bg: "bg-red-500/5", icon: Zap, onClick: showStrongSells, id: 'strong-sell' },
-                  { label: "Overbought", value: stats.overbought, color: "text-rose-400", bg: "bg-rose-500/5", icon: ArrowUpCircle, onClick: showMostOverbought, id: 'overbought' },
-                ].map((s) => {
-                  const Icon = s.icon;
-                  const isActive = signalFilter === s.id;
-                  return (
+                {/* Signal Density (Oversold/Bought Ribbon - Compact) */}
+                <div className="flex-1 flex items-center justify-between gap-1 overflow-hidden">
+                  {[
+                    { label: "OS", value: stats.oversold, color: "text-emerald-400", onClick: showMostOversold, id: 'oversold' },
+                    { label: "SB", value: stats.strongBuy, color: "text-blue-400", onClick: showStrongBuys, id: 'strong-buy' },
+                    { label: "B", value: stats.buy, color: "text-emerald-400/80", onClick: showBuys, id: 'buy' },
+                    { label: "N", value: stats.neutral, color: "text-slate-500", onClick: showNeutrals, id: 'neutral' },
+                    { label: "S", value: stats.sell, color: "text-rose-400/80", onClick: showSells, id: 'sell' },
+                    { label: "SS", value: stats.strongSell, color: "text-red-400", onClick: showStrongSells, id: 'strong-sell' },
+                    { label: "OB", id: 'overbought', value: stats.overbought, color: "text-rose-400", onClick: showMostOverbought },
+                  ].map((s) => (
                     <button
                       key={s.label} onClick={s.onClick}
                       className={cn(
-                        "flex items-center justify-between px-4 py-1.5 rounded-xl transition-all border group/stat h-full",
-                        s.bg, isActive ? "border-[#39FF14]/40 bg-[#39FF14]/10 shadow-[0_0_15px_rgba(57,255,20,0.15)]" : "border-transparent hover:bg-white/5 hover:border-white/5"
+                        "flex flex-col items-center justify-center min-w-[28px] px-1 py-0.5 rounded-lg transition-all border border-transparent",
+                        signalFilter === s.id ? "bg-[#39FF14]/10 border-[#39FF14]/20" : "hover:bg-white/5"
                       )}
                     >
-                      <div className="flex items-center gap-2">
-                        <Icon size={13} className={cn("transition-transform group-hover/stat:scale-110", s.color)} />
-                        <span className="text-[8px] font-black uppercase tracking-wider text-slate-500 group-hover/stat:text-slate-300">{s.label}</span>
-                      </div>
-                      <span className={cn("text-xs font-black tabular-nums transition-all group-hover/stat:scale-110", s.color)}><Counter value={s.value} /></span>
+                      <span className="text-[6px] font-black text-slate-600 uppercase tracking-tighter mb-0.5">{s.label}</span>
+                      <span className={cn("text-[9px] font-black tabular-nums leading-none", s.color)}><Counter value={s.value} /></span>
                     </button>
-                  );
-                })}
-              </div>
-
-              <div className="h-6 w-px bg-white/10 mx-1" />
-
-              {/* Sentiment Micro-Gauge */}
-              <div className="flex items-center gap-4 px-4 h-full bg-black/40 border border-white/5 rounded-xl shadow-inner">
-                <div className="flex flex-col items-center">
-                  <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Sentiment</span>
-                  <div className="flex items-center gap-2">
-                    <Gauge size={11} className={fearGreedColor} />
-                    <span className={cn("text-[10px] font-black tabular-nums tracking-tighter", fearGreedColor)}>{fearGreedScore}</span>
-                  </div>
-                </div>
-                <div className="h-5 w-px bg-white/10" />
-                <div className="flex flex-col items-center min-w-[30px]">
-                  <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest mb-0.5">Vol</span>
-                  <span className="text-[9px] font-black tabular-nums text-slate-300">HIGH</span>
+                  ))}
                 </div>
               </div>
             </div>
 
-            <div className="hidden lg:flex items-center gap-4 h-9 mb-2">
-              <div className="flex items-center gap-2 px-4 h-full bg-[#39FF14]/10 border border-[#39FF14]/20 rounded-xl shrink-0 shadow-[0_0_15px_rgba(57,255,20,0.1)] group cursor-help" title="Real-time Market Pulse & Volatility Indicators">
-                <TrendingUp size={12} className="text-[#39FF14]" />
-                <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#39FF14]">Dynamics</span>
+            {/* ROW 3: OPERATIONAL UTILITIES & DYNAMICS */}
+            <div className="hidden lg:flex items-center gap-3 h-9">
+              {/* Institutional Action Cluster */}
+              <div className="flex items-center bg-black/40 border border-white/5 rounded-xl p-0.5 h-full shadow-inner shrink-0">
+                <button onClick={() => setShowWatchlistOnly(!showWatchlistOnly)} className={cn("h-full px-3 rounded-xl flex items-center gap-2 transition-all group", showWatchlistOnly ? "bg-yellow-500/10 text-yellow-400" : "text-slate-500 hover:text-slate-300")}>
+                  <Star size={12} fill={showWatchlistOnly ? "currentColor" : "none"} />
+                  <span className="text-[7.5px] font-black uppercase tracking-wider">W/L</span>
+                </button>
+                <div className="h-4 w-px bg-white/10" />
+                <button onClick={() => setShowCorrelation(!showCorrelation)} className={cn("h-full px-3 rounded-xl flex items-center gap-2 transition-all", showCorrelation ? "bg-violet-500/10 text-violet-400" : "text-slate-500 hover:text-slate-300")}>
+                  <LinkIcon size={12} />
+                  <span className="text-[7.5px] font-black uppercase tracking-wider">CORR</span>
+                </button>
+                <div className="h-4 w-px bg-white/10" />
+                <button onClick={() => setShowPortfolio(true)} className={cn("h-full px-3 rounded-xl flex items-center gap-2 transition-all", showPortfolio ? "bg-cyan-500/10 text-cyan-400" : "text-slate-500 hover:text-slate-300")}>
+                  <Shield size={12} />
+                  <span className="text-[7.5px] font-black uppercase tracking-wider">RISK</span>
+                </button>
+                <div className="h-4 w-px bg-white/10" />
+                <button onClick={handleExportCsv} className="h-full px-3 rounded-xl text-slate-500 hover:text-white transition-all flex items-center group/exp" title="Export Market Data">
+                  <Download size={12} className="group-hover/exp:translate-y-0.5 transition-transform" />
+                  <span className="text-[7.5px] font-black uppercase tracking-wider ml-2">CSV</span>
+                </button>
               </div>
 
-              <div className="flex-1 overflow-hidden h-full bg-black/30 border border-white/5 rounded-xl flex items-center px-6 relative">
+              <div className="flex-1 overflow-hidden h-full bg-black/30 border border-white/5 rounded-xl flex items-center px-4 relative">
                 <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#080F1B] to-transparent z-10" />
                 <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#080F1B] to-transparent z-10" />
-                <div className="animate-marquee flex gap-16 items-center">
+                <div className="animate-marquee flex gap-12 items-center">
                   {[...topMovers.gainers, ...topMovers.losers, ...topMovers.gainers, ...topMovers.losers].map((mover, i) => (
-                    <div key={i} className="flex items-center gap-3 whitespace-nowrap group/mover cursor-pointer hover:bg-white/5 px-3 py-1 rounded-xl transition-all border border-transparent hover:border-white/5">
-                      <span className="text-[10px] font-black text-slate-400 font-mono tracking-tighter group-hover/mover:text-white">{getSymbolAlias(mover.symbol)}</span>
-                      <div className="flex items-center gap-1.5">
-                        {mover.change24h >= 0 ? <TrendingUp size={10} className="text-[#39FF14]" /> : <TrendingDown size={10} className="text-rose-500" />}
-                        <span className={cn("text-[11px] font-black tabular-nums", mover.change24h >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
+                    <div key={i} className="flex items-center gap-2.5 whitespace-nowrap group/mover cursor-pointer hover:bg-white/5 px-2 py-0.5 rounded-lg transition-all border border-transparent hover:border-white/5">
+                      <span className="text-[9px] font-black text-slate-400 font-mono tracking-tighter group-hover/mover:text-white uppercase">{getSymbolAlias(mover.symbol)}</span>
+                      <div className="flex items-center gap-1">
+                        {mover.change24h >= 0 ? <TrendingUp size={9} className="text-[#39FF14]" /> : <TrendingDown size={9} className="text-rose-500" />}
+                        <span className={cn("text-[10px] font-black tabular-nums", mover.change24h >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
                           {mover.change24h > 0 ? '+' : ''}{mover.change24h.toFixed(1)}%
                         </span>
                       </div>
@@ -3615,25 +3605,25 @@ export default function ScreenerDashboard() {
                 </div>
               </div>
 
-              {/* Compact Local Row & Col Controls */}
-              <div className="flex items-center gap-1.5 bg-black/20 border border-white/5 rounded-xl p-0.5 h-full px-2">
-                <div className="flex items-center gap-1">
+              {/* High-Density Row & Col Orchestration */}
+              <div className="flex items-center gap-1 bg-black/40 border border-white/5 rounded-xl p-0.5 h-full px-2">
+                <div className="flex items-center gap-0.5">
                   {[100, 300, 500].map(cnt => (
-                    <button key={cnt} onClick={() => handlePairCountChange(cnt)} className={cn("px-2.5 py-0.5 h-full text-[8px] font-black uppercase rounded-lg transition-all", pairCount === cnt ? "bg-white text-black" : "text-slate-600 hover:text-slate-400")}>
+                    <button key={cnt} onClick={() => handlePairCountChange(cnt)} className={cn("px-2 py-0.5 h-full text-[8px] font-black uppercase rounded-lg transition-all", pairCount === cnt ? "bg-white text-black" : "text-slate-600 hover:text-slate-400")}>
                       {cnt}
                     </button>
                   ))}
                 </div>
                 <div className="h-4 w-px bg-white/10 mx-1" />
-                <button onClick={() => setShowColPicker(!showColPicker)} className="px-3 py-0.5 h-full text-[8px] font-black uppercase text-slate-500 hover:text-[#39FF14] flex items-center gap-2 transition-all">
+                <button onClick={() => setShowColPicker(!showColPicker)} className="px-2 py-0.5 h-full text-[8px] font-black uppercase text-slate-500 hover:text-[#39FF14] flex items-center gap-1.5 transition-all">
                   <LayoutGrid size={11} />
                   Cols
                 </button>
                 <div className="h-4 w-px bg-white/10 mx-1" />
-                <div className="flex items-center gap-2 px-2 h-full text-[8px] font-black uppercase text-slate-500">
+                <div className="flex items-center gap-2 px-1 h-full text-[8px] font-black uppercase text-slate-500">
                   <span>RSI</span>
-                  <input type="range" min="2" max="50" value={rsiPeriod} onChange={(e) => setRsiPeriod(Number(e.target.value))} className="w-16 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#39FF14]" />
-                  <span className="text-[#39FF14] tabular-nums">{rsiPeriod}</span>
+                  <input type="range" min="2" max="50" value={rsiPeriod} onChange={(e) => setRsiPeriod(Number(e.target.value))} className="w-14 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#39FF14]" />
+                  <span className="text-[#39FF14] tabular-nums w-4 text-center">{rsiPeriod}</span>
                 </div>
               </div>
             </div>
@@ -3818,9 +3808,16 @@ export default function ScreenerDashboard() {
               <div key={i} className="h-44 rounded-3xl skeleton border border-white/5 opacity-40" />
             ))
           ) : filtered.length === 0 ? (
-            <div className="col-span-full py-24 text-center opacity-50 flex flex-col items-center gap-4">
-              <Search size={48} className="text-slate-700" />
-              <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+            <div className="col-span-full py-32 text-center flex flex-col items-center gap-6">
+              <div className="w-20 h-20 rounded-full bg-slate-900/50 flex items-center justify-center border border-white/5 shadow-inner">
+                <LayoutGrid size={40} className="text-slate-700" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-white font-black uppercase tracking-[0.2em] text-sm">Asset Hunter Idle</p>
+                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] max-w-[200px] mx-auto leading-relaxed">
+                  Your Watchlist is empty. Star assets in the global terminal to track them here.
+                </p>
+              </div>
             </div>
           ) : (
             <>
@@ -3914,10 +3911,27 @@ export default function ScreenerDashboard() {
                   <SkeletonRows cols={colCount} />
                 ) : filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={colCount} className="px-6 py-24 text-center">
-                      <div className="flex flex-col items-center gap-4 opacity-50">
-                        <Search size={48} className="text-slate-700" />
-                        <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No matches found</p>
+                    <td colSpan={colCount} className="px-6 py-32 text-center">
+                      <div className="flex flex-col items-center gap-6">
+                        <div className="w-24 h-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
+                           <LayoutGrid size={48} className="text-slate-800" />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-white font-black uppercase tracking-[0.3em] text-base">Analytical Deadzone</p>
+                          <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] max-w-sm mx-auto leading-relaxed">
+                            {showWatchlistOnly 
+                              ? "Your high-priority intelligence feed is currently empty. Star assets in the 'Global' universe to initiate dedicated tracking."
+                              : "No assets match your current matrix constraints. Adjust filters or search parameters."}
+                          </p>
+                          {showWatchlistOnly && (
+                            <button 
+                              onClick={() => setShowWatchlistOnly(false)}
+                              className="mt-4 px-6 py-2 bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#39FF14]/20 transition-all active:scale-95"
+                            >
+                              Return to Global Terminal
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
