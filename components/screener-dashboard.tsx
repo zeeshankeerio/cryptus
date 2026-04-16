@@ -16,7 +16,7 @@ import { useSession, signOut } from '@/lib/auth-client';
 import { AUTH_CONFIG } from '@/lib/config';
 import { UserProfileDropdown } from './user-profile-dropdown';
 import { TrialIndicator } from './trial-indicator';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } from '@/lib/types';
@@ -1887,13 +1887,9 @@ export default function ScreenerDashboard() {
         setVisibleCols(new Set(JSON.parse(cols)));
       } catch { }
     } else {
-      // If no saved prefs, check if we're on a mobile-ish screen and hide rank by default
+      // If no saved prefs, check if we're on a mobile-ish screen and hide non-essential columns by default
       if (window.innerWidth < 1280) {
-        setVisibleCols(prev => {
-          const next = new Set(prev);
-          next.delete('rank');
-          return next;
-        });
+        setVisibleCols(new Set(['rsi15m', 'strategy']) as any);
       }
     }
 
@@ -3640,68 +3636,160 @@ export default function ScreenerDashboard() {
               </div>
             </div>
 
-            {/* ─── MOBILE COMMAND CENTER ─── */}
-            <div className="lg:hidden flex flex-col gap-4 relative z-10 w-full">
-              <div className="flex items-center justify-between">
-                <Link href="/" className="flex items-center gap-3">
-                  <div className="relative w-28 h-6">
+            {/* ─── MOBILE COMMAND CENTER (Enterprise Architecture) ─── */}
+            <div className="lg:hidden flex flex-col gap-3 relative z-10 w-full animate-in fade-in slide-in-from-top-4 duration-500">
+              
+              {/* MOBILE ROW 1: IDENTITY & SYSTEM CORE */}
+              <div className="flex items-center justify-between gap-3 h-9">
+                <Link href="/" className="flex items-center gap-2 active:scale-95 transition-all">
+                  <div className="relative w-24 h-5">
                     <Image src="/logo/rsiq-mindscapeanalytics.png" alt="RSIQ Pro" fill className="object-contain" />
                   </div>
                 </Link>
-                <div className="flex items-center gap-2 bg-slate-900/60 border border-white/10 rounded-xl px-2.5 py-1.5 shadow-lg shadow-black/40">
-                  <motion.div animate={{ opacity: isConnected ? [0.4, 1, 0.4] : 1 }} transition={{ duration: 2, repeat: Infinity }} className={cn("w-1.5 h-1.5 rounded-full", isConnected ? "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]" : "bg-slate-700")} />
-                  <span className="text-[8px] font-black text-[#39FF14] tabular-nums tracking-widest uppercase">{data.length} INSIGHTS</span>
+
+                <div className="flex items-center gap-1.5 h-full">
+                  <div className="flex items-center bg-black/40 border border-white/5 rounded-xl px-2.5 h-full shadow-inner">
+                    <motion.div 
+                      animate={{ opacity: isConnected ? [0.4, 1, 0.4] : 1 }} 
+                      transition={{ duration: 2, repeat: Infinity }} 
+                      className={cn("w-1 h-1 rounded-full", isConnected ? "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]" : "bg-slate-700")} 
+                    />
+                    <span className="text-[7.5px] font-black tabular-nums text-slate-500 uppercase tracking-widest ml-2">Live</span>
+                  </div>
+                  
+                  <button onClick={() => fetchData(true)} className="w-9 h-full flex items-center justify-center rounded-xl bg-white/5 border border-white/5 text-slate-500 active:text-[#39FF14] active:bg-[#39FF14]/10 transition-all">
+                    <RefreshCcw size={12} className={cn(refreshing && "animate-spin")} />
+                  </button>
+
+                  <div className="relative h-full" ref={profileRef}>
+                    <button 
+                      onClick={() => setIsProfileOpen(!isProfileOpen)} 
+                      className="h-full w-9 rounded-xl bg-white/5 border border-white/5 flex items-center justify-center active:border-[#39FF14]/30 transition-all text-slate-500"
+                    >
+                      <UserIcon size={14} />
+                    </button>
+                    <AnimatePresence>
+                      {isProfileOpen && session && (
+                        <UserProfileDropdown 
+                          session={session} 
+                          isOwner={isOwner} 
+                          onLogout={handleSignOut} 
+                          isLoggingOut={isLoggingOut} 
+                          onClose={() => setIsProfileOpen(false)} 
+                          onShowGlobalSettings={() => setShowGlobalSettings(true)} 
+                        />
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-1 gap-1 h-10 shadow-inner">
-                  {['crypto', 'forex', 'metals', 'stocks'].map((ac) => (
-                    <button
-                      key={ac}
-                      onClick={() => setActiveAssetClass(ac as any)}
-                      className={cn(
-                        "flex-1 h-full rounded-xl flex items-center justify-center transition-all",
-                        activeAssetClass === ac ? "bg-[#39FF14]/15 text-[#39FF14]" : "text-slate-600"
-                      )}
-                    >
-                      <span className="text-xs">{ac === 'crypto' ? '₿' : ac === 'forex' ? '💱' : ac === 'metals' ? '🥇' : '📈'}</span>
-                    </button>
-                  ))}
+              {/* MOBILE ROW 2: STRATEGIC PULSE RIBBON (Institutional Intelligence) */}
+              <div className="flex items-center justify-between bg-black/40 border border-white/5 rounded-xl px-3 py-1.5 shadow-inner backdrop-blur-md">
+                <div className="flex items-center gap-4">
+                  <div className="flex flex-col">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Bias</span>
+                    <span className={cn("text-[9px] font-black tabular-nums font-mono leading-none", stats.bias >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
+                      {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                    </span>
+                  </div>
+                  <div className="h-4 w-px bg-white/5" />
+                  <div className="flex flex-col">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Sentiment</span>
+                    <div className="flex items-center gap-1 leading-none">
+                      <Gauge size={9} className={fearGreedColor} />
+                      <span className={cn("text-[9px] font-black tabular-nums", fearGreedColor)}>{fearGreedScore}</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-1 gap-1 h-10 shadow-inner overflow-x-auto no-scrollbar">
-                  {[
-                    { label: "OS", id: 'oversold' },
-                    { label: "SB", id: 'strong-buy' },
-                    { label: "B", id: 'buy' },
-                    { label: "N", id: 'neutral' },
-                    { label: "S", id: 'sell' },
-                    { label: "SS", id: 'strong-sell' },
-                    { label: "OB", id: 'overbought' },
-                  ].map((s) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setSignalFilter(s.id as any)}
-                      className={cn(
-                        "flex-1 min-w-[32px] h-full rounded-xl flex items-center justify-center text-[9px] font-black transition-all",
-                        signalFilter === s.id ? "bg-white/10 text-white" : "text-slate-600"
-                      )}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
+
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Volatility</span>
+                    <span className="text-[8px] font-black tabular-nums text-amber-500 animate-pulse">MEDIUM</span>
+                  </div>
+                  <div className="h-4 w-px bg-white/5" />
+                  <div className="flex flex-col items-end" title="5min Liquidation Flux">
+                    <span className="text-[6px] font-black text-slate-600 uppercase tracking-widest leading-none mb-0.5">Liq Flux</span>
+                    <div className="flex items-center gap-1.5 text-[8px] font-mono font-black">
+                      <span className="text-red-400">-${Math.round((liquidations.filter((l: LiquidationEvent) => (Date.now() - l.timestamp) < 300000).reduce((acc: number, l: LiquidationEvent) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="relative h-11 w-full">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="SEARCH INSTRUMENTS..."
-                  className="w-full h-full pl-11 pr-4 py-2 text-[11px] font-black uppercase tracking-[0.2em] bg-black/60 border border-white/5 rounded-2xl text-white placeholder:text-slate-700"
-                />
-                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-600" />
+              {/* MOBILE ROW 3: INTELLIGENCE DOCK (Horizontal Scrolling) */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5 scroll-smooth snap-x">
+                  {/* Asset Selectors */}
+                  <div className="flex items-center bg-white/5 border border-white/5 rounded-lg p-0.5 shrink-0 snap-start">
+                    {['crypto', 'forex', 'metals', 'stocks'].map((ac) => (
+                      <button
+                        key={ac}
+                        onClick={() => setActiveAssetClass(ac as any)}
+                        className={cn(
+                          "px-2 py-1 rounded flex items-center justify-center transition-all",
+                          activeAssetClass === ac ? "bg-[#39FF14] text-black shadow-lg" : "text-slate-500"
+                        )}
+                      >
+                        <span className="text-[10px]">{ac === 'crypto' ? '₿' : ac === 'forex' ? '💱' : ac === 'metals' ? '🥇' : '📈'}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="w-px h-4 bg-white/10 shrink-0" />
+
+                  {/* Signal Filters */}
+                  <div className="flex items-center gap-1 shrink-0 snap-start">
+                    {[
+                      { label: "ALL", id: 'all' },
+                      { label: "OS", id: 'oversold' },
+                      { label: "SB", id: 'strong-buy' },
+                      { label: "B", id: 'buy' },
+                      { label: "N", id: 'neutral' },
+                      { label: "S", id: 'sell' },
+                      { label: "SS", id: 'strong-sell' },
+                      { label: "OB", id: 'overbought' },
+                    ].map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => setSignalFilter(s.id as any)}
+                        className={cn(
+                          "px-2.5 py-1.5 rounded-lg text-[8px] font-black transition-all border shrink-0",
+                          signalFilter === s.id 
+                            ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.1)]" 
+                            : "bg-white/5 border-white/5 text-slate-500"
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* MOBILE ROW 4: COMMAND SEARCH & QUICK ACTIONS */}
+              <div className="flex items-center gap-2 h-10 mb-1">
+                <div className="relative flex-1 h-full">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="SEARCH INSTRUMENTS..."
+                    className="w-full h-full pl-10 pr-4 py-2 text-[10px] font-black uppercase tracking-[0.15em] bg-black/60 border border-white/10 rounded-xl text-white placeholder:text-slate-800 transition-all focus:border-[#39FF14]/30"
+                  />
+                  <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700" />
+                </div>
+                
+                <button
+                  onClick={() => setAlertsEnabled(!alertsEnabled)}
+                  className={cn(
+                    "w-10 h-full rounded-xl border transition-all flex items-center justify-center",
+                    alertsEnabled ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/10 text-slate-500"
+                  )}
+                >
+                  {alertsEnabled ? <Bell size={14} /> : <BellOff size={14} />}
+                </button>
               </div>
             </div>
 
