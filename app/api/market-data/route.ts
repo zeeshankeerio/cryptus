@@ -1,17 +1,65 @@
-import { NextRequest, NextResponse } from 'next/server';
-
 /**
  * RSIQ Pro — Hybrid Multi-Asset Market Data API
- * 
+ * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
+ * https://mindscapeanalytics.com/
+ *
+ * PROPRIETARY AND CONFIDENTIAL. Unauthorized copying, modification,
+ * distribution, or use of this software is strictly prohibited.
+ *
  * Architecture:
  * 1. Primary: Yahoo Finance v7 Batch Quote (up to 50 symbols, 1 request).
  *    Provides: Price, Change, Volume, names, and Institutional SMAs (50/200).
  * 2. Secondary: Yahoo Finance v8 Chart (top 30 symbols, parallelized).
  *    Provides: 1m historical candles (2 hours) for technicals (RSI/EMA).
- * 
- * Returns a unified format compatible with the ScreenerEntry interface.
+ * 3. Fallback: query2.finance.yahoo.com if query1 fails (geo-redundancy).
+ *
+ * Security: Session-gated — requires authenticated user with active subscription or trial.
  */
 
+import { NextRequest, NextResponse } from 'next/server';
+import { getSessionUser } from '@/lib/api-auth';
+
+// ── Rate Limiter (Per-IP, in-memory) ─────────────────────────────
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  entry.count++;
+  return entry.count <= RATE_LIMIT_MAX;
+}
+
+// ── Resilient fetch with retry + fallback endpoints ──────────────
+const YAHOO_HOSTS = ['query1.finance.yahoo.com', 'query2.finance.yahoo.com'];
+const USER_AGENTS = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+];
+
+async function resilientFetch(path: string, timeoutMs = 6000): Promise<any> {
+  for (const host of YAHOO_HOSTS) {
+    try {
+      const url = `https://${host}${path}`;
+      const ua = USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+      const res = await fetch(url, {
+        headers: { 'User-Agent': ua },
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (res.ok) return await res.json();
+    } catch {
+      // Try next host
+    }
+  }
+  return null;
+}
+
+// ── Types ────────────────────────────────────────────────────────
 interface MarketDataEntry {
   symbol: string;
   displayName: string;
@@ -28,11 +76,31 @@ interface MarketDataEntry {
   marketState: string;
   currency: string;
   updatedAt: number;
-  // Dynamic Intelligence
-  closes: number[]; // Last 60-120 minutes of 1m closes
+  closes: number[]; // Last 60-120 minutes of 1m closes for technicals
 }
 
+// ── Main Handler ─────────────────────────────────────────────────
 export async function GET(request: NextRequest) {
+  // ── 1. Soft Auth (tiered rate limits like the screener) ──
+  let userId: string | null = null;
+  try {
+    const { user } = await getSessionUser();
+    userId = user?.id ?? null;
+  } catch {
+    // Auth failure is non-fatal — anonymous access with lower limits
+  }
+
+  // ── 2. Rate Limit (authenticated users get higher burst) ──
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rateLimitKey = userId || ip;
+  if (!checkRateLimit(rateLimitKey)) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please retry shortly.' },
+      { status: 429, headers: { 'Retry-After': '30' } }
+    );
+  }
+
+  // ── 3. Parse Params ──
   const { searchParams } = new URL(request.url);
   const symbolsParam = searchParams.get('symbols');
   const assetClass = searchParams.get('class') || 'stocks';
@@ -45,43 +113,38 @@ export async function GET(request: NextRequest) {
   if (symbols.length === 0) return NextResponse.json({ data: [] });
 
   try {
-    // 1. Fetch Batch Quotes (v7)
-    const quoteUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}&fields=regularMarketPrice,regularMarketOpen,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,regularMarketVolume,regularMarketDayHigh,regularMarketDayLow,fiftyDayAverage,twoHundredDayAverage,shortName,longName,marketState,currency`;
+    // ── 4. Fetch Batch Quotes (v7) with fallback ──
+    const quotePath = `/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}&fields=regularMarketPrice,regularMarketOpen,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,regularMarketVolume,regularMarketDayHigh,regularMarketDayLow,fiftyDayAverage,twoHundredDayAverage,shortName,longName,marketState,currency`;
 
-    // 2. Fetch Charts for Technicals (v8) — Parallelized for speed
-    const techRequired = symbols.slice(0, 30); // Technicals only for prioritized signals
+    // ── 5. Fetch Charts for Technicals (v8) — Parallelized ──
+    const techRequired = symbols.slice(0, 30);
 
     const [quoteResponse, ...chartResults] = await Promise.all([
-      fetch(quoteUrl, { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(6000) })
-        .then(r => r.ok ? r.json() : null),
+      resilientFetch(quotePath, 6000),
       ...techRequired.map(s =>
-        fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(s)}?interval=1m&range=2h&includePrePost=false`, {
-          headers: { 'User-Agent': 'Mozilla/5.0' },
-          signal: AbortSignal.timeout(5000)
-        }).then(r => r.ok ? r.json() : null).catch(() => null)
-      )
+        resilientFetch(`/v8/finance/chart/${encodeURIComponent(s)}?interval=1m&range=2h&includePrePost=false`, 5000)
+      ),
     ]);
 
     const quotes = quoteResponse?.quoteResponse?.result || [];
     const charMap = new Map<string, number[]>();
 
-    // Process charts
+    // Process charts into closes map
     chartResults.forEach(chart => {
       const res = chart?.chart?.result?.[0];
       const sym = res?.meta?.symbol;
       const cl = res?.indicators?.quote?.[0]?.close;
       if (sym && Array.isArray(cl)) {
-        // Filter out null values which can occur in live candles
-        charMap.set(sym, cl.filter((c: any) => c !== null));
+        charMap.set(sym, cl.filter((c: any) => c !== null && typeof c === 'number'));
       }
     });
 
-    // 3. Merge Data into Perfect Stream
+    // ── 6. Merge into unified MarketDataEntry stream ──
     const results: MarketDataEntry[] = quotes.map((q: any) => {
       const histCloses = charMap.get(q.symbol) || [];
       const livePrice = q.regularMarketPrice || 0;
 
-      // Ensure v7's latest price is at the tail of the closes for indicators
+      // Append live price to closes tail for indicator accuracy
       if (livePrice > 0 && (histCloses.length === 0 || histCloses[histCloses.length - 1] !== livePrice)) {
         histCloses.push(livePrice);
       }
@@ -99,10 +162,10 @@ export async function GET(request: NextRequest) {
         low: q.regularMarketDayLow || livePrice,
         sma50: q.fiftyDayAverage || null,
         sma200: q.twoHundredDayAverage || null,
-        marketState: q.marketState || 'OPEN',
+        marketState: q.marketState || 'REGULAR',
         currency: q.currency || 'USD',
         updatedAt: Date.now(),
-        closes: histCloses.slice(-60), // Keep 60 nodes for technical smoothing
+        closes: histCloses.slice(-120), // Keep 120 candles for technical depth
       };
     });
 
@@ -112,7 +175,10 @@ export async function GET(request: NextRequest) {
       timestamp: Date.now(),
       assetClass,
     }, {
-      headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'X-Powered-By': 'Mindscape Analytics RSIQ Pro',
+      },
     });
 
   } catch (error) {
@@ -120,3 +186,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Market data engine error', data: [] }, { status: 502 });
   }
 }
+

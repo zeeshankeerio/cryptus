@@ -154,6 +154,22 @@ export const auth = betterAuth({
   plugins: authPlugins,
 
   trustedOrigins,
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user) => {
+          if (user.email === AUTH_CONFIG.SUPER_ADMIN_EMAIL) {
+            return {
+              data: {
+                ...user,
+                role: "owner",
+              },
+            };
+          }
+        },
+      },
+    },
+  },
 });
 
 export type Session = typeof auth.$Infer.Session;

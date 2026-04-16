@@ -77,6 +77,8 @@ export interface ScreenerEntry {
   // ── High-Accuracy Real-time Initialization ──
   open1m: number | null;
   volStart1m: number | null;
+  // ── Historical data for correlation analysis ──
+  historicalCloses?: number[];
 }
 
 export interface ScreenerResponse {

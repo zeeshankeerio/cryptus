@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const router = useRouter();
 
   const {
     register,
@@ -39,7 +41,6 @@ export default function LoginPage() {
         {
           email: values.email,
           password: values.password,
-          callbackURL: "/terminal",
         },
         {
           onError: (ctx) => {
@@ -48,7 +49,11 @@ export default function LoginPage() {
           },
           onSuccess: () => {
             setSuccess("Connection Established. Accessing Terminal...");
-            // Redirect will happen automatically via callbackURL
+            // Allow session cookie to fully propagate and refresh local state
+            router.refresh();
+            setTimeout(() => {
+              router.push("/terminal");
+            }, 800);
           }
         }
       );

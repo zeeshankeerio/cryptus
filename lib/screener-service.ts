@@ -1451,10 +1451,16 @@ function runRefresh(
  * Main screener function: fetch data, compute all indicators, return results.
  * Supports 500+ coins via batched parallel fetching.
  */
+// ── Geo-block failover state ──
+let geoBlockedExchanges = new Set<string>();
+let preferredExchange: string | null = null;
+
 export async function getScreenerData(symbolCount = 500, options: ScreenerOptions = {}): Promise<ScreenerResponse> {
   const smartMode = options.smartMode ?? getSmartModeDefault();
   const rsiPeriod = options.rsiPeriod ?? 14;
-  const exchange = options.exchange ?? 'binance';
+  // Use the preferred (non-blocked) exchange if we've detected a geo-block before
+  const requestedExchange = options.exchange ?? 'binance';
+  const exchange = preferredExchange ?? requestedExchange;
   maybeTrafficWarm(symbolCount, smartMode, exchange, rsiPeriod);
 
   // Return cached result if fresh enough and same count.
@@ -1466,9 +1472,67 @@ export async function getScreenerData(symbolCount = 500, options: ScreenerOption
     if (cached) return cached;
   }
 
-  // Removed stale-while-revalidate to ensure the client ALWAYS gets a freshly 
-  // generated baseline indicator state. This eliminates the "snap-back" UI bug.
+  // ── Automatic Exchange Failover ──
+  // If the requested exchange is geo-blocked, try alternatives automatically
+  const exchangeOrder = [exchange];
+  if (!exchangeOrder.includes('bybit')) exchangeOrder.push('bybit');
+  if (!exchangeOrder.includes('binance')) exchangeOrder.push('binance');
 
-  // No usable stale snapshot available; compute (deduplicated by symbolCount).
-  return runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, exchange);
+  for (const tryExchange of exchangeOrder) {
+    if (geoBlockedExchanges.has(tryExchange)) {
+      console.log(`[screener] Skipping geo-blocked exchange: ${tryExchange}`);
+      continue;
+    }
+
+    try {
+      const result = await runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, tryExchange);
+
+      if (result.data.length > 0) {
+        // This exchange works — remember it for future requests
+        if (tryExchange !== requestedExchange) {
+          console.log(`[screener] ✅ Failover success: ${requestedExchange} → ${tryExchange} (${result.data.length} symbols)`);
+          preferredExchange = tryExchange;
+        }
+        return result;
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('geo-blocked') || errMsg.includes('403') || errMsg.includes('451')) {
+        console.warn(`[screener] 🌍 Exchange ${tryExchange} geo-blocked. Trying next...`);
+        geoBlockedExchanges.add(tryExchange);
+        continue;
+      }
+      // For non-geo-block errors, also try next exchange
+      console.warn(`[screener] ⚠️ Exchange ${tryExchange} failed: ${errMsg}. Trying next...`);
+    }
+  }
+
+  // All exchanges failed — clear the blocked set periodically (in case of transient issues)
+  // and return empty with diagnostic info
+  setTimeout(() => {
+    geoBlockedExchanges.clear();
+    preferredExchange = null;
+  }, 300_000); // Reset every 5 minutes
+
+  console.error(`[screener] ❌ All exchanges failed. Data unavailable.`);
+  return {
+    data: [],
+    meta: {
+      total: 0,
+      indicatorReady: 0,
+      indicatorCoveragePct: 0,
+      oversold: 0,
+      overbought: 0,
+      strongBuy: 0,
+      buy: 0,
+      neutral: 0,
+      sell: 0,
+      strongSell: 0,
+      computeTimeMs: 0,
+      fetchedAt: Date.now(),
+      smartMode: smartMode,
+      refreshCap: 0,
+    },
+  };
 }
+

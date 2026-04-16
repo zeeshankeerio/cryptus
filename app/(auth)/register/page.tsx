@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,6 +22,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const router = useRouter();
 
   const {
     register,
@@ -62,7 +64,6 @@ export default function RegisterPage() {
         {
           email: values.email,
           password: values.password,
-          callbackURL: "/terminal",
         },
         {
           onError: (ctx) => {
@@ -71,7 +72,10 @@ export default function RegisterPage() {
           },
           onSuccess: () => {
             setSuccess("Connected. Launching terminal...");
-            setIsLoading(false);
+            router.refresh();
+            setTimeout(() => {
+              router.push("/terminal");
+            }, 800);
           },
         },
       );

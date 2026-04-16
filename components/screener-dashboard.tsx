@@ -14,6 +14,7 @@ import {
 import { useSession, signOut } from '@/lib/auth-client';
 import { AUTH_CONFIG } from '@/lib/config';
 import { UserProfileDropdown } from './user-profile-dropdown';
+import { TrialIndicator } from './trial-indicator';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -23,6 +24,8 @@ import { useAlertEngine } from '@/hooks/use-alert-engine';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { useDerivativesIntel } from '@/hooks/use-derivatives-intel';
 import { DerivativesPanel, OrderFlowBar } from '@/components/derivatives-panel';
+import { CorrelationHeatmap } from '@/components/correlation-heatmap';
+import { PortfolioScannerPanel } from '@/components/portfolio-scanner-panel';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
 import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi } from '@/lib/indicators';
 import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
@@ -1990,6 +1993,8 @@ export default function ScreenerDashboard() {
     new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
   );
   const [showColPicker, setShowColPicker] = useState(false);
+  const [showCorrelation, setShowCorrelation] = useState(false);
+  const [showPortfolio, setShowPortfolio] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
 
   // Watchlist (hydrate from localStorage after mount to avoid SSR/CSR mismatch)
@@ -2143,6 +2148,7 @@ export default function ScreenerDashboard() {
           updatedAt: md.updatedAt,
           open1m: md.open,
           volStart1m: 0,
+          historicalCloses: closes,
         };
 
         // Re-run global strategy logic for tradify
@@ -2371,7 +2377,7 @@ export default function ScreenerDashboard() {
 
   // Removed old duplicate processedData block
 
-  const { alerts, clearAlertHistory, resumeAudioContext } = useAlertEngine(
+  const { alerts, clearAlertHistory, resumeAudioContext, getGlobalWinRate } = useAlertEngine(
     processedData,
     coinConfigs,
     alertsEnabled,
@@ -3287,6 +3293,7 @@ export default function ScreenerDashboard() {
                     />
                   </div>
                 </Link>
+                <TrialIndicator />
 
                 <div className="flex flex-col gap-1 min-w-[140px]">
                   <div className="flex items-center justify-between">
@@ -3302,6 +3309,23 @@ export default function ScreenerDashboard() {
                     />
                   </div>
                 </div>
+
+                {/* Win Rate Badge — Signal Accuracy Tracker™ */}
+                {(() => {
+                  const wr = getGlobalWinRate();
+                  if (wr.total === 0) return null;
+                  const rate = Math.round(wr.winRate1h);
+                  const color = rate >= 60 ? 'text-[#39FF14]' : rate >= 40 ? 'text-amber-400' : 'text-[#FF4B5C]';
+                  return (
+                    <div className="flex flex-col gap-0.5 min-w-[70px]">
+                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Win Rate</span>
+                      <div className="flex items-center gap-1">
+                        <span className={cn("text-[11px] font-black tabular-nums", color)}>{rate}%</span>
+                        <span className="text-[7px] text-slate-600 font-bold">({wr.total} signals)</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Center Group: Combined Operations & Sentiment */}
@@ -3349,6 +3373,22 @@ export default function ScreenerDashboard() {
                     title="Settings"
                   >
                     <Settings size={14} />
+                  </motion.button>
+                  <motion.button
+                    onClick={() => setShowCorrelation(true)}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", showCorrelation ? "bg-violet-500/10 text-violet-400" : "text-slate-600 hover:text-violet-400")}
+                    title="Correlation Heatmap"
+                  >
+                    <span className="text-[13px]">🔗</span>
+                  </motion.button>
+                  <motion.button
+                    onClick={() => setShowPortfolio(true)}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn("w-8 h-8 rounded-xl flex items-center justify-center transition-all", showPortfolio ? "bg-cyan-500/10 text-cyan-400" : "text-slate-600 hover:text-cyan-400")}
+                    title="Portfolio Risk Scanner"
+                  >
+                    <span className="text-[13px]">🛡️</span>
                   </motion.button>
                 </div>
 
@@ -3758,6 +3798,20 @@ export default function ScreenerDashboard() {
           isConnected={derivativesConnected}
         />
       </div>
+
+      {/* ─── CORRELATION HEATMAP MODAL ─── */}
+      <CorrelationHeatmap
+        open={showCorrelation}
+        onClose={() => setShowCorrelation(false)}
+        data={processedData}
+      />
+
+      {/* ─── PORTFOLIO RISK SCANNER MODAL ─── */}
+      <PortfolioScannerPanel
+        open={showPortfolio}
+        onClose={() => setShowPortfolio(false)}
+        data={processedData}
+      />
 
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3 mb-6">
         <div className="relative flex-1 rounded-2xl border border-white/5 bg-slate-900/40 focus-within:border-[#39FF14]/20 transition-all lg:max-w-xs shrink-0">

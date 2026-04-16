@@ -173,11 +173,11 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
     maxRecords,
     availableRecordOptions: deriveOptions(maxRecords),
     features: {
-      enableAlerts: hasPaidAccess || (trialFeaturesEnabled && flags.allowTrialAlerts),
+      enableAlerts: hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAlerts),
       enableAdvancedIndicators:
-        hasPaidAccess || (trialFeaturesEnabled && flags.allowTrialAdvancedIndicators),
+        hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAdvancedIndicators),
       enableCustomSettings:
-        hasPaidAccess || (trialFeaturesEnabled && flags.allowTrialCustomSettings),
+        hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialCustomSettings),
     },
     coins: user.coins ?? 0,
     maxSymbols: hasPaidAccess ? 1000 : 100, // 100 symbols for trial/free

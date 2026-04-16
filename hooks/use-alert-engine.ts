@@ -7,6 +7,7 @@ import { getSymbolAlias } from '@/lib/symbol-utils';
 import { formatPrice } from '@/lib/utils';
 import { alertCoordinator } from '@/lib/alert-coordinator-client';
 import { shouldSuppressAlert, getAlertBehavior, type AlertPriority } from '@/lib/alert-priority';
+import { recordSignal, evaluateOutcomes, getGlobalWinRate } from '@/lib/signal-tracker';
 
 // ── Wake Lock for mobile alert reliability (GAP-E4) ──
 let wakeLock: WakeLockSentinel | null = null;
@@ -143,6 +144,8 @@ export function useAlertEngine(
   const lastTriggered = useRef<Map<string, number>>(new Map());
   // Track when a config was last updated to allow "cold-start" alerts for manual changes
   const configLastUpdated = useRef<Map<string, number>>(new Map());
+  // Win Rate Tracker throttle — evaluate outcomes at most once per 30 seconds
+  const lastWinRateEvalRef = useRef<number | null>(null);
 
   // Gap 7: O(1) data index — rebuilt only when `data` changes, not on every tick
   const dataMapRef = useRef<Map<string, ScreenerEntry>>(new Map());
@@ -777,6 +780,9 @@ export function useAlertEngine(
                   type: liveStrategy.signal === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
                 });
 
+                // Signal Win Rate Tracker™ — record snapshot for outcome evaluation
+                recordSignal(symbol, currentStrat as 'strong-buy' | 'strong-sell', live.price);
+
                 const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
                 // isBuy and priceStr are already defined above
                 
@@ -789,6 +795,18 @@ export function useAlertEngine(
             zoneState.current.set(stratKey, currentStrat);
           }
         });
+
+        // ── Win Rate Tracker: Evaluate pending outcomes against live prices ──
+        // Throttle to once every 30 seconds to avoid excessive localStorage I/O
+        const now = Date.now();
+        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30_000) {
+          lastWinRateEvalRef.current = now;
+          const priceMap = new Map<string, number>();
+          batch.forEach((live: any, symbol: string) => {
+            if (live.price > 0) priceMap.set(symbol, live.price);
+          });
+          if (priceMap.size > 0) evaluateOutcomes(priceMap);
+        }
       };
 
       // ── Phase 4: Worker-triggered alerts (Instant Response) ──
@@ -934,5 +952,5 @@ export function useAlertEngine(
     }
   }, [resumeAudioContext]);
 
-  return { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext };
+  return { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext, getGlobalWinRate };
 }

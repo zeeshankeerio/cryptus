@@ -1,5 +1,9 @@
 /**
- * Technical indicators library.
+ * RSIQ Pro — Technical Indicators Library
+ * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
+ * https://mindscapeanalytics.com/
+ *
+ * PROPRIETARY AND CONFIDENTIAL.
  * All functions operate on arrays of numeric values (close prices, volumes, etc.)
  */
 
