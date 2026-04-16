@@ -20,8 +20,9 @@
 // ── Constants ────────────────────────────────────────────────────
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
-const FLUSH_INTERVAL_MS = 500;
+const FLUSH_INTERVAL_MS = 300;
 const OI_POLL_INTERVAL_MS = 30000;
+let LIQUIDATION_THRESHOLD = 10000;         // Default $10K, can be toggled to $5K
 const WHALE_THRESHOLD_USD = 100000;        // $100K+ = whale trade
 const MEGA_WHALE_THRESHOLD_USD = 500000;   // $500K+ = mega whale
 const ORDER_FLOW_WINDOW_MS = 60000;        // 1-minute accumulation window
@@ -213,8 +214,8 @@ function connectLiquidationStream() {
           const price = parseFloat(liq.price) || 0;
           const valueUsd = size * price;
 
-          // Only track significant liquidations (>$10K)
-          if (valueUsd < 10000) return;
+          // Only track significant liquidations (dynamic threshold)
+          if (valueUsd < LIQUIDATION_THRESHOLD) return;
 
           const event = {
             id: generateId(),
@@ -548,6 +549,13 @@ self.onmessage = function(e) {
 
     case 'UPDATE_SYMBOLS':
       updateSymbols(payload?.symbols || []);
+      break;
+
+    case 'UPDATE_CONFIG':
+      if (payload?.liquidationThreshold) {
+        LIQUIDATION_THRESHOLD = payload.liquidationThreshold;
+        console.log(`[deriv-worker] Liquidation threshold updated to $${LIQUIDATION_THRESHOLD}`);
+      }
       break;
 
     default:

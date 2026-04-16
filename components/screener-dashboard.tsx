@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } from '@/lib/types';
+import type { LiquidationEvent } from '@/lib/derivatives-types';
 import { useLivePrices, useSymbolPrice } from '@/hooks/use-live-prices';
 import { useAlertEngine } from '@/hooks/use-alert-engine';
 import { usePushNotifications } from '@/hooks/use-push-notifications';
@@ -2089,6 +2090,7 @@ export default function ScreenerDashboard() {
     openInterest,
     smartMoney,
     isConnected: derivativesConnected,
+    updateConfig: updateDerivConfig,
   } = useDerivativesIntel(symbolSet, activeAssetClass === 'crypto');
 
   // ─── Multi-Asset Market Data (Forex, Metals, Stocks) ───
@@ -3499,8 +3501,8 @@ export default function ScreenerDashboard() {
                   <div className="flex flex-col">
                     <span className="text-[6px] font-black text-slate-600 uppercase leading-none tracking-widest mb-0.5">Liq Flux</span>
                     <div className="flex items-center gap-2 text-[9px] font-mono font-black tabular-nums">
-                      <span className="text-red-500">-${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
-                      <span className="text-emerald-500">+${Math.round((liquidations.filter(l => (Date.now() - l.timestamp) < 300000).reduce((acc, l) => acc + (l.side === 'Buy' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                      <span className="text-red-500">-${Math.round((liquidations.filter((l: LiquidationEvent) => (Date.now() - l.timestamp) < 300000).reduce((acc: number, l: LiquidationEvent) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                      <span className="text-emerald-500">+${Math.round((liquidations.filter((l: LiquidationEvent) => (Date.now() - l.timestamp) < 300000).reduce((acc: number, l: LiquidationEvent) => acc + (l.side === 'Buy' ? l.valueUsd : 0), 0)) / 1000)}K</span>
                     </div>
                   </div>
                 </div>
@@ -3717,6 +3719,7 @@ export default function ScreenerDashboard() {
           openInterest={openInterest}
           smartMoney={smartMoney}
           isConnected={derivativesConnected}
+          onUpdateConfig={updateDerivConfig}
         />
       </div>
 

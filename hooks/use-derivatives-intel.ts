@@ -216,6 +216,15 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     });
   }, [symbols, enabled]);
 
+  // Update worker configuration (e.g. liquidation threshold)
+  const updateConfig = useCallback((config: { liquidationThreshold?: number }) => {
+    if (!derivativesWorker) return;
+    derivativesWorker.postMessage({
+      type: 'UPDATE_CONFIG',
+      payload: config
+    });
+  }, []);
+
   return {
     fundingRates,
     liquidations,
@@ -224,6 +233,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     openInterest,
     smartMoney,
     isConnected,
+    updateConfig,
   };
 }
 

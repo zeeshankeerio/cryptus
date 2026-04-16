@@ -123,21 +123,24 @@ const LiquidationItem = memo(function LiquidationItem({ liq }: { liq: Liquidatio
       "flex items-center justify-between px-2 py-1 rounded-lg text-[10px] font-mono",
       "border border-white/5 transition-colors",
       isLong
-        ? "bg-red-500/5 border-l-2 border-l-red-500/40"
-        : "bg-green-500/5 border-l-2 border-l-green-500/40"
+        ? "bg-[#FF4B5C]/5 border-l-2 border-l-[#FF4B5C]/50"
+        : "bg-[#39FF14]/5 border-l-2 border-l-[#39FF14]/50"
     )}>
       <div className="flex items-center gap-1.5">
         <span className="text-[8px]">💀</span>
         <span className="font-black text-white/90">{getSymbolAlias(liq.symbol)}</span>
         <span className={cn(
           "text-[8px] font-black px-1 rounded",
-          isLong ? "bg-red-500/20 text-red-400" : "bg-green-500/20 text-green-400"
+          isLong ? "bg-[#FF4B5C]/20 text-[#FF4B5C]" : "bg-[#39FF14]/20 text-[#39FF14]"
         )}>
           {isLong ? 'LONG' : 'SHORT'}
         </span>
       </div>
       <div className="flex items-center gap-2">
-        <span className="font-black text-white/80">{sizeStr}</span>
+        <span className={cn(
+          "font-black text-white/80",
+          liq.valueUsd >= 500000 && (isLong ? "text-[#FF4B5C]" : "text-[#39FF14]")
+        )}>{sizeStr}</span>
         <span className="text-slate-500">{timeStr}</span>
       </div>
     </div>
@@ -159,15 +162,15 @@ const WhaleItem = memo(function WhaleItem({ whale }: { whale: WhaleTradeEvent })
       "flex items-center justify-between px-2 py-1 rounded-lg text-[10px] font-mono",
       "border border-white/5 transition-colors",
       isBuy
-        ? "bg-green-500/5 border-l-2 border-l-green-500/40"
-        : "bg-red-500/5 border-l-2 border-l-red-500/40"
+        ? "bg-[#39FF14]/5 border-l-2 border-l-[#39FF14]/50"
+        : "bg-[#FF4B5C]/5 border-l-2 border-l-[#FF4B5C]/50"
     )}>
       <div className="flex items-center gap-1.5">
         <span className="text-[8px]">{isMega ? '🐋' : '🐳'}</span>
         <span className="font-black text-white/90">{getSymbolAlias(whale.symbol)}</span>
         <span className={cn(
           "text-[8px] font-black px-1 rounded",
-          isBuy ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
+          isBuy ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#FF4B5C]/20 text-[#FF4B5C]"
         )}>
           {isBuy ? 'BUY' : 'SELL'}
         </span>
@@ -193,7 +196,7 @@ const FundingCell = memo(function FundingCell({ data }: { data: FundingRateData 
       "flex flex-col items-center justify-center px-2 py-1.5 rounded-lg",
       "border border-white/5 text-center min-w-[70px]",
       isExtreme
-        ? isPositive ? "bg-green-500/10 border-green-500/20" : "bg-red-500/10 border-red-500/20"
+        ? isPositive ? "bg-[#39FF14]/10 border-[#39FF14]/20" : "bg-[#FF4B5C]/10 border-[#FF4B5C]/20"
         : "bg-slate-800/40"
     )}>
       <span className="text-[8px] font-black text-slate-400 truncate max-w-[60px]">
@@ -201,7 +204,7 @@ const FundingCell = memo(function FundingCell({ data }: { data: FundingRateData 
       </span>
       <span className={cn(
         "text-[10px] font-black tabular-nums",
-        isPositive ? "text-green-400" : "text-red-400"
+        isPositive ? "text-[#39FF14]" : "text-[#FF4B5C]"
       )}>
         {isPositive ? '+' : ''}{ratePercent}%
       </span>
@@ -247,12 +250,10 @@ export const OrderFlowBar = memo(function OrderFlowBar({
         <span className="text-red-400">{sellPercent.toFixed(0)}% Sell</span>
       </div>
       <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden flex">
-        <div
-          className="h-full bg-gradient-to-r from-green-500/80 to-green-400/60 transition-all duration-500"
+        <div className="h-full bg-gradient-to-r from-[#39FF14]/80 to-[#39FF14]/60 transition-all duration-500"
           style={{ width: `${buyPercent}%` }}
         />
-        <div
-          className="h-full bg-gradient-to-l from-red-500/80 to-red-400/60 transition-all duration-500"
+        <div className="h-full bg-gradient-to-l from-[#FF4B5C]/80 to-[#FF4B5C]/60 transition-all duration-500"
           style={{ width: `${sellPercent}%` }}
         />
       </div>
@@ -270,6 +271,7 @@ interface DerivativesPanelProps {
   openInterest: Map<string, OpenInterestData>;
   smartMoney: Map<string, SmartMoneyPressure>;
   isConnected: boolean;
+  onUpdateConfig?: (config: { liquidationThreshold?: number }) => void;
 }
 
 type ActiveTab = 'liquidations' | 'whales' | 'funding' | 'flow';
@@ -282,9 +284,18 @@ export const DerivativesPanel = memo(function DerivativesPanel({
   openInterest,
   smartMoney,
   isConnected,
+  onUpdateConfig,
 }: DerivativesPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('liquidations');
+  const [liqThreshold, setLiqThreshold] = useState<5000 | 10000>(10000);
+
+  const handleToggleThreshold = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = liqThreshold === 10000 ? 5000 : 10000;
+    setLiqThreshold(next);
+    onUpdateConfig?.({ liquidationThreshold: next });
+  };
 
   // Sort liquidations/whales by timestamp (newest first)
   const sortedLiquidations = useMemo(
@@ -382,6 +393,24 @@ export const DerivativesPanel = memo(function DerivativesPanel({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Liquidation Threshold Toggle */}
+          {isConnected && (
+            <div 
+              onClick={handleToggleThreshold}
+              className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 cursor-pointer hover:border-white/20 transition-all"
+              title="Toggle Discovery Threshold ($5K vs $10K)"
+            >
+              <div className={cn(
+                "px-1.5 py-0.5 text-[7px] font-black rounded transition-all",
+                liqThreshold === 10000 ? "bg-white text-black" : "text-slate-500"
+              )}>$10K</div>
+              <div className={cn(
+                "px-1.5 py-0.5 text-[7px] font-black rounded transition-all",
+                liqThreshold === 5000 ? "bg-white text-black" : "text-slate-500"
+              )}>$5K</div>
+            </div>
+          )}
+
           {/* Market Pressure Gauge (compact) */}
           {marketPressure && (
             <SmartMoneyGauge data={marketPressure} compact />
@@ -492,16 +521,32 @@ export const DerivativesPanel = memo(function DerivativesPanel({
                       .sort((a, b) => (b[1].buyVolume1m + b[1].sellVolume1m) - (a[1].buyVolume1m + a[1].sellVolume1m))
                       .slice(0, 15)
                       .map(([symbol, data]) => (
-                        <div key={symbol} className="flex items-center gap-2">
-                          <span className="text-[9px] font-black text-white w-16 truncate">
-                            {getSymbolAlias(symbol)}
-                          </span>
-                          <div className="flex-1">
-                            <OrderFlowBar data={data} />
+                        <div key={symbol} className="flex flex-col gap-1.5 p-2 rounded-xl bg-white/[0.01] border border-white/[0.03]">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-black text-white">
+                              {getSymbolAlias(symbol)}
+                            </span>
+                            <div className="flex items-center gap-3">
+                              {openInterest.has(symbol) && (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[7px] font-black text-slate-500 uppercase tracking-tighter">OI:</span>
+                                  <span className="text-[9px] font-black tabular-nums text-slate-300">
+                                    ${(openInterest.get(symbol)!.value / 1000000).toFixed(1)}M
+                                  </span>
+                                  <span className={cn(
+                                    "text-[8px] font-bold tabular-nums",
+                                    openInterest.get(symbol)!.change1h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+                                  )}>
+                                    {openInterest.get(symbol)!.change1h >= 0 ? '↑' : '↓'}{Math.abs(openInterest.get(symbol)!.change1h).toFixed(1)}%
+                                  </span>
+                                </div>
+                              )}
+                              <span className="text-[8px] font-mono text-slate-500 tabular-nums uppercase">
+                                {data.tradeCount1m} Trades/min
+                              </span>
+                            </div>
                           </div>
-                          <span className="text-[8px] font-mono text-slate-500 tabular-nums w-14 text-right">
-                            {data.tradeCount1m} trades
-                          </span>
+                          <OrderFlowBar data={data} />
                         </div>
                       ))
                   )}
