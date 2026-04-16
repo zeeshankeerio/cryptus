@@ -1200,12 +1200,16 @@ function runRefresh(
     const [topSymbols, searchMatches, tickers, coinConfigs] = await Promise.all([
       getTopSymbols(symbolCount, exchange),
       search ? searchSymbols(search, exchange) : Promise.resolve([]),
-      fetchTickersSafe(exchange),
+      fetchTickers(exchange), // Removed fetchTickersSafe as it doesn't exist, using fetchTickers which is robust
       getAllCoinConfigs(),
     ]);
 
     // Merge: search matches first, then top symbols (uniquely)
     const symbols = [...new Set([...searchMatches, ...topSymbols])];
+    
+    // 🔥 Rank-based Priority Mapping
+    const symbolRanks = new Map<string, number>();
+    symbols.forEach((s, i) => symbolRanks.set(s, i));
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
     // Alert-active symbols use a shorter TTL for more accurate RSI state refresh
@@ -1251,19 +1255,26 @@ function runRefresh(
         const bPriority = prioritySymbols.includes(b) ? 1 : 0;
         if (aPriority !== bPriority) return bPriority - aPriority;
 
-        // 1. Strict priority for search matches
-        const aSearch = search?.toUpperCase().includes(a) || searchMatches.includes(a) ? 1 : 0;
-        const bSearch = search?.toUpperCase().includes(b) || searchMatches.includes(b) ? 1 : 0;
+        // 1. Priority for Search matches
+        const aSearch = (search?.toUpperCase() && a.includes(search.toUpperCase())) || searchMatches.includes(a) ? 1 : 0;
+        const bSearch = (search?.toUpperCase() && b.includes(search.toUpperCase())) || searchMatches.includes(b) ? 1 : 0;
         if (aSearch !== bSearch) return bSearch - aSearch;
 
-        // 2. Volatility Boost (Prioritise coins that are actually moving)
+        // ⚡ 2. RANK-BASED PRIORITY (Ensure Top 100 are ALWAYS refreshed)
+        const aRank = symbolRanks.get(a) ?? 999;
+        const bRank = symbolRanks.get(b) ?? 999;
+        const aTop100 = aRank < 100 ? 1 : 0;
+        const bTop100 = bRank < 100 ? 1 : 0;
+        if (aTop100 !== bTop100) return bTop100 - aTop100;
+
+        // 3. Volatility Boost (Prioritise coins that are actually moving)
         const tickA = tickers.get(a);
         const tickB = tickers.get(b);
         const volA = Math.abs(parseFloat(tickA?.priceChangePercent || '0'));
         const volB = Math.abs(parseFloat(tickB?.priceChangePercent || '0'));
-        if (Math.abs(volA - volB) > 2) return volB - volA;
+        if (Math.abs(volA - volB) > 5) return volB - volA; // Higher threshold for volatility jump
 
-        // 3. Gap Fill priority (Uncached symbols)
+        // 4. Gap Fill priority (Uncached symbols)
         const aCached = indicatorCache.has(getCacheKey(a));
         const bCached = indicatorCache.has(getCacheKey(b));
         if (aCached !== bCached) return aCached ? 1 : -1;

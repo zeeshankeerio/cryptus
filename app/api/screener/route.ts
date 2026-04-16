@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     const cachedSession = sessionCache.get(sessionId);
     const now = Date.now();
 
-    const fetchTask = getScreenerData(500, { smartMode, rsiPeriod, search, prioritySymbols, exchange })
+    const fetchTask = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange })
       .catch(err => {
         console.error('[screener-api] Fetch task failed:', err instanceof Error ? err.message : err);
         return { data: [], meta: { total: 0, fetchedAt: Date.now() } as any };
