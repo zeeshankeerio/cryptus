@@ -28,6 +28,11 @@ import {
   MessageCircle,
   Handshake,
   ExternalLink,
+  ChevronRight,
+  Gauge,
+  CircleDollarSign,
+  Globe,
+  Coins,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
@@ -54,11 +59,37 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#05080F] text-slate-300 selection:bg-[#39FF14]/30 selection:text-white overflow-x-hidden font-sans">
+      {/* ─── Global Market Pulse Ticker ─── */}
+      <div className="fixed top-0 w-full z-[110] bg-[#39FF14] text-black h-8 flex items-center overflow-hidden border-b border-black/10">
+        <div className="animate-marquee whitespace-nowrap flex items-center gap-12 font-black text-[10px] uppercase tracking-widest px-4">
+          {[...Array(10)].map((_, i) => (
+            <React.Fragment key={i}>
+              <div className="flex items-center gap-2">
+                <Coins size={12} />
+                <span>BTC/USD $96,442.20 <span className="text-emerald-700 opacity-80">+2.4%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Globe size={12} />
+                <span>XAU/USD $2,742.15 <span className="text-red-700 opacity-80">-0.1%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CircleDollarSign size={12} />
+                <span>EUR/USD 1.0542 <span className="text-emerald-700 opacity-80">+0.04%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Gauge size={12} />
+                <span>MARKET VOLATILITY: EXTREME</span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
       {/* ─── Grid Overlay ─── */}
       <div className="fixed inset-0 bg-[linear-gradient(rgba(57,255,20,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(57,255,20,0.03)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black,transparent)] pointer-events-none z-0" />
 
       {/* ─── Header ─── */}
-      <nav className="fixed top-0 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
+      <nav className="fixed top-8 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-3">
@@ -186,68 +217,190 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 w-full sm:w-auto px-4 sm:px-0"
+            className="w-full max-w-5xl"
           >
-            <Link 
-              href="/register" 
-              className="w-full sm:w-auto px-8 sm:px-12 py-4 sm:py-6 rounded-2xl bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] sm:tracking-[0.25em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all text-[12px] sm:text-[13px] active:scale-95 text-center"
-            >
-              Start Trading Now
-            </Link>
-            <Link
-              href="/login"
-              className="sm:hidden w-full text-center px-8 py-4 rounded-2xl border border-white/10 text-slate-300 font-black uppercase tracking-[0.2em] text-[12px] active:scale-95 transition-all"
-            >
-              Sign In
-            </Link>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-center">
+              {/* Left HUD Stats */}
+              <div className="hidden md:flex flex-col gap-4">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                   <div className="flex items-center gap-2 mb-1">
+                     <Cpu size={14} className="text-[#39FF14]" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engine Latency</span>
+                   </div>
+                   <div className="text-xl font-black text-white">0.5ms</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                   <div className="flex items-center gap-2 mb-1">
+                     <Activity size={14} className="text-[#39FF14]" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Ticks / Day</span>
+                   </div>
+                   <div className="text-xl font-black text-white text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">2.4B+</div>
+                </div>
+              </div>
+
+              {/* Main CTAs */}
+              <div className="flex flex-col gap-4">
+                <Link 
+                  href="/register" 
+                  className="w-full px-8 py-5 sm:py-7 rounded-2xl bg-[#39FF14] text-black font-black uppercase tracking-[0.25em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all text-[12px] sm:text-[14px] active:scale-95 text-center group"
+                >
+                  Launch Terminal
+                  <ChevronRight size={18} className="inline ml-2 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link
+                  href="/login"
+                  className="w-full text-center px-8 py-4 rounded-2xl border border-white/10 bg-white/[0.02] text-slate-300 font-black uppercase tracking-[0.2em] text-[11px] active:scale-95 transition-all backdrop-blur-sm"
+                >
+                  Sign In to Desk
+                </Link>
+              </div>
+
+              {/* Right HUD Stats */}
+              <div className="hidden md:flex flex-col gap-4">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                   <div className="flex items-center gap-2 mb-1">
+                     <Globe size={14} className="text-[#39FF14]" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Symbols</span>
+                   </div>
+                   <div className="text-xl font-black text-white">580+</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                   <div className="flex items-center gap-2 mb-1">
+                     <ShieldCheck size={14} className="text-[#39FF14]" />
+                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Security Grade</span>
+                   </div>
+                   <div className="text-xl font-black text-white">ENTERPRISE</div>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ─── Desktop Preview Section ─── */}
+      {/* ─── Institutional Trust Bar ─── */}
+      <section className="py-12 border-y border-white/5 bg-white/[0.01] overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#05080F] via-transparent to-[#05080F] z-10 pointer-events-none" />
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center gap-8 md:gap-20">
+          <div className="flex-shrink-0 flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Connectivity Hub</span>
+            <span className="text-sm font-black text-white uppercase tracking-widest mt-1">Global Exchanges</span>
+          </div>
+          <div className="flex-1 overflow-hidden relative h-10 flex items-center">
+            <div className="animate-marquee whitespace-nowrap flex items-center gap-16 font-black text-[11px] uppercase tracking-[0.3em] text-slate-400/40">
+              <span>Binance Direct</span>
+              <span>Bybit WebSocket</span>
+              <span>OKX Institutional</span>
+              <span>Coinbase Pro</span>
+              <span>Bitget Unified</span>
+              <span>Kraken Terminal</span>
+              <span>KuCoin Alpha</span>
+              <span>Binance Direct</span>
+              <span>Bybit WebSocket</span>
+              <span>OKX Institutional</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Desktop Preview Section (The Pulse) ─── */}
       <section id="preview" className="relative px-4 sm:px-6 pb-20 sm:pb-32 md:pb-40 z-10">
         <div className="max-w-[1400px] mx-auto">
-          <motion.div 
-            initial={{ opacity: 0, y: 100 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.8, type: 'spring', damping: 20 }}
-            className="relative p-1.5 sm:p-2 rounded-[24px] sm:rounded-[40px] bg-gradient-to-b from-white/10 to-transparent border border-white/10 shadow-[0_40px_80px_rgba(0,0,0,0.8)] sm:shadow-[0_80px_160px_rgba(0,0,0,0.9)] group"
-          >
-            <div className="bg-[#0A0E17] rounded-[18px] sm:rounded-[32px] overflow-hidden relative border border-white/5">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-10">
+            {/* Main Terminal Image */}
+            <motion.div 
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="xl:col-span-8 relative p-1.5 rounded-[32px] bg-gradient-to-b from-white/10 to-transparent border border-white/10 shadow-2xl group overflow-hidden"
+            >
               <Image 
-                src="/images/desktop_view.webp" 
-                alt="RSIQ Pro Desktop Terminal" 
+                src="/images/system_images/main_dashboard.png" 
+                alt="RSIQ Pro Institutional Terminal" 
                 width={2560} 
                 height={1440}
-                className="w-full h-auto object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-700"
+                className="w-full h-auto rounded-[26px] object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-[1.02]"
               />
-              
-              <div className="absolute top-4 sm:top-10 left-4 sm:left-10 p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-black/60 backdrop-blur-xl border border-[#39FF14]/30 shadow-2xl hidden lg:block max-w-xs transition-transform group-hover:-translate-y-2">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#39FF14]/20 flex items-center justify-center">
-                    <Activity size={18} className="text-[#39FF14]" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Market Bias Algorithm</span>
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0A0E17]/80 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between pointer-events-none">
+                <div className="flex items-center gap-4 bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10">
+                  <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Live Decision Engine Active</span>
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed font-bold">
-                  Calculates global sentiment across 500+ pairs. Identifies macro reversals before they hit the tape.
-                </p>
               </div>
+            </motion.div>
 
-              <div className="absolute bottom-4 sm:bottom-10 right-4 sm:right-10 p-3 sm:p-6 rounded-xl sm:rounded-2xl bg-black/60 backdrop-blur-xl border border-[#39FF14]/30 shadow-2xl hidden lg:block max-w-xs transition-transform group-hover:translate-y-2">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#39FF14]/20 flex items-center justify-center">
-                    <Target size={18} className="text-[#39FF14]" />
-                  </div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-white">Strategy Scoring</span>
+            {/* Sidebar High-Performance Stats */}
+            <div className="xl:col-span-4 flex flex-col gap-6">
+              <motion.div 
+                initial={{ opacity: 0, x: 50 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="flex-1 p-8 rounded-[32px] bg-white/[0.03] border border-white/10 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform duration-500 text-[#39FF14]">
+                  <TrendingUp size={120} />
                 </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed font-bold">
-                  Proprietary 0-100 score combining RSI Divergence, EMA Crossovers, and MACD Momentum.
-                </p>
-              </div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-[#39FF14] mb-4">Liquidation Flux V4</h4>
+                <p className="text-2xl font-black text-white tracking-tight leading-tight">Intercept institutional margin exhaustion.</p>
+                <div className="mt-8 relative h-32 w-full">
+                  <Image src="/images/system_images/Signal_naratives.png" alt="Signal Narration" fill className="object-contain" />
+                </div>
+              </motion.div>
+
+              <motion.div 
+                initial={{ opacity: 0, x: 50 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 }}
+                className="flex-1 p-8 rounded-[32px] bg-[#39FF14]/[0.05] border border-[#39FF14]/20 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform duration-500 text-[#39FF14]">
+                  <ShieldCheck size={120} />
+                </div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Portfolio Armor</h4>
+                <p className="text-2xl font-black text-white tracking-tight leading-tight">Neural HHI risk scoring built-in.</p>
+                <div className="mt-8 relative h-32 w-full">
+                  <Image src="/images/system_images/portfolio_risk.png" alt="Portfolio Risk" fill className="object-contain" />
+                </div>
+              </motion.div>
             </div>
-          </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Global Real-Time Intelligence (TradingView) ─── */}
+      <section className="py-20 sm:py-32 bg-white/[0.01] border-y border-white/5 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-16 space-y-4">
+             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">Live Market Pulse</h2>
+             <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Unified Multi-Asset Authority.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
+               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14]" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">BTC / USD - REATIME</span>
+               </div>
+               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_btc&symbol=BINANCE%3ABTCUSDT&interval=1&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
+               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">GOLD / USD - REATIME</span>
+               </div>
+               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_gold&symbol=OANDA%3AXAUUSD&interval=15&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
+               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">EUR / USD - REATIME</span>
+               </div>
+               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_eur&symbol=FX%3AEURUSD&interval=15&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -265,23 +418,23 @@ export default function LandingPage() {
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Winning Execution.</span>
                 </p>
                 <p className="text-slate-400 text-sm sm:text-base leading-relaxed mt-4 max-w-md">
-                  <strong className="text-slate-200">The Problem:</strong> Manual charting leads to missed opportunities and emotional trading. You can&apos;t watch 500 charts at once.<br/><br/>
-                  <strong className="text-[#39FF14]">The Solution:</strong> A unified engine that algorithmically cross-references divergence, momentum, and volume across multiple timeframes simultaneously.
+                  <strong className="text-slate-200">The Problem:</strong> Information Fragmentation. Most traders lose because they are forced to synthesize 5+ disconnected tools while the market moves instantly.<br/><br/>
+                  <strong className="text-[#39FF14]">The Solution:</strong> A Unified Command Center. We merge real-time liquidation flux, institutional indicators, and smart money footprints into a single low-latency decision engine.
                 </p>
               </div>
 
               <div className="space-y-6 sm:space-y-8">
                 <AnalysisItem 
-                  title="Multi-Indicator Confluence" 
-                  desc="Stop relying on a single data point. RSIQ Pro cross-references RSI, MACD Histogram, Stochastics, and BB Position to find high-probability setups." 
+                  title="59-Second Alpha Edge" 
+                  desc="Don't wait for candles to close. Our Neural Engine calculates 'Approximated Indicators' tick-by-tick, giving you up to a minute of lead-time over standard screeners." 
                 />
                 <AnalysisItem 
-                  title="Deep Customizations" 
-                  desc="Tailor your edge perfectly. Adjust RSI periods (2 to 50), toggle volatility filters, set specific threshold triggers, and watch the entire market re-calculate in absolute real-time." 
+                  title="Liquidation Convergence" 
+                  desc="Spot the exact microsecond institutional margin calls trigger. Identify local bottoms and tops as they are being defended by smart money liquidity walls." 
                 />
                 <AnalysisItem 
-                  title="Real-Time Divergence Detection" 
-                  desc="Automated Bullish and Bearish divergence tracking across multiple timeframes. Spot reversals hours before they happen." 
+                  title="Viral Signal Narration" 
+                  desc="Transform technical setups into community growth. Generate professional, narratively-driven signal calls with one click for X, Discord, or Telegram." 
                 />
               </div>
             </div>
@@ -400,6 +553,38 @@ export default function LandingPage() {
                 </Link>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Who Is This For (Target Audiences) ─── */}
+      <section className="py-20 sm:py-32 md:py-40 border-t border-white/5 bg-[#05080F] px-4 sm:px-6 relative overflow-hidden">
+        <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#39FF14]/5 blur-[140px] rounded-full pointer-events-none -ml-64 opacity-50" />
+        <div className="max-w-7xl mx-auto relative">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Professional Spectrum</h2>
+             <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Engineered for the Top 1%.</p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            <PersonaCard 
+              icon={<Zap className="text-[#39FF14]" />}
+              role="The Scalper"
+              needs="Absolute speed. Whale alerts. Zero-latency liquidation tracking for micro-entries."
+              impact="Captures alpha in the milliseconds before the retail crowd reacts."
+            />
+            <PersonaCard 
+              icon={<ShieldCheck className="text-emerald-400" />}
+              role="The Fund Manager"
+              needs="HHI Index tracking. Neural risk matrix. Diversification armor for high-capital portfolios."
+              impact="Protects enterprise assets during volatility cascades."
+            />
+            <PersonaCard 
+              icon={<MessageCircle className="text-blue-400" />}
+              role="The Elite Provider"
+              needs="Signal Narration. Instant X/Discord generation. High-aesthetic dashboards for streams."
+              impact="Scales community trust with institutional-grade data transparency."
+            />
           </div>
         </div>
       </section>
@@ -609,6 +794,28 @@ export default function LandingPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function PersonaCard({ icon, role, needs, impact }: { icon: React.ReactNode; role: string; needs: string; impact: string }) {
+  return (
+    <motion.div 
+      whileHover={{ y: -5 }}
+      className="p-8 sm:p-10 rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col"
+    >
+      <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mb-8">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
+      </div>
+      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2">TARGET PERSONA</h4>
+      <h3 className="text-2xl font-black text-white tracking-tight mb-4">{role}</h3>
+      <p className="text-sm text-slate-400 font-medium leading-relaxed mb-6 flex-1">
+        {needs}
+      </p>
+      <div className="pt-6 border-t border-white/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">IMPACT:</span>
+        <p className="mt-1 text-xs text-white/80 font-bold italic">"{impact}"</p>
+      </div>
+    </motion.div>
   );
 }
 
