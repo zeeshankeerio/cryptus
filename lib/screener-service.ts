@@ -102,7 +102,7 @@ const FALLBACK_SYMBOLS = [
 // BINANCE_NATIVE_SPECIAL: Symbols supported by Binance that are NOT primarily Crypto.
 const BINANCE_NATIVE_SPECIAL = [
   'PAXGUSDT', 'XAUTUSDT',                    // Metals (Gold)
-  'EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT',  // Forex Majors
+  'EURUSDT', 'GBPUSDT', 'AUDUSDT',            // Forex Majors
 ];
 
 const YAHOO_MARKET_MAP: Record<string, string> = {
@@ -705,6 +705,13 @@ async function fetchWithRetry(
         debugWarn(`[kline] 429 rate-limited from ${base}, waiting ${wait}ms`);
         await new Promise((r) => setTimeout(r, wait));
         continue;
+      }
+      if (res.status === 400) {
+        // Invalid symbol or invalid parameters for this specific endpoint.
+        // We throw a specific skip-symbol error to avoid retrying across all providers.
+        const errorMsg = `[kline] ${label}: HTTP 400 (Invalid Symbol) from ${base}`;
+        debugWarn(errorMsg);
+        throw new Error(`SKIP_SYMBOL: ${errorMsg}`);
       }
       if (res.status === 451) {
         // Geo-restriction is enforced at the symbol level across all Binance

@@ -78,13 +78,13 @@ function formatTimeAgo(ts: number): string {
 
 function getRsiColor(rsi: number | null): string {
   if (rsi === null) return 'text-slate-600';
-  if (rsi <= 20) return 'text-[#39FF14] font-black';
-  if (rsi <= 30) return 'text-[#39FF14] font-bold';
-  if (rsi <= 40) return 'text-[#39FF14]/80';
-  if (rsi >= 80) return 'text-[#FF4B5C] font-black';
-  if (rsi >= 70) return 'text-[#FF4B5C] font-bold';
-  if (rsi >= 60) return 'text-[#FF4B5C]/80';
-  return 'text-slate-300';
+  if (rsi >= 75) return 'text-[#FF4B5C] drop-shadow-[0_0_10px_rgba(255,75,92,0.4)] font-black italic'; // Extreme OB
+  if (rsi <= 25) return 'text-[#39FF14] drop-shadow-[0_0_10px_rgba(57,255,20,0.4)] font-black italic'; // Extreme OS
+  if (rsi >= 70) return 'text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.2)] font-bold';
+  if (rsi <= 30) return 'text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.2)] font-bold';
+  if (rsi >= 60) return 'text-[#FF4B5C]/80 font-bold';
+  if (rsi <= 40) return 'text-[#39FF14]/80 font-bold';
+  return 'text-white/90 font-medium';
 }
 
 function getRsiBg(rsi: number | null): string {
@@ -110,12 +110,12 @@ function getScoreBarColor(score: number): string {
 
 function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   const styles: Record<string, string> = {
-    oversold: 'bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/30',
-    overbought: 'bg-[#722f37]/20 text-[#FF4B5C] border-[#722f37]/40',
-    neutral: 'bg-slate-800/50 text-slate-400 border-slate-700/50',
+    oversold: 'bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50 shadow-[0_0_15px_rgba(57,255,20,0.2)] animate-pulse',
+    overbought: 'bg-[#722f37]/30 text-[#FF4B5C] border-[#722f37]/60 shadow-[0_0_15px_rgba(255,75,92,0.2)] animate-pulse',
+    neutral: 'bg-slate-800/50 text-slate-500 border-slate-700/50',
   };
   return (
-    <span className={cn("inline-flex items-center px-3 py-1 text-[10px] font-black uppercase tracking-widest rounded-full border shadow-sm transition-all duration-300", styles[signal])}>
+    <span className={cn("inline-flex items-center px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] rounded-full border shadow-sm transition-all duration-300", styles[signal])}>
       {signal}
     </span>
   );
@@ -698,8 +698,10 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('confluence') && (
         <td className={cn(
-          "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter",
-          display.confluence >= 15 ? "text-[#39FF14]" : display.confluence <= -15 ? "text-[#FF4B5C]" : "text-slate-600"
+          "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter transition-all duration-300",
+          display.confluence >= 15 ? "text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)]" : 
+          display.confluence <= -15 ? "text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)]" : 
+          "text-slate-600"
         )}>
           {display.confluenceLabel || '—'}
         </td>
@@ -707,8 +709,8 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase">
-          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14]">Bull Div</span> :
-            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C]">Bear Div</span> : '—'}
+          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)] animate-pulse">Bull Div</span> :
+            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)] animate-pulse">Bear Div</span> : '—'}
         </td>
       )}
 
@@ -787,10 +789,13 @@ const ScreenerRow = memo(function ScreenerRow({
         <td className="px-3 py-3 text-right text-[10px] tabular-nums font-bold font-mono">
           {fundingRate ? (
             <div className="flex flex-col items-end">
-              <span className={fundingRate.rate > 0 ? "text-green-400" : fundingRate.rate < 0 ? "text-red-400" : "text-slate-500"}>
+              <span className={cn(
+                "transition-colors duration-300",
+                fundingRate.rate > 0 ? "text-[#39FF14]" : fundingRate.rate < 0 ? "text-[#FF4B5C]" : "text-slate-500"
+              )}>
                 {fundingRate.rate > 0 ? '+' : ''}{(fundingRate.rate * 100).toFixed(4)}%
               </span>
-              <span className="text-[7px] text-slate-600">{fundingRate.annualized.toFixed(0)}% APR</span>
+              <span className="text-[7px] text-slate-500 font-black opacity-60 uppercase">{fundingRate.annualized.toFixed(0)}% APR</span>
             </div>
           ) : <span className="text-slate-700">—</span>}
         </td>
@@ -1043,8 +1048,8 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'rsi1m', label: 'RSI 1m', group: 'RSI Std', defaultVisible: false },
   { id: 'rsi5m', label: 'RSI 5m', group: 'RSI Std', defaultVisible: false },
   { id: 'rsi15m', label: 'RSI 15m', group: 'RSI Std', defaultVisible: true },
-  { id: 'rsi1h', label: 'RSI 1h', group: 'RSI Std', defaultVisible: true },
-  { id: 'rsiCustom', label: 'RSI Custom', group: 'RSI Active', defaultVisible: true },
+  { id: 'rsi1h', label: 'RSI 1h', group: 'RSI Std', defaultVisible: false },
+  { id: 'rsiCustom', label: 'RSI Custom', group: 'RSI Active', defaultVisible: false },
   { id: 'ema9', label: 'EMA 9', group: 'Moving Avg', defaultVisible: false },
   { id: 'ema21', label: 'EMA 21', group: 'Moving Avg', defaultVisible: false },
   { id: 'emaCross', label: 'Trend', group: 'Indicators', defaultVisible: true },
@@ -3028,8 +3033,13 @@ export default function ScreenerDashboard() {
       try {
         const configRes = await fetch('/api/config', { cache: 'no-store' });
         if (configRes.ok) {
-          const cfg = await configRes.json();
-          setCoinConfigs(cfg);
+          const contentType = configRes.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const cfg = await configRes.json();
+            setCoinConfigs(cfg);
+          } else {
+            console.warn('[screener] Config API returned non-JSON response. Likely redirect or auth error.');
+          }
         }
       } catch (e) {
         console.error('[screener] Config fetch failed:', e);

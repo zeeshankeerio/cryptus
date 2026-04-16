@@ -86,8 +86,8 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
   }, []);
 
   // Risk Score Visualization Logic
-  const riskColor = report.riskScore >= 80 ? 'text-rose-500' : report.riskScore >= 60 ? 'text-orange-500' : report.riskScore >= 40 ? 'text-amber-500' : report.riskScore >= 20 ? 'text-emerald-500' : 'text-[#39FF14]';
-  const riskBorder = report.riskScore >= 80 ? 'border-rose-500/30' : report.riskScore >= 60 ? 'border-orange-500/30' : report.riskScore >= 40 ? 'border-amber-500/30' : 'border-emerald-500/30';
+  const riskColor = report.riskScore >= 80 ? 'text-[#FF4B5C]' : report.riskScore >= 60 ? 'text-orange-500' : report.riskScore >= 40 ? 'text-amber-500' : report.riskScore >= 20 ? 'text-emerald-500' : 'text-[#39FF14]';
+  const riskBorder = report.riskScore >= 80 ? 'border-[#FF4B5C]/30' : report.riskScore >= 60 ? 'border-orange-500/30' : report.riskScore >= 40 ? 'border-amber-500/30' : 'border-emerald-500/30';
 
   return (
     <AnimatePresence>

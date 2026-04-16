@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
+import { getSessionUser } from '@/lib/api-auth';
+import { prisma } from '@/lib/prisma';
+import { resolveEntitlementsForUser } from '@/lib/entitlements';
 import { getAllCoinConfigs, updateCoinConfig } from '@/lib/coin-config';
 import { invalidateSymbolCache } from '@/lib/screener-service';
-import { auth } from '@/lib/auth';
-import { resolveEntitlementsForUser } from '@/lib/entitlements';
-import { prisma } from '@/lib/prisma';
 
 const ALERT_FIELDS = [
   'alertOn1m',
@@ -36,11 +36,11 @@ const CUSTOM_SETTING_FIELDS = [
 // GAP-F1 FIX: GET now requires authentication
 export async function GET(request: Request) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
-    if (!session?.user) {
+    const { user } = await getSessionUser();
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const configs = await getAllCoinConfigs(session.user.id);
+    const configs = await getAllCoinConfigs(user.id);
     return NextResponse.json(Object.fromEntries(configs), {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
@@ -55,13 +55,13 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await auth.api.getSession({ headers: request.headers });
-    if (!session?.user) {
+    const { user: sessionUser } = await getSessionUser();
+    if (!sessionUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
+      where: { id: sessionUser.id },
       select: { id: true, email: true, role: true, createdAt: true },
     });
     if (!user) {
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     // Inject authenticated userId and current exchange
     const updated = await updateCoinConfig({
       ...body,
-      userId: session.user.id,
+      userId: sessionUser.id,
     });
 
     // Invalidate caches so the next fetch uses the fresh config
