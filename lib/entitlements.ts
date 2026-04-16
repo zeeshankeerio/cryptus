@@ -9,6 +9,7 @@ type EntitlementUser = {
   email: string;
   role: string | null;
   createdAt: Date;
+  coins?: number;
 };
 
 export type EntitlementTier = "owner" | "subscribed" | "trial" | "free" | "anonymous";
@@ -25,6 +26,8 @@ export interface ResolvedEntitlements {
     enableAdvancedIndicators: boolean;
     enableCustomSettings: boolean;
   };
+  coins: number;
+  maxSymbols: number;
   flags: FeatureFlags;
 }
 
@@ -77,6 +80,8 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
         enableAdvancedIndicators: false,
         enableCustomSettings: false,
       },
+      coins: 0,
+      maxSymbols: 10, // Minimal for anonymous
       flags,
     };
   }
@@ -95,6 +100,8 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
         enableAdvancedIndicators: true,
         enableCustomSettings: true,
       },
+      coins: user.coins ?? 999999,
+      maxSymbols: 1000,
       flags,
     };
   }
@@ -172,6 +179,8 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
       enableCustomSettings:
         hasPaidAccess || (trialFeaturesEnabled && flags.allowTrialCustomSettings),
     },
+    coins: user.coins ?? 0,
+    maxSymbols: hasPaidAccess ? 1000 : 100, // 100 symbols for trial/free
     flags,
   };
 }

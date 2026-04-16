@@ -72,7 +72,8 @@ export interface ScreenerEntry {
   signalStartedAt: number;
   lastPriceChange?: number;
   updatedAt: number;
-  market: 'Crypto' | 'Metal' | 'Forex' | 'Index';
+  market: 'Crypto' | 'Metal' | 'Forex' | 'Index' | 'Stocks';
+  marketState: string | null;
   // ── High-Accuracy Real-time Initialization ──
   open1m: number | null;
   volStart1m: number | null;

@@ -24,8 +24,11 @@ import { usePushNotifications } from '@/hooks/use-push-notifications';
 import { useDerivativesIntel } from '@/hooks/use-derivatives-intel';
 import { DerivativesPanel, OrderFlowBar } from '@/components/derivatives-panel';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
-import { computeStrategyScore, deriveSignal } from '@/lib/indicators';
-import { getSymbolAlias } from '@/lib/symbol-utils';
+import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi } from '@/lib/indicators';
+import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
+import { generateSignalNarration } from '@/lib/signal-narration';
+import type { AssetClass } from '@/lib/asset-classes';
+import { useMarketData } from '@/hooks/use-market-data';
 import { toast } from 'sonner';
 
 // ─── Formatting helpers ────────────────────────────────────────
@@ -114,7 +117,7 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   );
 }
 
-function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[] }) {
+function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry }) {
   const styles: Record<string, string> = {
     'strong-buy': 'bg-[#39FF14]/20 text-[#39FF14] border-[#39FF14]/40',
     'buy': 'bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/20',
@@ -122,9 +125,22 @@ function StrategyBadge({ signal, label, reasons }: { signal: ScreenerEntry['stra
     'sell': 'bg-[#722f37]/10 text-[#FF4B5C]/80 border-[#722f37]/20',
     'strong-sell': 'bg-[#722f37]/20 text-[#FF4B5C] border-[#722f37]/40',
   };
-  const title = reasons?.length ? reasons.join(' \u00B7 ') : undefined;
+
+  // Signal Narration Engine™ — generate rich explanations for non-neutral signals
+  const narration = useMemo(() => {
+    if (!entry || signal === 'neutral') return null;
+    return generateSignalNarration(entry);
+  }, [entry, signal]);
+
+  const title = narration
+    ? `${narration.emoji} ${narration.headline} (${narration.conviction}% ${narration.convictionLabel})\n\n${narration.reasons.join('\n')}`
+    : reasons?.length ? reasons.join(' \u00B7 ') : undefined;
+
   return (
-    <span className={cn("inline-flex items-center px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all", styles[signal])} title={title}>
+    <span className={cn("inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all cursor-help", styles[signal])} title={title}>
+      {narration && narration.conviction >= 65 && (
+        <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
+      )}
       {label}
     </span>
   );
@@ -136,11 +152,7 @@ function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
     Metal: 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_5px_rgba(245,158,11,0.1)]',
     Forex: 'bg-blue-500/10 text-blue-400 border-blue-500/20 shadow-[0_0_5px_rgba(59,130,246,0.1)]',
     Index: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20 shadow-[0_0_5px_rgba(99,102,241,0.1)]',
-    // 2026 Resilience: Dynamic support for Global Indices
-    FTSE: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    DAX: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    DOW: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    NKY: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
+    Stocks: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 shadow-[0_0_5px_rgba(16,185,129,0.1)]',
   };
   return (
     <span className={cn("px-2 py-0.5 text-[7px] font-black uppercase tracking-[0.2em] rounded-sm border shrink-0 shadow-sm transition-colors", styles[market] || styles['Index'])}>
@@ -466,8 +478,14 @@ const ScreenerRow = memo(function ScreenerRow({
           <div className="flex items-center gap-1.5">
             <span className="font-black text-white text-[13px] tracking-tight hover:text-[#39FF14] transition-colors cursor-pointer" onClick={() => onOpenSettings(entry.symbol)}>{getSymbolAlias(entry.symbol)}</span>
             <MarketBadge market={entry.market} />
+            {entry.market !== 'Crypto' && entry.marketState !== 'REGULAR' && (
+              <span className="text-[7px] px-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-sm font-black uppercase tracking-tighter shadow-[0_0_8px_rgba(255,75,92,0.1)]">
+                {entry.marketState || 'CLOSED'}
+              </span>
+            )}
           </div>
           {entry.market === 'Crypto' && <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">USDT</span>}
+          {entry.market !== 'Crypto' && <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">{getSymbolTicker(entry.symbol)}</span>}
         </div>
       </td>
       <td className="px-3 py-4 text-right tabular-nums font-bold font-mono text-[13px]">
@@ -815,7 +833,7 @@ const ScreenerRow = memo(function ScreenerRow({
               </div>
               <span className="text-[10px] font-black tabular-nums text-slate-500">{display.strategyScore}</span>
             </div>
-            <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} />
+            <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} />
           </div>
         </td>
       )}
@@ -1413,10 +1431,15 @@ const ScreenerCard = memo(function ScreenerCard({
           <div className="flex items-center gap-1">
             <span className="font-black text-white text-sm tracking-tight">{getSymbolAlias(entry.symbol)}</span>
             <MarketBadge market={entry.market} />
+            {entry.market !== 'Crypto' && entry.marketState !== 'REGULAR' && (
+              <span className="text-[6px] px-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-sm font-black uppercase tracking-tighter">
+                {entry.marketState || 'CLOSED'}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
             <div className="text-[7px] font-black text-slate-700 uppercase leading-none">
-              {entry.market === 'Crypto' ? `${exchange.startsWith('bybit') ? 'Bybit' : 'Binance'}` : 'Global'}
+              {entry.market === 'Crypto' ? `${exchange.startsWith('bybit') ? 'Bybit' : 'Binance'}` : getSymbolTicker(entry.symbol)}
             </div>
             {display.signal !== 'neutral' && (
               <div className="scale-[0.65] origin-left -ml-1 -my-1">
@@ -1447,7 +1470,7 @@ const ScreenerCard = memo(function ScreenerCard({
                     {globalUseRsi ? formatRsi(val as number) : '—'}
                   </span>
                 ) : col.id === 'strategy' ? (
-                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} />
+                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} />
                 ) : col.id === 'divergence' ? (
                   <span className={cn("text-[8px] font-black uppercase", display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
                     {display.rsiDivergence === 'bullish' ? 'DIV+' : display.rsiDivergence === 'bearish' ? 'DIV-' : '—'}
@@ -1680,6 +1703,8 @@ export default function ScreenerDashboard() {
 
   // ── Theme State ──
   const smartModeDefault = process.env.NEXT_PUBLIC_SMART_MODE_DEFAULT !== '0';
+  // ── Asset Class State ──
+  const [activeAssetClass, setActiveAssetClass] = useState<AssetClass>('crypto');
   // ── State ──
   const [data, setData] = useState<ScreenerEntry[]>([]);
   const isMobile = useIsMobile();
@@ -2014,12 +2039,155 @@ export default function ScreenerDashboard() {
     openInterest,
     smartMoney,
     isConnected: derivativesConnected,
-  } = useDerivativesIntel(symbolSet, true);
+  } = useDerivativesIntel(symbolSet, activeAssetClass === 'crypto');
+
+  // ─── Multi-Asset Market Data (Forex, Metals, Stocks) ───
+  const {
+    data: marketData,
+    isLoading: marketDataLoading,
+    source: marketDataSource,
+    refresh: refreshMarketData,
+  } = useMarketData(activeAssetClass, activeAssetClass !== 'crypto');
 
   // ─── Hybrid Atomic Data ───
   // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
   // It merges the SWR data (from API) with the Live WebSocket prices (from useLivePrices).
   const processedData = useMemo<ScreenerEntry[]>(() => {
+    // ─── BRANCH A: Tradify (Forex, Metals, Stocks) ───
+    if (activeAssetClass !== 'crypto') {
+      if (marketData.length === 0) return [];
+
+      // ── Asset class → market type mapping ──
+      const MARKET_TYPE_MAP: Record<string, ScreenerEntry['market']> = {
+        forex: 'Forex',
+        metals: 'Metal',
+        stocks: 'Stocks',
+      };
+      const resolvedMarket = MARKET_TYPE_MAP[activeAssetClass] || 'Index';
+
+      return marketData.map(md => {
+        // ── Full Technical Analysis from Historical Closes ──
+        const closes = md.closes || [];
+        const rsi14 = calculateRsi(closes, 14);
+        const rsi1m = closes.length >= 20 ? calculateRsi(closes.slice(-20), 14) : rsi14;
+        const ema9 = latestEma(closes, 9);
+        const ema21 = latestEma(closes, 21);
+        const emaCross = detectEmaCross(closes, 9, 21);
+
+        // MACD (12/26/9) from full closes
+        const macdResult = calculateMacd(closes, 12, 26, 9);
+
+        // Bollinger Bands (20, 2σ)
+        const bbResult = calculateBollinger(closes, 20, 2);
+
+        // Stochastic RSI (14/14/3/3)
+        const stochResult = calculateStochRsi(closes, 14, 14, 3, 3);
+
+        const entry: ScreenerEntry = {
+          symbol: md.symbol,
+          price: md.price,
+          change24h: md.changePercent,
+          volume24h: md.volume,
+          rsi1m: rsi1m,
+          rsi5m: null,
+          rsi15m: rsi14,
+          rsi1h: null,
+          rsiCustom: rsi14,
+          ema9: ema9,
+          ema21: ema21,
+          emaCross,
+          macdHistogram: macdResult?.histogram ?? null,
+          macdLine: macdResult?.macdLine ?? null,
+          macdSignal: macdResult?.signalLine ?? null,
+          bbUpper: bbResult?.upper ?? null,
+          bbMiddle: bbResult?.middle ?? null,
+          bbLower: bbResult?.lower ?? null,
+          bbPosition: bbResult?.position ?? (md.price && md.sma50 ? (md.price > md.sma50 ? 0.7 : 0.3) : 0.5),
+          stochK: stochResult?.k ?? null,
+          stochD: stochResult?.d ?? null,
+          strategyScore: 0,
+          strategySignal: 'neutral',
+          strategyLabel: 'Neutral',
+          strategyReasons: [],
+          signal: 'neutral',
+          market: resolvedMarket,
+          marketState: md.marketState || 'REGULAR',
+          curCandleSize: 0,
+          curCandleVol: 0,
+          avgBarSize1m: 1,
+          avgVolume1m: 1,
+          candleDirection: null,
+          isLiveRsi: true,
+          rsiDivergence: 'none',
+          momentum: 0,
+          atr: 0,
+          adx: 0,
+          vwapDiff: ema9 && md.price ? ((md.price - ema9) / ema9) * 100 : 0,
+          volumeSpike: false,
+          vwap: ema21 ?? 0,
+          confluence: 0,
+          confluenceLabel: 'Mixed',
+          rsiPeriodAtCreation: rsiPeriod,
+          rsiStateCustom: null,
+          rsiDivergenceCustom: 'none',
+          rsiState1m: null,
+          rsiState5m: null,
+          rsiState15m: null,
+          rsiState1h: null,
+          ema9State: null,
+          ema21State: null,
+          macdFastState: null,
+          macdSlowState: null,
+          macdSignalState: null,
+          signalStartedAt: Date.now(),
+          updatedAt: md.updatedAt,
+          open1m: md.open,
+          volStart1m: 0,
+        };
+
+        // Re-run global strategy logic for tradify
+        const strategy = computeStrategyScore({
+          rsi1m: entry.rsi1m,
+          rsi5m: entry.rsi5m,
+          rsi15m: entry.rsi15m,
+          rsi1h: entry.rsi1h,
+          macdHistogram: entry.macdHistogram,
+          bbPosition: entry.bbPosition,
+          stochK: entry.stochK,
+          stochD: entry.stochD,
+          emaCross: entry.emaCross,
+          vwapDiff: entry.vwapDiff,
+          volumeSpike: entry.volumeSpike,
+          price: entry.price,
+          enabledIndicators: {
+            rsi: globalUseRsi,
+            macd: globalUseMacd,
+            bb: globalUseBb,
+            stoch: globalUseStoch,
+            ema: globalUseEma,
+            vwap: globalUseVwap,
+            confluence: globalUseConfluence,
+            divergence: globalUseDivergence,
+            momentum: globalUseMomentum,
+          }
+        });
+
+        entry.strategyScore = strategy.score;
+        entry.strategySignal = strategy.signal;
+        entry.strategyLabel = strategy.label;
+        entry.strategyReasons = strategy.reasons;
+
+        // Apply RSI threshold signals
+        if (globalShowSignalTags && globalUseRsi && entry.rsiCustom !== null) {
+          if (entry.rsiCustom <= globalOversold) entry.signal = 'oversold';
+          else if (entry.rsiCustom >= globalOverbought) entry.signal = 'overbought';
+        }
+
+        return entry;
+      });
+    }
+
+    // ─── BRANCH B: Crypto (Existing WebSocket Engine) ───
     if (data.length === 0) return [];
 
     return data.map(entry => {
@@ -2049,6 +2217,7 @@ export default function ScreenerDashboard() {
         avgBarSize1m: live.avgBarSize1m ?? entry.avgBarSize1m,
         avgVolume1m: live.avgVolume1m ?? entry.avgVolume1m,
         candleDirection: (live.candleDirection ?? entry.candleDirection) as any,
+        marketState: 'OPEN',
       } : entry;
 
       // Type safety enforcement for the unions
@@ -2104,9 +2273,11 @@ export default function ScreenerDashboard() {
       return merged;
     });
   }, [
-    data, livePrices, rsiPeriod,
+    data, livePrices, rsiPeriod, marketData, activeAssetClass,
     globalShowSignalTags, globalUseRsi, globalSignalThresholdMode,
-    coinConfigs, globalThresholdsEnabled, globalOverbought, globalOversold
+    coinConfigs, globalThresholdsEnabled, globalOverbought, globalOversold,
+    globalUseMacd, globalUseBb, globalUseStoch, globalUseEma, globalUseVwap,
+    globalUseConfluence, globalUseDivergence, globalUseMomentum
   ]);
 
   // Sync state to Background Worker for Instant Alerts (Debounced)
@@ -3093,8 +3264,11 @@ export default function ScreenerDashboard() {
     <div className="max-w-[1800px] mx-auto px-4 pt-4 pb-32 lg:py-8">
       {/* ── Header ── */}
       {showHeader && (
-        <header className="mb-5 rounded-3xl border border-white/5 bg-[#080F1B] p-5 sm:p-6 shadow-lg relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-[#39FF14]/[0.02] rounded-full -mr-20 -mt-20 group-hover:bg-[#39FF14]/[0.04] transition-colors duration-1000" />
+        <header className="mb-5 rounded-3xl border border-white/5 bg-[#080F1B] p-5 sm:p-6 shadow-lg relative group z-[100]">
+          {/* Background Glow - Wrapped to allow dropdowns to overflow while keeping glow contained */}
+          <div className="absolute inset-0 overflow-hidden rounded-3xl pointer-events-none">
+            <div className="absolute top-0 right-0 w-96 h-96 bg-[#39FF14]/[0.02] rounded-full -mr-20 -mt-20 group-hover:bg-[#39FF14]/[0.04] transition-colors duration-1000" />
+          </div>
 
           {/* Desktop Header Layout */}
           <div className="hidden lg:flex flex-col gap-6 relative z-10 w-full">
@@ -3191,24 +3365,53 @@ export default function ScreenerDashboard() {
 
                 <div className="h-4 w-px bg-white/10" />
 
-                {/* Exchange Switcher (Compact Pill) */}
-                <div className="flex items-center p-0.5 gap-0.5">
-                  {[
-                    { id: 'binance', label: 'Binance' },
-                    { id: 'bybit', label: 'Spot' },
-                    { id: 'bybit-linear', label: 'Perp' }
-                  ].map((ex) => (
-                    <button
-                      key={ex.id}
-                      onClick={() => setExchange(ex.id)}
-                      className={cn(
-                        "px-3 py-1.5 text-[8px] font-black uppercase tracking-widest transition-all rounded-xl",
-                        exchange === ex.id ? "bg-[#39FF14]/20 text-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.1)]" : "text-slate-500 hover:text-slate-300"
-                      )}
-                    >
-                      {ex.label}
-                    </button>
-                  ))}
+                {/* Asset Class Selector (Primary) + Exchange Sub-selector */}
+                <div className="flex items-center gap-1">
+                  {/* Asset Class Tabs */}
+                  <div className="flex items-center bg-slate-900/60 border border-white/5 rounded-2xl p-0.5 gap-0.5">
+                    {[
+                      { id: 'crypto' as const, label: 'Crypto', icon: '₿' },
+                      { id: 'forex' as const, label: 'Forex', icon: '💱' },
+                      { id: 'metals' as const, label: 'Metals', icon: '🥇' },
+                      { id: 'stocks' as const, label: 'Stocks', icon: '📈' },
+                    ].map((ac) => (
+                      <button
+                        key={ac.id}
+                        onClick={() => setActiveAssetClass(ac.id)}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1.5 text-[8px] font-black uppercase tracking-widest transition-all rounded-xl",
+                          activeAssetClass === ac.id
+                            ? "bg-[#39FF14]/15 text-[#39FF14] shadow-[0_0_12px_rgba(57,255,20,0.08)]"
+                            : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                        )}
+                      >
+                        <span className="text-[10px]">{ac.icon}</span>
+                        {ac.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Exchange Sub-selector (only for Crypto) */}
+                  {activeAssetClass === 'crypto' && (
+                    <div className="flex items-center bg-slate-900/40 border border-white/5 rounded-xl p-0.5 gap-0.5 ml-1">
+                      {[
+                        { id: 'binance', label: 'BIN' },
+                        { id: 'bybit', label: 'SPOT' },
+                        { id: 'bybit-linear', label: 'PERP' }
+                      ].map((ex) => (
+                        <button
+                          key={ex.id}
+                          onClick={() => setExchange(ex.id)}
+                          className={cn(
+                            "px-2 py-1 text-[7px] font-black uppercase tracking-widest transition-all rounded-lg",
+                            exchange === ex.id ? "bg-white/10 text-white" : "text-slate-600 hover:text-slate-400"
+                          )}
+                        >
+                          {ex.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3403,23 +3606,46 @@ export default function ScreenerDashboard() {
 
             {/* Controls Row: Alerts, Toggles, Actions */}
             <div className="flex items-center justify-between bg-slate-900/40 border border-white/10 rounded-2xl p-1 shadow-inner backdrop-blur-md">
-              <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-xl p-0.5">
+              <div className="flex items-center gap-1 bg-white/[0.04] rounded-xl p-0.5">
+                {/* Asset Class Tabs (Mobile) */}
                 {[
-                  { id: 'binance', label: 'BIN' },
-                  { id: 'bybit', label: 'BYB' },
-                  { id: 'bybit-linear', label: 'PERP' }
-                ].map((ex) => (
+                  { id: 'crypto' as const, icon: '₿' },
+                  { id: 'forex' as const, icon: '💱' },
+                  { id: 'metals' as const, icon: '🥇' },
+                  { id: 'stocks' as const, icon: '📈' },
+                ].map((ac) => (
                   <button
-                    key={ex.id}
-                    onClick={() => setExchange(ex.id)}
+                    key={ac.id}
+                    onClick={() => setActiveAssetClass(ac.id)}
                     className={cn(
-                      "px-2.5 py-1.5 text-[8px] font-black uppercase rounded-lg transition-all",
-                      exchange === ex.id ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600"
+                      "px-2 py-1.5 text-[9px] rounded-lg transition-all",
+                      activeAssetClass === ac.id ? "bg-[#39FF14]/20 text-[#39FF14] shadow-sm" : "text-slate-600"
                     )}
                   >
-                    {ex.label}
+                    {ac.icon}
                   </button>
                 ))}
+                {activeAssetClass === 'crypto' && (
+                  <>
+                    <div className="w-px h-3 bg-white/10" />
+                    {[
+                      { id: 'binance', label: 'BIN' },
+                      { id: 'bybit', label: 'BYB' },
+                      { id: 'bybit-linear', label: 'PERP' }
+                    ].map((ex) => (
+                      <button
+                        key={ex.id}
+                        onClick={() => setExchange(ex.id)}
+                        className={cn(
+                          "px-2 py-1.5 text-[7px] font-black uppercase rounded-lg transition-all",
+                          exchange === ex.id ? "bg-white/10 text-white" : "text-slate-600"
+                        )}
+                      >
+                        {ex.label}
+                      </button>
+                    ))}
+                  </>
+                )}
               </div>
               <div className="flex items-center gap-1.5 pr-1">
                 <button
@@ -3916,7 +4142,7 @@ export default function ScreenerDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {loading ? (
+                {(loading || (activeAssetClass !== 'crypto' && marketDataLoading && processedData.length === 0)) ? (
                   <SkeletonRows cols={colCount} />
                 ) : filtered.length === 0 ? (
                   <tr>

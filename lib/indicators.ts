@@ -142,6 +142,40 @@ export function calculateBollinger(
   };
 }
 
+// ── RSI (Relative Strength Index) ───────────────────────────────
+
+export function calculateRsi(closes: number[], period = 14): number | null {
+  if (closes.length < period + 1) return null;
+
+  const changes: number[] = [];
+  for (let i = 1; i < closes.length; i++) {
+    changes.push(closes[i] - closes[i - 1]);
+  }
+
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 0; i < period; i++) {
+    if (changes[i] > 0) avgGain += changes[i];
+    else avgLoss += Math.abs(changes[i]);
+  }
+  avgGain /= period;
+  avgLoss /= period;
+
+  // Wilder's smoothing
+  for (let i = period; i < changes.length; i++) {
+    const c = changes[i];
+    if (c > 0) {
+      avgGain = (avgGain * (period - 1) + c) / period;
+      avgLoss = (avgLoss * (period - 1)) / period;
+    } else {
+      avgGain = (avgGain * (period - 1)) / period;
+      avgLoss = (avgLoss * (period - 1) + Math.abs(c)) / period;
+    }
+  }
+
+  return avgLoss === 0 ? 100 : round(100 - 100 / (1 + avgGain / avgLoss));
+}
+
 // ── Stochastic RSI ──────────────────────────────────────────────
 
 export interface StochRsiResult {

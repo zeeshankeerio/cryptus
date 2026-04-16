@@ -117,10 +117,10 @@ export async function POST(request: Request) {
       ...body,
       userId: session.user.id,
     });
-    
+
     // Invalidate caches so the next fetch uses the fresh config
     invalidateSymbolCache(body.symbol);
-    
+
     return NextResponse.json(updated, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

@@ -25,6 +25,8 @@ model User {
   alertLogs         AlertLog[]
   alertTemplates    AlertTemplate[]
   subscriptions     Subscription[]
+  coins             Int       @default(0)
+  trialActivated    Boolean   @default(false)
 
   @@map("user")
 }
@@ -199,4 +201,16 @@ model AlertTemplate {
 
   @@index([userId])
   @@map("alert_template")
+}
+model FeatureFlag {
+  id                           String   @id @default("global")
+  maxTrialRecords              Int      @default(100)
+  maxSubscribedRecords         Int      @default(500)
+  allowTrialAlerts             Boolean  @default(false)
+  allowTrialAdvancedIndicators Boolean  @default(false)
+  allowTrialCustomSettings     Boolean  @default(false)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+
+  @@map("feature_flag")
 }
