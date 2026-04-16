@@ -253,6 +253,13 @@ export function useSymbolDerivatives(symbol: string, enabled: boolean = true) {
         const match = entries.find(([sym]) => sym === symbol);
         if (match) setFlow(match[1]);
       }
+
+      // Compute per-symbol Smart Money Pressure from the global SMART_MONEY_UPDATE
+      if (type === 'SMART_MONEY_UPDATE') {
+        const entries = payload as [string, SmartMoneyPressure][];
+        const match = entries.find(([sym]) => sym === symbol);
+        if (match) setPressure(match[1]);
+      }
     };
 
     derivativesWorker.addEventListener('message', handleMessage);

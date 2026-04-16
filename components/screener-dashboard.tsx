@@ -137,12 +137,28 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
   }, [entry, signal]);
 
   const title = narration
-    ? `${narration.emoji} ${narration.headline} (${narration.conviction}% ${narration.convictionLabel})\n\n${narration.reasons.join('\n')}`
+    ? `${narration.emoji} ${narration.headline} (${narration.conviction}% ${narration.convictionLabel})\n\n${narration.reasons.join('\n')}\n\n📋 Click to copy signal`
     : reasons?.length ? reasons.join(' \u00B7 ') : undefined;
 
+  // Signal Sharing — copy narration shareLine to clipboard for viral growth
+  const handleCopySignal = useCallback(() => {
+    if (!narration) return;
+    const text = `${narration.shareLine}\n\n🔗 Powered by RSIQ Pro — mindscapeanalytics.com`;
+    navigator.clipboard.writeText(text).then(() => {
+      toast.success('Signal copied to clipboard!', { duration: 2000 });
+    }).catch(() => {
+      toast.error('Failed to copy');
+    });
+  }, [narration]);
+
   return (
-    <span className={cn("inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all cursor-help", styles[signal])} title={title}>
+    <span
+      className={cn("inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all", styles[signal], narration ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help')}
+      title={title}
+      onClick={narration ? handleCopySignal : undefined}
+    >
       {label}
+      {narration && <LinkIcon size={8} className="opacity-50 ml-0.5" />}
     </span>
   );
 }
@@ -3703,6 +3719,41 @@ export default function ScreenerDashboard() {
           isConnected={derivativesConnected}
         />
       </div>
+
+      {/* ─── SIGNAL WIN RATE TRACKER™ RIBBON ─── */}
+      {(() => {
+        const wr = getGlobalWinRate();
+        if (wr.total < 3) return null;
+        return (
+          <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-sm">
+            <div className="flex items-center gap-1.5">
+              <ShieldCheck size={13} className="text-[#39FF14]/70" />
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">Signal Accuracy</span>
+            </div>
+            <div className="flex items-center gap-4 ml-auto">
+              <div className="flex items-center gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-600">5m</span>
+                <span className={cn("text-[11px] font-black tabular-nums font-mono", wr.winRate5m >= 60 ? 'text-[#39FF14]' : wr.winRate5m >= 45 ? 'text-amber-400' : 'text-[#FF4B5C]')}>
+                  {wr.winRate5m.toFixed(0)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-600">15m</span>
+                <span className={cn("text-[11px] font-black tabular-nums font-mono", wr.winRate15m >= 60 ? 'text-[#39FF14]' : wr.winRate15m >= 45 ? 'text-amber-400' : 'text-[#FF4B5C]')}>
+                  {wr.winRate15m.toFixed(0)}%
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-[8px] font-black uppercase tracking-wider text-slate-600">1h</span>
+                <span className={cn("text-[11px] font-black tabular-nums font-mono", wr.winRate1h >= 60 ? 'text-[#39FF14]' : wr.winRate1h >= 45 ? 'text-amber-400' : 'text-[#FF4B5C]')}>
+                  {wr.winRate1h.toFixed(0)}%
+                </span>
+              </div>
+              <span className="text-[7px] font-bold text-slate-700 tabular-nums">{wr.total} signals</span>
+            </div>
+          </div>
+        );
+      })()}
 
       <CorrelationHeatmap open={showCorrelation} onClose={() => setShowCorrelation(false)} data={processedData} />
       <PortfolioScannerPanel open={showPortfolio} onClose={() => setShowPortfolio(false)} data={processedData} />

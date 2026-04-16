@@ -125,6 +125,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Upstream timeout', data: [], meta: result.meta }, { status: 503 });
     }
 
+    // Bandwidth optimization: Strip historicalCloses from response unless
+    // explicitly requested via ?includeCloses=1 (used by Correlation Heatmap).
+    // This saves ~250KB per response for 500-symbol fetches.
+    const includeCloses = searchParams.get('includeCloses') === '1';
+    if (!includeCloses) {
+      for (const entry of result.data) {
+        delete (entry as any).historicalCloses;
+      }
+    }
+
     return NextResponse.json(result, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

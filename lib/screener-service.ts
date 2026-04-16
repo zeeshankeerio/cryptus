@@ -329,7 +329,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     marketState: 'OPEN',
     signalStartedAt: nowTs,
     updatedAt: nowTs,
-    market: 'Crypto',
+    market: getMarketType(sym),
     open1m: null,
     volStart1m: null,
   };
@@ -850,13 +850,6 @@ async function fetchKlines1h(symbol: string, exchange: string = 'binance'): Prom
   return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_LIMIT_1H}`, `1h candle for ${symbol}`);
 }
 
-async function fetchTickersSafe(exchange: string = 'binance'): Promise<Map<string, BinanceTicker>> {
-  try {
-    return await fetchTickers(exchange);
-  } catch {
-    return tickerCache.get(exchange)?.data ?? new Map<string, BinanceTicker>();
-  }
-}
 
 /**
  * Fetch both 1m and 1h klines in a single concurrent pass per symbol.
@@ -1183,6 +1176,7 @@ function buildEntry(
       market: getMarketType(sym),
       open1m,
       volStart1m,
+      historicalCloses: closes15m,
     };
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
@@ -1213,7 +1207,7 @@ function runRefresh(
     const [topSymbols, searchMatches, tickers, coinConfigs] = await Promise.all([
       getTopSymbols(symbolCount, exchange),
       search ? searchSymbols(search, exchange) : Promise.resolve([]),
-      fetchTickers(exchange), // Removed fetchTickersSafe as it doesn't exist, using fetchTickers which is robust
+      fetchTickers(exchange),
       getAllCoinConfigs(),
     ]);
 
