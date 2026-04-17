@@ -3,11 +3,11 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, ArrowRight } from "lucide-react";
+import { Loader2, ArrowRight, ShieldCheck } from "lucide-react";
 import { signIn, signUp } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -24,6 +24,8 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedPlan = searchParams.get("plan");
 
   const {
     register,
@@ -72,11 +74,10 @@ export default function RegisterPage() {
             setIsLoading(false);
           },
           onSuccess: () => {
-            setSuccess("Connected. Launching terminal...");
+            const dest = selectedPlan ? `/subscription?plan=${selectedPlan}` : "/terminal";
+            setSuccess(`Connected. Launching ${selectedPlan ? "billing" : "terminal"}...`);
             router.refresh();
-            setTimeout(() => {
-              router.push("/terminal");
-            }, 800);
+            router.push(dest);
           },
         },
       );
@@ -110,7 +111,17 @@ export default function RegisterPage() {
             </Link>
 
             <h1 className="text-4xl font-bold tracking-tight mb-3">Create Account</h1>
-            <p className="text-slate-400 text-sm font-medium">Join elite traders with next-gen market scanning</p>
+            <p className="text-slate-400 text-sm font-medium mb-8">Join elite traders with next-gen market scanning</p>
+
+            <div className="p-4 rounded-xl bg-[#39FF14]/5 border border-[#39FF14]/20 flex items-center gap-3">
+               <div className="w-10 h-10 rounded-lg bg-[#39FF14]/10 flex items-center justify-center text-[#39FF14]">
+                 <ShieldCheck size={20} />
+               </div>
+               <div>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">14-Day Free Trial Active</p>
+                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Full Professional Access • No Credit Card Required</p>
+               </div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

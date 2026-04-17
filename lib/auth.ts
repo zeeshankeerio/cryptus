@@ -17,8 +17,8 @@ const resolvedAppUrl =
   (typeof window !== "undefined" ? window.location.origin : null) ||
   "http://localhost:3000";
 
-if (process.env.NODE_ENV !== "test") {
-  console.log(`[auth] Initializing with baseURL: ${resolvedAppUrl}`);
+if (process.env.NODE_ENV === "development") {
+  console.log(`[auth] 🚀 Initializing Auth System | baseURL: ${resolvedAppUrl} | Timestamp: ${new Date().toISOString()}`);
 }
 
 function normalizeOrigin(value: string | undefined): string | null {

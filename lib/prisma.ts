@@ -21,7 +21,7 @@ function createPrismaClient() {
     ssl: { rejectUnauthorized: false }, // Silence warning and ensure secure connection
     connectionTimeoutMillis: 60000, // 60s timeout for cold starts
     idleTimeoutMillis: 30000,
-    max: 10, // Cap connections for serverless stability
+    max: 30, // Increased for high-concurrency production stability
   });
   if (process.env.NODE_ENV !== "production") globalForPrisma.pool = pool;
 

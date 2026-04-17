@@ -48,13 +48,14 @@ export async function middleware(request: NextRequest) {
 
   // ─── Phase 2: Burst Cache & Validation ───
   // Memory-resident burst cache to deduplicate session calls within high-concurrency windows.
-  // Next.js middleware is technically edge, but local var stays alive between requests in the same worker instance.
   let session: Session | null = null;
   const sessionToken = request.cookies.get("better-auth.session_token")?.value || 
                        request.cookies.get("__Secure-better-auth.session_token")?.value ||
                        "anon";
 
-  if (hasSessionCookie) {
+  // 2026 Optimization: Skip heavy session validation for public routes.
+  // This prevents DB/Internal-API lag from blocking the landing page or login page.
+  if (hasSessionCookie && !isPublicRoute) {
     const cached = sessionCache.get(sessionToken);
     const now = Date.now();
     if (cached && now < cached.expires) {
@@ -71,37 +72,45 @@ export async function middleware(request: NextRequest) {
               cookie: request.headers.get("cookie") || "",
               "cache-control": "no-store",
             },
-            timeout: 4000, 
+            timeout: 10000, // 10s timeout for local dev resilience
           },
         );
 
-        // ─── 429 RESILIENCE (Critical for SaaS) ───
-        // [...] Skip error check for 429 logic handled by sessionResult check below
         if (sessionResult.error?.status === 429) {
-          console.warn("[middleware] 429 detected on auth fetch. Allowing request to pass.");
+          console.warn("[middleware] 429 detected. Passing through.");
           return NextResponse.next();
         }
 
         if (sessionResult.error) {
-          console.warn(
-            "[middleware] Session fetch rejected:",
-            sessionResult.error.statusText || "Unauthorized/Network Error"
-          );
+          console.warn("[middleware] Session fetch rejected:", sessionResult.error.statusText);
         }
         
         session = sessionResult.data;
-        // Cache session for 5 seconds to reduce latency and redundant fetches
         sessionCache.set(sessionToken, { data: session, expires: now + 5000 });
       } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        const isTimeout = errorMessage.includes("aborted") || errorMessage.includes("timeout");
+        
         console.error(
-          "[middleware] Critical session validation failure:",
-          e instanceof Error ? e.message : String(e),
+          `[middleware] Session validation failure (${isTimeout ? "Timeout" : "Error"}):`,
+          errorMessage
         );
+
+        // ─── Phase 2.5: Soft-Gate Resilience (Critical for Production) ───
+        // If the auth check times out (likely due to DB pool saturation), we 
+        // DO NOT block the user. We allow the request to pass to the page.
+        // The client-side useSession() will handle the eventual auth check.
+        // This stops the infinite redirect loop during traffic spikes.
+        if (isTimeout && !isPublicRoute) {
+          console.warn("[middleware] Soft-Gate activated: allowing protected route access during latency spike.");
+          return NextResponse.next();
+        }
       }
     }
   }
 
   // Unauthenticated user on a protected page → redirect to login
+  // Note: If Soft-Gate activated above, this line isn't reached because we returned NextResponse.next()
   if (!session && !isPublicRoute) {
     const url = new URL("/login", request.url);
     url.searchParams.set("from", pathname);

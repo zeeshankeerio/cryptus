@@ -16,6 +16,7 @@ export default function SubscriptionPage() {
   const [loadingCrypto, setLoadingCrypto] = useState<string | null>(null);
   const [sentinelOpen, setSentinelOpen] = useState(false);
   const [sentinelPlan, setSentinelPlan] = useState<string>("");
+  const [requestedPlan, setRequestedPlan] = useState<string | null>(null);
   const session = authClient.useSession();
   const { subscription, isTrialing, hasActiveSubscription, daysLeft } = useSubscription();
 
@@ -23,6 +24,7 @@ export default function SubscriptionPage() {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     setSubscriptionRequired(params.get("required") === "1");
+    setRequestedPlan(params.get("plan"));
   }, []);
 
   const isOwner =
@@ -224,16 +226,19 @@ export default function SubscriptionPage() {
 
         <div className="grid md:grid-cols-2 gap-8">
           <PlanCard
-            name="Monthly"
+            name="Professional"
             price="$20"
             period="/month"
-            note="Flexible maintenance plan"
+            note="Full Institutional Access"
             features={[
-              "Real-time screener access",
-              "Alerts and templates",
-              "Manual renewal support",
-              "Priority bug fixes",
+              "All Timeframes (1m - 4h)",
+              "500+ Asset Global Library",
+              "Neuro-Confluence Engine",
+              "0.5ms Priority Latency",
+              "Native Mobile PWA Install",
+              "Premium Support Access",
             ]}
+            highlight={requestedPlan === "monthly"}
             loading={loadingPlan === "monthly"}
             onClick={() => handleSubscribe("monthly")}
             onCryptoClick={() => handleCryptoSubscribe("monthly")}
@@ -243,17 +248,19 @@ export default function SubscriptionPage() {
           />
 
           <PlanCard
-            name="Yearly"
+            name="Enterprise"
             price="$200"
             period="/year"
-            note="Best value for full-year operation"
+            note="Max Alpha & Continuity"
             features={[
-              "Everything in monthly",
-              "Lower annual cost",
-              "Stable long-term continuity",
-              "Owner billing controls",
+              "Annual Professional License",
+              "2 Months Free Included",
+              "Exclusive Beta Logic Access",
+              "Priority Roadmap Voting",
+              "White-Glove Onboarding",
+              "Everything in Pro",
             ]}
-            highlight
+            highlight={requestedPlan === "yearly" || !requestedPlan}
             loading={loadingPlan === "yearly"}
             onClick={() => handleSubscribe("yearly")}
             onCryptoClick={() => handleCryptoSubscribe("yearly")}

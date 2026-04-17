@@ -1,0 +1,1337 @@
+﻿"use client";
+
+import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import Image from 'next/image';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+import {
+  Zap,
+  ShieldCheck,
+  BarChart3,
+  TrendingUp,
+  Bell,
+  Cpu,
+  Smartphone,
+  Activity,
+  Target,
+  LineChart,
+  Lock,
+  Layers,
+  ArrowUpRight,
+  Menu,
+  X,
+  Download,
+  Wifi,
+  Star,
+  Building2,
+  MessageCircle,
+  Handshake,
+  ExternalLink,
+  ChevronRight,
+  Gauge,
+  CircleDollarSign,
+  Globe,
+  Coins,
+  Mail,
+  Phone,
+  MapPin,
+} from 'lucide-react';
+import { useSession } from '@/lib/auth-client';
+import { useRouter } from 'next/navigation';
+import { MINDSCAPE_LINKS, withUTM } from '@/lib/mindscape-links';
+
+export default function LandingPage() {
+  const { data: session, isPending } = useSession();
+  const router = useRouter();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  return (
+    <div className="min-h-screen bg-[#05080F] text-slate-300 selection:bg-[#39FF14]/30 selection:text-white overflow-x-hidden font-sans">
+      {/* ΓöÇΓöÇΓöÇ Global Market Pulse Ticker ΓöÇΓöÇΓöÇ */}
+      <div className="fixed top-0 w-full z-[110] bg-[#39FF14] text-black h-6 sm:h-8 flex items-center overflow-hidden border-b border-black/10">
+        <div className="animate-marquee whitespace-nowrap flex items-center gap-8 sm:gap-12 font-black text-[9px] sm:text-[10px] uppercase tracking-widest px-4">
+          {[...Array(10)].map((_, i) => (
+            <React.Fragment key={i}>
+              <div className="flex items-center gap-2">
+                <Coins size={12} />
+                <span>BTC/USD $96,442.20 <span className="text-emerald-700 opacity-80">+2.4%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Globe size={12} />
+                <span>XAU/USD $2,742.15 <span className="text-red-700 opacity-80">-0.1%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CircleDollarSign size={12} />
+                <span>EUR/USD 1.0542 <span className="text-emerald-700 opacity-80">+0.04%</span></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Gauge size={12} />
+                <span className="hidden sm:inline">MARKET VOLATILITY: EXTREME</span>
+                <span className="sm:hidden">VOLATILITY: HIGH</span>
+              </div>
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      {/* ΓöÇΓöÇΓöÇ Grid Overlay ΓöÇΓöÇΓöÇ */}
+      <div className="fixed inset-0 bg-[linear-gradient(rgba(57,255,20,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(57,255,20,0.03)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black,transparent)] pointer-events-none z-0" />
+
+      {/* ΓöÇΓöÇΓöÇ Header ΓöÇΓöÇΓöÇ */}
+      <nav className="fixed top-6 sm:top-8 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+          {/* Logo */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="relative w-9 h-9 sm:w-14 sm:h-14 overflow-hidden rounded-xl border border-[#39FF14]/20 shadow-lg shadow-[#39FF14]/10 bg-gradient-to-br from-[#39FF14]/10 to-transparent">
+              <Image
+                src="/logo/rsiq-mindscapeanalytics.png"
+                alt="RSIQ Pro | Institutional Crypto Terminal"
+                fill
+                priority
+                loading="eager"
+                className="object-cover scale-110"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-lg sm:text-xl font-black text-white tracking-tighter leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></span>
+              <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 leading-none mt-0.5">Global Terminal</span>
+            </div>
+          </div>
+
+          {/* Desktop Nav Links */}
+          <div className="hidden md:flex items-center gap-8 mr-auto ml-16">
+            <a href="#features" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Features</a>
+            <a href="#logic" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">The Logic</a>
+            <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Pricing</a>
+            <a href="#mobile" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Mobile</a>
+            <Link href="/services" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Services</Link>
+            <Link href="/about" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">About</Link>
+            <a href="#connect" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Connect</a>
+          </div>
+
+          {/* Desktop CTA + Mobile Menu Toggle */}
+          <div className="flex items-center gap-3 sm:gap-6">
+            <Link href={session ? "/terminal" : "/login"} className="hidden sm:block text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
+              {session ? "Account" : "Login"}
+            </Link>
+            <Link
+              href={session ? "/terminal" : "/register"}
+              className="px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-[#39FF14] text-black text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] shadow-xl shadow-[#39FF14]/20 hover:scale-105 active:scale-95 transition-all"
+            >
+              {session ? "Terminal" : "Launch"}
+            </Link>
+            {/* Mobile Hamburger */}
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="md:hidden w-9 h-9 flex items-center justify-center rounded-lg border border-white/10 text-slate-400"
+            >
+              {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Mobile Dropdown Menu */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden border-t border-white/5 bg-[#05080F]/98 backdrop-blur-2xl overflow-hidden"
+            >
+              <div className="px-4 py-4 flex flex-col gap-1">
+                <a href="#features" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Features</a>
+                <a href="#logic" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">The Logic</a>
+                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Pricing</a>
+                <a href="#mobile" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Mobile</a>
+                <Link href="/services" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Services</Link>
+                <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">About</Link>
+                <a href="#connect" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Connect</a>
+                <div className="my-2 border-t border-white/5" />
+                <Link href={session ? "/terminal" : "/login"} onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-white hover:bg-white/5 transition-all">
+                  {session ? "My Account" : "Login"}
+                </Link>
+                <Link href={session ? "/terminal" : "/register"} onClick={() => setMobileMenuOpen(false)} className="px-4 py-3.5 rounded-xl bg-[#39FF14] text-black text-[11px] font-black uppercase tracking-[0.2em] text-center mt-1">
+                  {session ? "Enter Terminal" : "Start Free Trial"}
+                </Link>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
+
+      {/* ΓöÇΓöÇΓöÇ Hero Section ΓöÇΓöÇΓöÇ */}
+      <section className="relative pt-24 sm:pt-32 md:pt-36 pb-12 sm:pb-20 md:pb-24 px-4 sm:px-6 z-10 overflow-hidden">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none">
+          <motion.div
+            animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-0 left-1/4 w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] bg-[#39FF14]/10 blur-[120px] rounded-full"
+          />
+          <motion.div
+            animate={{ scale: [1.2, 1, 1.2], opacity: [0.05, 0.15, 0.05] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+            className="absolute bottom-0 right-1/4 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-emerald-500/10 blur-[100px] rounded-full"
+          />
+        </div>
+
+        <div className="max-w-7xl mx-auto flex flex-col items-center relative">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 mb-6 sm:mb-10"
+          >
+            <span className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-[#39FF14]"></span>
+            </span>
+            <span className="text-[8px] sm:text-[11px] font-black uppercase tracking-[0.1em] sm:tracking-[0.25em] text-[#39FF14] text-center px-1">Enterprise Engine Active ΓÇö 500+ Live Symbols (Crypto, Forex, Gold & Silver)</span>
+          </motion.div>
+
+          <div className="flex flex-col items-center">
+            <motion.h1
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="text-[2.8rem] sm:text-6xl md:text-8xl lg:text-9xl font-black text-center text-white tracking-tighter leading-[1.05] sm:leading-[0.85] mb-4 drop-shadow-2xl relative z-10"
+            >
+              THE ALPHA <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">TERMINAL.</span>
+            </motion.h1>
+
+            <h2 className="text-[9px] sm:text-xs md:text-sm font-black uppercase tracking-[0.2em] sm:tracking-[0.6em] text-[#39FF14] mb-10 sm:mb-16 text-center px-4">Institutional Speed for Professional Signal Execution</h2>
+          </div>
+
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="text-xs sm:text-base md:text-xl text-slate-400 max-w-4xl text-center leading-relaxed mb-10 sm:mb-12 font-medium px-6 sm:px-0"
+          >
+            <strong className="text-white">Stop operating with a 60-second delay.</strong> Retail traders miss high-alpha moves because candles haven't closed. RSIQ Pro gives you the lead by scanning <span className="text-[#39FF14]">500+ assets tick-by-tick</span>. Get the lead, <strong>verify the logic</strong>, and <span className="text-white">execute before the crowd</span>.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+            className="w-full max-w-5xl"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 items-center">
+              {/* Left HUD Stats */}
+              <div className="hidden md:flex flex-col gap-4">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Cpu size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engine Latency</span>
+                  </div>
+                  <div className="text-xl font-black text-white">0.5ms</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Ticks / Day</span>
+                  </div>
+                  <div className="text-xl font-black text-white text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">2.4B+</div>
+                </div>
+              </div>
+
+              {/* Main CTAs */}
+              <div className="flex flex-col gap-4">
+                <Link
+                  href={session ? "/terminal" : "/register"}
+                  className="w-full px-8 py-5 sm:py-7 rounded-2xl bg-[#39FF14] text-black font-black uppercase tracking-[0.25em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all text-[12px] sm:text-[14px] active:scale-95 text-center group"
+                >
+                  {session ? "Enter Terminal" : "Launch Terminal"}
+                  <ChevronRight size={18} className="inline ml-2 group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link
+                  href={session ? "/terminal" : "/login"}
+                  className="w-full text-center px-8 py-4 rounded-2xl border border-white/10 bg-white/[0.02] text-slate-300 font-black uppercase tracking-[0.2em] text-[11px] active:scale-95 transition-all backdrop-blur-sm"
+                >
+                  {session ? "Return to Desk" : "Sign In to Desk"}
+                </Link>
+              </div>
+
+              {/* Right HUD Stats */}
+              <div className="hidden md:flex flex-col gap-4">
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Symbols</span>
+                  </div>
+                  <div className="text-xl font-black text-white">580+</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Security Grade</span>
+                  </div>
+                  <div className="text-xl font-black text-white">ENTERPRISE</div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Institutional Trust Bar ΓöÇΓöÇΓöÇ */}
+      <section className="py-12 border-y border-white/5 bg-white/[0.01] overflow-hidden relative">
+        <div className="absolute inset-0 bg-gradient-to-r from-[#05080F] via-transparent to-[#05080F] z-10 pointer-events-none" />
+        <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center gap-8 md:gap-20">
+          <div className="flex-shrink-0 flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Connectivity Hub</span>
+            <span className="text-sm font-black text-white uppercase tracking-widest mt-1">Global Exchanges</span>
+          </div>
+          <div className="flex-1 overflow-hidden relative h-10 flex items-center">
+            <div className="animate-marquee whitespace-nowrap flex items-center gap-16 font-black text-[11px] uppercase tracking-[0.3em] text-slate-400/40">
+              <span>Binance Direct</span>
+              <span>Bybit WebSocket</span>
+              <span>OKX Institutional</span>
+              <span>Coinbase Pro</span>
+              <span>Bitget Unified</span>
+              <span>Kraken Terminal</span>
+              <span>KuCoin Alpha</span>
+              <span>Binance Direct</span>
+              <span>Bybit WebSocket</span>
+              <span>OKX Institutional</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Desktop Preview Section (The Pulse) ΓöÇΓöÇΓöÇ */}
+      <section id="preview" className="relative px-4 sm:px-6 pb-20 sm:pb-32 md:pb-40 z-10">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-10">
+            {/* Main Terminal Image */}
+            <motion.div
+              initial={{ opacity: 0, x: -50 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="xl:col-span-8 relative p-1.5 rounded-[32px] bg-gradient-to-b from-white/10 to-transparent border border-white/10 shadow-2xl group overflow-hidden"
+            >
+              <Image
+                src="/images/system_images/main_dashboard.png"
+                alt="RSIQ Pro Institutional Terminal"
+                width={2560}
+                height={1440}
+                className="w-full h-auto rounded-[26px] object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-[1.02]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#0A0E17]/80 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between pointer-events-none">
+                <div className="flex items-center gap-4 bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10">
+                  <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">Live Decision Engine Active</span>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Sidebar High-Performance Stats */}
+            <div className="xl:col-span-4 flex flex-col gap-6">
+              <motion.div
+                initial={{ opacity: 0, x: 50 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="flex-1 p-8 rounded-[32px] bg-white/[0.03] border border-white/10 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-125 transition-transform duration-500 text-[#39FF14]">
+                  <TrendingUp size={120} />
+                </div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-[#39FF14] mb-4">Liquidation Flux V4</h4>
+                <p className="text-2xl font-black text-white tracking-tight leading-tight">Intercept institutional margin exhaustion.</p>
+                <div className="mt-8 relative h-32 w-full">
+                  <Image src="/images/system_images/Signal_naratives.png" alt="Signal Narration" fill className="object-contain" />
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, x: 50 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.1 }}
+                className="flex-1 p-8 rounded-[32px] bg-[#39FF14]/[0.05] border border-[#39FF14]/20 relative overflow-hidden group"
+              >
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform duration-500 text-[#39FF14]">
+                  <ShieldCheck size={120} />
+                </div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-4">Portfolio Armor</h4>
+                <p className="text-2xl font-black text-white tracking-tight leading-tight">Neural HHI risk scoring built-in.</p>
+                <div className="mt-8 relative h-32 w-full">
+                  <Image src="/images/system_images/portfolio_risk.png" alt="Portfolio Risk" fill className="object-contain" />
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Global Real-Time Intelligence (Market Intelligence Hub) ΓöÇΓöÇΓöÇ */}
+      <section className="py-24 sm:py-32 md:py-40 bg-white/[0.01] border-y border-white/5 relative overflow-hidden">
+        {/* Abstract Background Elements */}
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#39FF14]/[0.02] blur-[150px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-emerald-500/[0.02] blur-[120px] rounded-full pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.6em] text-[#39FF14]"
+            >
+              Situational Awareness
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tighter leading-[0.95]"
+            >
+              Global Market <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Surveillance.</span>
+            </motion.p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {/* Module 1: Signal Confluence */}
+            <IntelligenceCard
+              icon={<Layers className="text-[#39FF14]" />}
+              subtitle="The Logic Layer"
+              title="Deep Signal Confluence"
+              delay={0.1}
+            >
+              <div className="space-y-3 mt-4">
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Our Neural Engine syncs <strong className="text-white">5+ indicators</strong> across all timeframes to identify institutional-grade setups in real-time.
+                </p>
+                <div className="space-y-2">
+                  <SignalRibbon label="RSI(14) 15M / 1H Align" value="OVERSOLD" status="bullish" />
+                  <SignalRibbon label="MACD Histogram Divergence" value="CONFIRMED" status="bullish" />
+                  <SignalRibbon label="EMA 20/50 Multi-Cross" value="BULLISH" status="bullish" />
+                  <SignalRibbon label="Stochastic K/D Signal" value="NEUTRAL" status="neutral" />
+                </div>
+              </div>
+            </IntelligenceCard>
+
+            {/* Module 2: Whale Surveillance */}
+            <IntelligenceCard
+              icon={<ShieldCheck className="text-emerald-400" />}
+              subtitle="Smart Money"
+              title="Whale Surveillance"
+              delay={0.2}
+            >
+              <div className="space-y-3 mt-4">
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Intercept the footprints of institutional capital. Track big wallet movements and margin exhaustion levels instantly.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-[#39FF14]/5 border border-[#39FF14]/10 flex flex-col items-center">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Buy Volume</span>
+                    <span className="text-sm font-black text-[#39FF14] tracking-tight">$42.8M</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10 flex flex-col items-center">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Liq. Risk</span>
+                    <span className="text-sm font-black text-red-500 tracking-tight">V. LOW</span>
+                  </div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recent Footprint</span>
+                    <span className="text-[8px] text-slate-600 font-bold tabular-nums">1.4s ago</span>
+                  </div>
+                  <p className="text-[10px] text-white/80 font-medium leading-tight italic">"Large Buy Wall detected at $94,800. Net Flow: +1,240 BTC."</p>
+                </div>
+              </div>
+            </IntelligenceCard>
+
+            {/* Module 3: Execution Hub */}
+            <IntelligenceCard
+              icon={<Zap className="text-amber-400" />}
+              subtitle="Infrastructure"
+              title="Global Authority"
+              delay={0.3}
+            >
+              <div className="h-[260px] relative rounded-2xl overflow-hidden border border-white/5 bg-black/40 group/tv">
+                <div className="absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white">BTC / USD LIVE</span>
+                </div>
+                <TradingViewMiniChart symbol="BINANCE:BTCUSDT" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  <span>Low Latency: 0.5ms</span>
+                  <span>Uptime: 99.9%</span>
+                </div>
+              </div>
+            </IntelligenceCard>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ The ROI of Speed (Split Comparison) ΓöÇΓöÇΓöÇ */}
+      <section className="py-20 sm:py-32 px-4 sm:px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Profit Gap</h2>
+            <p className="text-3xl sm:text-5xl font-black text-white tracking-tighter">Quantifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Pro Edge.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 relative">
+            {/* Center Connector */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-[80%] bg-white/5 hidden lg:block" />
+
+            <ComparisonModule
+              status="retail"
+              title="The Retail Friction"
+              points={[
+                "Manual chart flipping across 10+ tabs",
+                "60-second delay waiting for candle closure",
+                "Analysis paralysis during high volatility",
+                "Silent setups missed while away from desk",
+                "Guessing signal strength with zero backtest data"
+              ]}
+            />
+
+            <ComparisonModule
+              status="pro"
+              title="The Alpha Pro Edge"
+              points={[
+                "500+ symbols scanned autonomously every tick",
+                "Real-time lead alerts before retail closes candles",
+                "Instantly verified confluence win-rate tracking",
+                "Institutional Whale volume & Liquidation flux",
+                "Native Push alerts triggered 24/7 in your pocket"
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ The Alpha Logic Section ΓöÇΓöÇΓöÇ */}
+      <section id="logic" className="py-20 sm:py-32 md:py-40 border-y border-white/5 bg-white/[0.01] px-4 sm:px-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[400px] sm:w-[800px] h-[400px] sm:h-[800px] bg-[#39FF14]/5 blur-[160px] rounded-full pointer-events-none -mr-20 sm:-mr-40 -mt-20 sm:-mt-40" />
+
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 sm:gap-20 lg:gap-24 items-center">
+            <div className="space-y-8 sm:space-y-12">
+              <div className="space-y-3 sm:space-y-4">
+                <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">The Intelligence Layer</h2>
+                <p className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter leading-[0.95]">
+                  Engineered for <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Winning Execution.</span>
+                </p>
+                <p className="text-slate-400 text-sm sm:text-base leading-relaxed mt-4 max-w-md">
+                  <strong className="text-slate-200">The Problem:</strong> Information Fragmentation. Most traders lose because they are forced to synthesize 5+ disconnected tools while the market moves instantly.<br /><br />
+                  <strong className="text-[#39FF14]">The Solution:</strong> A Unified Command Center. We merge real-time liquidation flux, institutional indicators, and smart money footprints into a single low-latency decision engine.
+                </p>
+              </div>
+
+              <div className="space-y-6 sm:space-y-8">
+                <AnalysisItem
+                  title="59-Second Alpha Lead"
+                  desc="Don't wait for candles to close. The Alpha Logic Engine (ALE-v4) calculates approximated indicators per-tick, giving you the lead before standard retail screeners even refresh."
+                />
+                <AnalysisItem
+                  title="Neural Divergence Detection"
+                  desc="Identifies RSI and MACD divergences before they manifest in price, allowing for high-precision institutional reversal entries."
+                />
+                <AnalysisItem
+                  title="Signal Win-Rate Tracker"
+                  desc="Stop guessing. Every signal pattern is indexed and tracked against historical outcomes, providing real-time accuracy ratios for every alert."
+                />
+                <AnalysisItem
+                  title="Whale & Liq. Flux Tracking"
+                  desc="Merge technicals with the orderbook. ALE-v4 overlays large trade flow and margin liquidation clusters directly onto the confluence logic."
+                />
+                <AnalysisItem
+                  title="HHI Concentration Alpha"
+                  desc="Monitor the Herfindahl-Hirschman Index for market concentration. Know when the top 5 wallets are shifting the entire asset's momentum."
+                />
+                <AnalysisItem
+                  title="Adaptive Load Shedding"
+                  desc="Engineered for high-volatility resilience. ALE-v4 prioritizes 0.5ms data fidelity during extreme market cascades, ensuring your alerts stay live."
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 sm:gap-6 relative">
+              <StatBox value="+14% / -6%" label="Market Bias Delta" />
+              <StatBox value="0.5ms" label="Engine Latency" highlight />
+              <StatBox value="24/7" label="Live Uptime" />
+              <StatBox value="500+" label="Pairs Tracked" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Mobile / PWA Experience Section (Tightened Window) ΓöÇΓöÇΓöÇ */}
+      <section id="mobile" className="py-24 sm:py-32 md:py-48 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-white/[0.01]">
+        {/* Background Decorative Element */}
+        <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#39FF14]/5 blur-[120px] rounded-full pointer-events-none -translate-y-1/2 -ml-32 opacity-30" />
+        
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 items-center gap-10 lg:gap-12 xl:gap-16">
+            
+            {/* Column 1: Narrative (Left Side) */}
+            <div className="flex flex-col items-start space-y-6 lg:space-y-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="space-y-3"
+              >
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 mb-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#39FF14]">Always Informed</span>
+                </div>
+                <h3 className="text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter leading-[0.9] lg:leading-[0.85]">
+                  THE TERMINAL <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">IN YOUR POCKET.</span>
+                </h3>
+              </motion.div>
+
+              <p className="text-sm sm:text-base lg:text-lg text-slate-400 font-medium leading-relaxed max-w-lg">
+                Experience institutional-grade logic anywhere. Our high-performance PWA grants full terminal access with biometric security, real-time push confluence alerts, and native install speed on iOS and Android.
+              </p>
+
+              {/* High-Performance Feature Grid */}
+              <div className="grid grid-cols-2 gap-4 sm:gap-6 w-full max-w-md pt-2">
+                <MobileFeature icon={<Bell size={18} />} text="Push Alerts" />
+                <MobileFeature icon={<Download size={18} />} text="Install PWA" />
+                <MobileFeature icon={<ShieldCheck size={18} />} text="Biometric" />
+                <MobileFeature icon={<Wifi size={18} />} text="Offline Ready" />
+              </div>
+
+              {/* Action Button */}
+              <div className="pt-4">
+                <Link
+                  href="/register"
+                  className="group inline-flex items-center gap-4 px-8 py-4 sm:py-5 rounded-2xl bg-[#39FF14] text-black font-black uppercase text-[12px] sm:text-[13px] tracking-[0.2em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all active:scale-95"
+                >
+                  Authorize Mobile Access
+                  <ArrowUpRight size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Column 2: Mobile Mockup (Right Side) */}
+            <div className="relative flex justify-center lg:justify-end py-10 lg:py-0">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="relative group w-full max-w-[300px] sm:max-w-[380px] xl:max-w-[440px]"
+              >
+                {/* Aura Bloom */}
+                <div className="absolute -inset-20 -z-10 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.1),transparent_75%)] blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                
+                {/* iPhone Frame + App Image */}
+                <div className="relative">
+                  <Image
+                    src="/images/rsi-mindscapeanalytics.png"
+                    alt="RSIQ Pro PWA Native Terminal"
+                    width={1200}
+                    height={2400}
+                    className="w-full h-auto drop-shadow-[0_40px_100px_rgba(0,0,0,0.6)] relative z-10"
+                    priority
+                  />
+
+                  {/* The Institutional Blade Tag - Precision Positioning */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.4 }}
+                    className="absolute -top-4 -right-4 sm:-top-6 sm:-right-8 z-20 pointer-events-none"
+                  >
+                    <div className="relative">
+                      <div className="absolute -inset-1.5 bg-[#39FF14]/30 blur-xl rounded-2xl animate-pulse" />
+                      <div className="relative bg-[#081008]/95 backdrop-blur-3xl border border-[#39FF14]/30 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl overflow-hidden">
+                        {/* Technical Scanline */}
+                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(57,255,20,0.1)_1px,transparent_1px)] bg-[size:100%_4px] animate-[scan_6s_linear_infinite]" />
+                        
+                        <div className="relative flex items-center justify-center">
+                          <span className="flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-40"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#39FF14]"></span>
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-black text-white tracking-[0.1em] uppercase leading-none mb-1">Retail Lag</span>
+                          <span className="text-[8px] font-black text-[#39FF14] tracking-[0.1em] uppercase leading-none opacity-80">System Cleared</span>
+                        </div>
+                        <div className="ml-2 pl-3 border-l border-white/10">
+                          <Zap size={16} className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.5)]" />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Badges - Tightened positioning */}
+                  <motion.div
+                    animate={{ y: [0, -10, 0] }}
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute -left-6 top-[25%] hidden xl:flex bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-3xl shadow-2xl z-20 flex-col items-center gap-2"
+                  >
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-[#39FF14] border border-emerald-500/20">
+                      <Smartphone size={20} />
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">PWA Native</span>
+                  </motion.div>
+
+                  <motion.div
+                    animate={{ y: [0, 10, 0] }}
+                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                    className="absolute -right-6 bottom-[15%] hidden xl:flex bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-3xl shadow-2xl z-20 flex-col items-center gap-2"
+                  >
+                    <div className="flex gap-1.5">
+                      {[...Array(5)].map((_, i) => <Star key={i} size={10} className="text-[#39FF14] fill-[#39FF14]" />)}
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">Institutional</span>
+                  </motion.div>
+                </div>
+              </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Who Is This For (Target Audiences) ΓöÇΓöÇΓöÇ */}
+      <section className="py-20 sm:py-32 md:py-40 border-t border-white/5 bg-[#05080F] px-4 sm:px-6 relative overflow-hidden">
+        <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#39FF14]/5 blur-[140px] rounded-full pointer-events-none -ml-64 opacity-50" />
+        <div className="max-w-7xl mx-auto relative">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Professional Spectrum</h2>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Engineered for the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Top 1%.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            <PersonaCard
+              icon={<Zap className="text-[#39FF14]" />}
+              role="The Scalper"
+              needs="Absolute speed. Whale alerts. Zero-latency liquidation tracking for micro-entries."
+              impact="Captures alpha in the milliseconds before the retail crowd reacts."
+            />
+            <PersonaCard
+              icon={<ShieldCheck className="text-emerald-400" />}
+              role="The Fund Manager"
+              needs="HHI Index tracking. Neural risk matrix. Diversification armor for high-capital portfolios."
+              impact="Protects enterprise assets during volatility cascades."
+            />
+            <PersonaCard
+              icon={<MessageCircle className="text-blue-400" />}
+              role="The Elite Provider"
+              needs="Signal Narration. Instant X/Discord generation. High-aesthetic dashboards for streams."
+              impact="Scales community trust with institutional-grade data transparency."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Core Features Grid ΓöÇΓöÇΓöÇ */}
+      <section id="features" className="py-20 sm:py-32 md:py-40 bg-white/[0.02] border-t border-white/5 px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-20 md:mb-24 space-y-3 sm:space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-[#39FF14]">RSI & MACD Crypto Scanner</h2>
+            <h3 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Everything for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Professional Trading.</span></h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
+            <FeatureCard
+              icon={<Zap />}
+              title="Global Market Reach"
+              desc="Simultaneously track 500+ active symbols including Top Crypto pairs, premier Forex pairs, and precious metals like Gold (XAU) and Silver (XAG)."
+            />
+            <FeatureCard
+              icon={<BarChart3 />}
+              title="Confluence Strategy"
+              desc="Never trade a single indicator again. Our engine combines 5+ technical signals for a unified decision score."
+            />
+            <FeatureCard
+              icon={<Bell />}
+              title="Real-Time Alerts"
+              desc="Get instant push notifications and desktop sound alerts the second a setup aligns with your exact custom parameters."
+            />
+            <FeatureCard
+              icon={<Cpu />}
+              title="Deep Customization"
+              desc="Input your custom RSI period, define unique thresholds, and isolate volatile markets to match your exact trading style."
+            />
+            <FeatureCard
+              icon={<LineChart />}
+              title="MACD + EMA Integration"
+              desc="Full trend analysis built-in. EMA Golden/Death crosses and MACD histograms integrated into the main scanner."
+            />
+            <FeatureCard
+              icon={<Layers />}
+              title="Multi-Timeframe Sync"
+              desc="Track 1m, 5m, 15m, and 1h intervals simultaneously. Align your micro entries with higher timeframe macro dominance."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Coming Soon Section ΓöÇΓöÇΓöÇ */}
+      <section className="py-20 sm:py-32 md:py-40 border-t border-white/5 bg-[#05080F] px-4 sm:px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-amber-400">Future Roadmap</h2>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Expanding the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Alpha Edge.</span></p>
+            <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-4 font-medium">We are continuously pushing the boundaries of retail trading technology. Here is what is deploying next to your terminal.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+            <FeatureCard
+              icon={<Cpu />}
+              title="Autonomous Webhooks"
+              desc="Connect RSIQ Pro directly to your broker or algorithmic trading bots via customizable JSON webhook triggers. Completely automate your execution."
+            />
+            <FeatureCard
+              icon={<LineChart />}
+              title="Advanced Flow & Options Insights"
+              desc="Incorporate dark pool prints, options delta exposure, and institutional orderbook flow directly into the scanning confluence logic."
+            />
+            <FeatureCard
+              icon={<Handshake />}
+              title="Alpha Syndicates"
+              desc="Share your customized screening layouts and trigger conditions with your community through private generated share-links."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Services Section ΓöÇΓöÇΓöÇ */}
+      <section id="services" className="py-20 sm:py-32 md:py-36 px-4 sm:px-6 border-t border-white/5 bg-[#060b14]">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-12 sm:mb-16">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.45em] text-[#39FF14]">Mindscape Services</p>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">Build <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">More Than A Scanner</span></h2>
+            <p className="mt-4 text-sm sm:text-base text-slate-400 max-w-3xl mx-auto">
+              Turn RSIQ Pro into your growth engine with productized AI automation, SaaS engineering, and managed infrastructure from Mindscape Analytics.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6">
+            <LeadServiceCard
+              icon={<Cpu size={18} />}
+              title="AI Agents & Voice"
+              desc="Automate lead qualification, customer response, and bookings with agentic AI + voice systems."
+              href={withUTM(MINDSCAPE_LINKS.aiGenAi, { content: 'landing_services_ai_voice' })}
+            />
+            <LeadServiceCard
+              icon={<Layers size={18} />}
+              title="SaaS Development"
+              desc="High-performance Next.js SaaS builds with enterprise auth, billing, and multi-tenant architecture."
+              href={withUTM(MINDSCAPE_LINKS.enterpriseSoftware, { content: 'landing_services_saas' })}
+            />
+            <LeadServiceCard
+              icon={<Activity size={18} />}
+              title="Cloud & Data Ops"
+              desc="Managed cloud hosting, query optimization, backup automation, and long-term reliability engineering."
+              href={withUTM(MINDSCAPE_LINKS.cloudInfrastructure, { content: 'landing_services_cloud_data' })}
+            />
+            <LeadServiceCard
+              icon={<Handshake size={18} />}
+              title="Automation Partnerships"
+              desc="Monthly build-operate-optimize plans for teams shipping automation quickly without in-house overhead."
+              href={withUTM(MINDSCAPE_LINKS.services, { content: 'landing_services_automation_partner' })}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ The Subscription Advantage (Pricing) ΓöÇΓöÇΓöÇ */}
+      <section id="pricing" className="py-24 sm:py-32 md:py-48 px-4 sm:px-6 relative overflow-hidden bg-white/[0.01]">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#39FF14]/[0.02] blur-[160px] rounded-full pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.6em] text-[#39FF14]">The Subscription Edge</h2>
+            <p className="text-4xl sm:text-6xl font-black text-white tracking-tighter leading-[0.9]">Select Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Terminal Grade.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
+            <PlanCard
+              tier="Elite Alpha Trial"
+              price="Free"
+              features={[
+                "14-Day Full Feature Access",
+                "Real-Time Mobile Push alerts",
+                "Advanced RSI & Whale tracking",
+                "Unlimited Symbol Monitoring",
+                "Institutional sound synthesis"
+              ]}
+            />
+            <PlanCard
+              tier="Monthly Alpha Pro"
+              price="$20"
+              features={[
+                "500+ Registered Live Symbols",
+                "0.5ms WebSocket lead-time",
+                "Native PWA Mobile Notifications",
+                "Sawtooth Audio Alerts",
+                "Alpha Logic Engine (ALE-v4) access"
+              ]}
+            />
+            <PlanCard
+              highlight
+              tier="Annual Alpha Pro"
+              price="$200"
+              features={[
+                "All Monthly Pro Capabilities",
+                "Real-Time Mobile Push alerts",
+                "2 Months Free (Yearly discount)",
+                "Priority Technical Concierge",
+                "Early access to ALE-v5 webhooks",
+                "Lifetime Logic Hardening updates"
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ About Section ΓöÇΓöÇΓöÇ */}
+      <section id="about" className="py-20 sm:py-28 md:py-32 px-4 sm:px-6 border-t border-white/5 bg-white/[0.01]">
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-stretch">
+          <div className="rounded-3xl border border-white/10 bg-[#0a0f1a] p-7 sm:p-10">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">About Mindscape</p>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Systems-First <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Engineering Partner</span></h3>
+            <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed">
+              Mindscape Analytics builds AI systems that replace manual work. From sales automation and voice AI to full SaaS platforms and cloud operations, the team focuses on measurable business outcomes, not feature clutter.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">40-70% Cost Reduction</span>
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">24/7 Operations</span>
+              <span className="px-3 py-2 rounded-lg border border-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-slate-300">Long-Term Managed Support</span>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[#39FF14]/30 bg-[#101a12] p-7 sm:p-10">
+            <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Lead Actions</p>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Turn Interest <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Into Projects</span></h3>
+            <p className="mt-5 text-sm sm:text-base text-slate-300 leading-relaxed">
+              Running RSIQ Pro and need custom workflows, client automation, or white-label SaaS delivery? Use direct Mindscape channels below to open a strategy call or request a proposal.
+            </p>
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              <a
+                href={withUTM(MINDSCAPE_LINKS.whatsappStrategyCall, { content: 'landing_about_strategy_call' })}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#39FF14] text-black text-[11px] font-black uppercase tracking-[0.2em]"
+              >
+                <MessageCircle size={15} /> Book Strategy Call
+              </a>
+              <a
+                href={withUTM(MINDSCAPE_LINKS.contact, { content: 'landing_about_request_proposal' })}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-white/20 text-slate-100 text-[11px] font-black uppercase tracking-[0.2em]"
+              >
+                <Building2 size={15} /> Request Proposal
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Connect Section ΓöÇΓöÇΓöÇ */}
+      <section id="connect" className="py-16 sm:py-20 px-4 sm:px-6 border-t border-white/5 bg-[#05080F]">
+        <div className="max-w-7xl mx-auto rounded-3xl border border-white/10 bg-[#0a0f1a] p-6 sm:p-8 md:p-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Mindscape Analytics Connection</p>
+              <h3 className="mt-3 text-2xl sm:text-3xl font-black text-white tracking-tight">Lead Pipeline Links</h3>
+              <p className="mt-3 text-sm text-slate-400">Direct channels for SaaS builds, automation projects, managed cloud, and AI deployment engagements.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full md:w-auto">
+              <a href={withUTM(MINDSCAPE_LINKS.about, { content: 'landing_connect_about' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">About <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.services, { content: 'landing_connect_services' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">Services <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.projects, { content: 'landing_connect_case_studies' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">Case Studies <ExternalLink size={14} /></a>
+              <a href={withUTM(MINDSCAPE_LINKS.linkedin, { content: 'landing_connect_linkedin' })} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-white/15 text-[10px] font-black uppercase tracking-[0.2em] text-slate-200 hover:border-[#39FF14]/40 hover:text-[#39FF14] transition-colors">LinkedIn <ExternalLink size={14} /></a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Affiliates & Collaboration ΓöÇΓöÇΓöÇ */}
+      <section id="affiliate" className="py-20 sm:py-32 bg-gradient-to-b from-[#05080F] to-[#0A0E17] border-t border-white/5 relative overflow-hidden px-4 sm:px-6">
+        <div className="absolute top-1/2 left-1/2 w-full max-w-3xl h-[400px] bg-[#39FF14]/5 blur-[120px] rounded-full pointer-events-none transform -translate-x-1/2 -translate-y-1/2" />
+
+        <div className="max-w-5xl mx-auto relative z-10">
+          <div className="p-8 sm:p-16 rounded-[4rem] bg-white/[0.02] border border-white/5 shadow-2xl flex flex-col items-center text-center group">
+            <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-white mb-8 border border-white/10 shadow-lg group-hover:scale-110 group-hover:border-[#39FF14]/30 group-hover:text-[#39FF14] transition-all duration-500">
+              <Handshake size={32} />
+            </div>
+            <h2 className="text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14] mb-4">Strategic Partnerships</h2>
+            <h3 className="text-4xl sm:text-6xl font-black text-white tracking-tighter mb-6">Open for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Collaboration.</span></h3>
+            <p className="text-slate-400 text-sm sm:text-lg max-w-2xl mx-auto mb-10 sm:mb-14 leading-relaxed font-medium">
+              We are actively looking for elite traders, fund managers, and community leaders to join our exclusive affiliate network. Bring institutional-grade tools to your audience and earn high-tier revenue share.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
+              <a
+                href="mailto:partners@mindscapeanalytics.com"
+                className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl bg-white text-black font-black uppercase tracking-[0.2em] hover:bg-slate-200 transition-all text-xs text-center shadow-xl hover:scale-105"
+              >
+                Apply as Affiliate
+              </a>
+              <a
+                href="mailto:contact@mindscapeanalytics.com"
+                className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl border border-white/20 text-white font-black uppercase tracking-[0.2em] hover:bg-white/5 transition-all text-xs text-center hover:scale-105"
+              >
+                Contact for Synergy
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ΓöÇΓöÇΓöÇ Final CTA ΓöÇΓöÇΓöÇ */}
+      <section className="py-28 sm:py-40 md:py-60 px-4 sm:px-6 relative overflow-hidden bg-gradient-to-b from-transparent to-[#0A0E17]">
+        <div className="absolute inset-0 bg-[#39FF14]/[0.02] [mask-image:radial-gradient(circle_at_center,black,transparent)] pointer-events-none" />
+
+        <div className="max-w-4xl mx-auto text-center space-y-10 sm:space-y-16 relative z-10">
+          <h2 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black text-white tracking-tighter leading-[0.88] sm:leading-[0.85]">READY FOR<br className="sm:hidden" /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">THE ALPHA?</span></h2>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 pt-4 sm:pt-10 px-4 sm:px-0">
+            <Link
+              href="/register"
+              className="w-full sm:w-auto px-10 sm:px-16 py-5 sm:py-8 rounded-2xl sm:rounded-3xl bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] shadow-[0_20px_60px_rgba(57,255,20,0.4)] hover:shadow-[0_40px_140px_rgba(57,255,20,0.6)] transition-all text-sm group text-center"
+            >
+              Create Your Terminal
+              <ArrowUpRight size={18} className="inline ml-2 sm:ml-3 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+            </Link>
+            <a
+              href={withUTM(MINDSCAPE_LINKS.whatsappStrategyCall, { content: 'landing_final_cta_strategy_call' })}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full sm:w-auto px-10 sm:px-10 py-5 sm:py-6 rounded-2xl border border-white/20 text-white font-black uppercase tracking-[0.2em] text-xs text-center"
+            >
+              Book Automation Call
+            </a>
+          </div>
+          <div className="pt-20 sm:pt-32 opacity-60 flex justify-center gap-6">
+            <a href="mailto:info@mindscapeanalytics.com" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Email Mindscape Analytics">
+              <Mail size={18} />
+            </a>
+            <a href="tel:+13072106155" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Call Mindscape Analytics">
+              <Phone size={18} />
+            </a>
+            <a href="https://maps.google.com/?q=Sheridan,+WY,+US" target="_blank" rel="noreferrer" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Mindscape Analytics Headquarters">
+              <MapPin size={18} />
+            </a>
+          </div>
+          <div className="pt-8 opacity-20 flex flex-col items-center gap-3 sm:gap-4">
+            <span className="text-base sm:text-xl font-black text-white">MINDSCAPE ANALYTICS LLC</span>
+            <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 hover:[&_a]:text-[#39FF14] [&_a]:transition-colors">
+              <Link href="/legal/terms">Terms</Link>
+              <span className="text-white/20">ΓÇó</span>
+              <Link href="/legal/privacy">Privacy</Link>
+            </div>
+            <p className="max-w-2xl text-center text-[9px] text-slate-500 uppercase tracking-wider font-bold leading-relaxed mt-4 px-4 border border-white/5 bg-white/[0.01] rounded-xl p-4">
+              <strong>Risk Disclaimer:</strong> RSIQ Pro is an analytical aggregation tool and does not provide financial advice. Trading inherently involves extreme risk, and you may lose some or all of your initial investment. Past performance of any system, methodology, or indicator is not indicative of future results.
+            </p>
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.8em] sm:tracking-[1.5em] text-slate-500 mt-4">Global Terminal &copy; 2026</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PersonaCard({ icon, role, needs, impact }: { icon: React.ReactNode; role: string; needs: string; impact: string }) {
+  return (
+    <motion.div
+      whileHover={{ y: -5 }}
+      whileTap={{ scale: 0.98 }}
+      className="p-6 sm:p-10 rounded-[28px] sm:rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col"
+    >
+      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/5 flex items-center justify-center mb-6 sm:mb-8">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
+      </div>
+      <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">TARGET PERSONA</h4>
+      <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-4">{role}</h3>
+      <p className="text-sm text-slate-400 font-medium leading-relaxed mb-6 flex-1">
+        {needs}
+      </p>
+      <div className="pt-6 border-t border-white/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">IMPACT:</span>
+        <p className="mt-1 text-xs text-white/80 font-bold italic">"{impact}"</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function AnalysisItem({ title, desc }: { title: string; desc: string }) {
+  return (
+    <div className="group border-l-2 border-white/10 pl-5 sm:pl-8 py-1 sm:py-3 hover:border-[#39FF14] transition-colors relative">
+      <div className="absolute left-0 top-0 bottom-0 w-0 bg-gradient-to-r from-[#39FF14]/5 to-transparent group-hover:w-full transition-all duration-500" />
+      <h4 className="text-white font-black uppercase tracking-widest text-[10px] sm:text-[12px] mb-1 sm:mb-2 relative z-10 group-hover:text-[#39FF14] transition-colors">{title}</h4>
+      <p className="text-slate-500 text-[11px] sm:text-[13px] font-medium leading-relaxed relative z-10 group-hover:text-slate-400 transition-colors">{desc}</p>
+    </div>
+  );
+}
+
+function StatBox({ value, label, highlight = false }: { value: string; label: string; highlight?: boolean }) {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.05 }}
+      className={cn(
+        "p-5 sm:p-7 md:p-10 rounded-3xl sm:rounded-[40px] border flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2",
+        highlight
+          ? "bg-[#39FF14] border-[#39FF14] text-black shadow-2xl shadow-[#39FF14]/30"
+          : "bg-white/[0.03] border-white/5 text-white"
+      )}
+    >
+      <span className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tighter leading-none">{value}</span>
+      <span className={cn("text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em] sm:tracking-[0.3em]", highlight ? "opacity-60" : "text-slate-500")}>
+        {label}
+      </span>
+    </motion.div>
+  );
+}
+
+function MobileFeature({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-3 sm:gap-4 group p-3 sm:p-0 rounded-xl sm:rounded-none bg-white/[0.03] sm:bg-transparent border border-white/5 sm:border-none">
+      <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 group-hover:text-[#39FF14] group-hover:border-[#39FF14]/40 transition-all flex-shrink-0">
+        {icon}
+      </div>
+      <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-slate-400 group-hover:text-white transition-colors">{text}</span>
+    </div>
+  );
+}
+
+function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+  return (
+    <motion.div
+      whileHover={{ y: -8 }}
+      className="p-6 sm:p-8 md:p-10 rounded-3xl sm:rounded-[40px] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all group relative overflow-hidden"
+    >
+      <div className="absolute top-0 right-0 p-6 sm:p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 80 })}
+      </div>
+      <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl bg-white/5 flex items-center justify-center mb-6 sm:mb-8 md:mb-10 group-hover:scale-110 transition-transform relative z-10 group-hover:bg-[#39FF14]/10 group-hover:text-[#39FF14]">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
+      </div>
+      <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-3 sm:mb-5 relative z-10">{title}</h3>
+      <p className="text-slate-500 text-sm font-medium leading-relaxed relative z-10 group-hover:text-slate-400 transition-colors">{desc}</p>
+    </motion.div>
+  );
+}
+
+function LeadServiceCard({
+  icon,
+  title,
+  desc,
+  href,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  desc: string;
+  href: string;
+}) {
+  return (
+    <motion.div
+      whileHover={{ y: -6 }}
+      className="rounded-3xl border border-white/10 bg-[#0a0f1a] p-6 sm:p-7 flex flex-col"
+    >
+      <div className="w-11 h-11 rounded-xl border border-[#39FF14]/30 bg-[#39FF14]/10 text-[#39FF14] flex items-center justify-center">
+        {icon}
+      </div>
+      <h3 className="mt-5 text-xl font-black tracking-tight text-white">{title}</h3>
+      <p className="mt-3 text-sm text-slate-400 leading-relaxed flex-1">{desc}</p>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-6 inline-flex items-center gap-2 text-[#39FF14] text-[11px] font-black uppercase tracking-[0.2em]"
+      >
+        Explore Service <ArrowUpRight size={14} />
+      </a>
+    </motion.div>
+  );
+}
+
+function TradingViewMiniChart({ symbol }: { symbol: string }) {
+  const container = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!container.current) return;
+    container.current.innerHTML = '';
+    const script = document.createElement("script");
+    script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
+    script.type = "text/javascript";
+    script.async = true;
+    script.innerHTML = JSON.stringify({
+      "symbol": symbol,
+      "width": "100%",
+      "height": "100%",
+      "locale": "en",
+      "dateRange": "1D",
+      "colorTheme": "dark",
+      "isTransparent": true,
+      "autosize": true,
+      "largeChartUrl": ""
+    });
+    container.current.appendChild(script);
+  }, [symbol]);
+
+  return (
+    <div className="tradingview-widget-container h-[calc(100%-80px)] w-full opacity-60 group-hover:opacity-100 transition-opacity mt-14 pointer-events-none relative z-0" ref={container}>
+      <div className="tradingview-widget-container__widget h-full w-full"></div>
+    </div>
+  );
+}
+
+function IntelligenceCard({ icon, title, subtitle, children, delay = 0 }: { icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay }}
+      className="group relative p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all duration-500 overflow-hidden flex flex-col h-full"
+    >
+      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.1] group-hover:scale-125 transition-all duration-700">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 120 })}
+      </div>
+
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-[#39FF14] group-hover:border-[#39FF14]/40 transition-all">
+          {icon}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#39FF14]">{subtitle}</span>
+          <h3 className="text-xl font-black text-white tracking-tight">{title}</h3>
+        </div>
+      </div>
+
+      <div className="flex-1 relative z-10">
+        {children}
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Engine Stream</span>
+        </div>
+        <ArrowUpRight size={14} className="text-slate-600 group-hover:text-[#39FF14] transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+      </div>
+    </motion.div>
+  );
+}
+
+function SignalRibbon({ label, value, status }: { label: string; value: string; status: 'bullish' | 'bearish' | 'neutral' }) {
+  return (
+    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-all group/ribbon">
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "w-1.5 h-1.5 rounded-full",
+          status === 'bullish' ? "bg-[#39FF14]" : status === 'bearish' ? "bg-red-500" : "bg-slate-500"
+        )} />
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/ribbon:text-white transition-colors">{label}</span>
+      </div>
+      <span className={cn(
+        "text-[11px] font-black tabular-nums",
+        status === 'bullish' ? "text-[#39FF14]" : status === 'bearish' ? "text-red-500" : "text-white"
+      )}>{value}</span>
+    </div>
+  );
+}
+function ComparisonModule({ title, points, status }: { title: string; points: string[]; status: 'retail' | 'pro' }) {
+  return (
+    <div className={cn(
+      "p-8 rounded-[2.5rem] border flex flex-col h-full transition-all duration-500",
+      status === 'pro'
+        ? "bg-[#39FF14]/[0.01] border-[#39FF14]/20 shadow-[0_0_80px_rgba(57,255,20,0.05)]"
+        : "bg-white/[0.01] border-white/5 opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+    )}>
+      <div className="flex items-center gap-4 mb-8">
+        <div className={cn(
+          "w-12 h-12 rounded-2xl flex items-center justify-center border",
+          status === 'pro' ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/10 text-slate-500"
+        )}>
+          {status === 'pro' ? <Zap size={20} /> : <Lock size={20} />}
+        </div>
+        <h4 className="text-xl font-black text-white tracking-tight">{title}</h4>
+      </div>
+
+      <div className="space-y-4 flex-1">
+        {points.map((p, i) => (
+          <div key={i} className="flex items-start gap-3 group/point">
+            <div className={cn(
+              "mt-1.5 w-1.5 h-1.5 rounded-full",
+              status === 'pro' ? "bg-[#39FF14]" : "bg-slate-700"
+            )} />
+            <p className="text-sm font-medium text-slate-400 group-hover/point:text-slate-200 transition-colors leading-relaxed">
+              {p}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-white/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+          Result: <span className={status === 'pro' ? "text-[#39FF14]" : "text-red-500"}>
+            {status === 'pro' ? "Alpha Captured" : "Retail Friction"}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({ tier, price, features, highlight = false }: { tier: string; price: string; features: string[]; highlight?: boolean }) {
+  return (
+    <motion.div
+      whileHover={{ y: -10 }}
+      className={cn(
+        "p-10 rounded-[3rem] border flex flex-col relative overflow-hidden transition-all duration-700 h-full",
+        highlight
+          ? "bg-[#39FF14]/[0.02] border-[#39FF14]/30 shadow-[0_40px_100px_rgba(57,255,20,0.1)]"
+          : "bg-white/[0.02] border-white/5"
+      )}
+    >
+      {highlight && (
+        <div className="absolute top-0 right-0 p-6">
+          <span className="px-3 py-1 rounded-full bg-[#39FF14] text-black text-[9px] font-black uppercase tracking-widest shadow-xl">Best Value</span>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h4 className={cn("text-[10px] font-black uppercase tracking-[0.4em] mb-2", highlight ? "text-[#39FF14]" : "text-slate-500")}>
+          {tier}
+        </h4>
+        <div className="flex items-baseline gap-1">
+          <span className="text-5xl font-black text-white tracking-tighter">{price}</span>
+          <span className="text-sm font-bold text-slate-500">
+            {price === "Free" ? "" : price === "$200" ? "/yr" : "/mo"}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5 flex-1 pt-4">
+        {features.map((f, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className={cn("w-1 h-1 rounded-full", highlight ? "bg-[#39FF14]" : "bg-slate-700")} />
+            <span className="text-sm font-medium text-slate-400">{f}</span>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href="/register"
+        className={cn(
+          "mt-12 w-full py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all text-center",
+          highlight
+            ? "bg-[#39FF14] text-black shadow-xl shadow-[#39FF14]/20 hover:scale-[1.02]"
+            : "bg-white/5 text-white hover:bg-white/10"
+        )}
+      >
+        Select {tier} Plan
+      </Link>
+    </motion.div>
+  );
+}

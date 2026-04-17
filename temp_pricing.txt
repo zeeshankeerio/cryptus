@@ -1,0 +1,70 @@
+              subtitle="Infrastructure"
+              title="Global Authority"
+              delay={0.3}
+            >
+              <div className="h-[260px] relative rounded-2xl overflow-hidden border border-white/5 bg-black/40 group/tv">
+                <div className="absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white">BTC / USD LIVE</span>
+                </div>
+                <TradingViewMiniChart symbol="BINANCE:BTCUSDT" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  <span>Low Latency: 0.5ms</span>
+                  <span>Uptime: 99.9%</span>
+                </div>
+              </div>
+            </IntelligenceCard>
+          </div>
+        </div>
+      </section>
+
+      {/* ????????? The ROI of Speed (Split Comparison) ????????? */}
+      <section className="py-20 sm:py-32 px-4 sm:px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Profit Gap</h2>
+            <p className="text-3xl sm:text-5xl font-black text-white tracking-tighter">Quantifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Pro Edge.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 relative">
+            {/* Center Connector */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-[80%] bg-white/5 hidden lg:block" />
+
+            <ComparisonModule
+              status="retail"
+              title="The Retail Friction"
+              points={[
+                "Manual chart flipping across 10+ tabs",
+                "60-second delay waiting for candle closure",
+                "Analysis paralysis during high volatility",
+                "Silent setups missed while away from desk",
+                "Guessing signal strength with zero backtest data"
+              ]}
+            />
+
+            <ComparisonModule
+              status="pro"
+              title="The Alpha Pro Edge"
+              points={[
+                "500+ symbols scanned autonomously every tick",
+                "Real-time lead alerts before retail closes candles",
+                "Instantly verified confluence win-rate tracking",
+                "Institutional Whale volume & Liquidation flux",
+                "Native Push alerts triggered 24/7 in your pocket"
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ????????? The Alpha Logic Section ????????? */}
+      <section id="logic" className="py-20 sm:py-32 md:py-40 border-y border-white/5 bg-white/[0.01] px-4 sm:px-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-[400px] sm:w-[800px] h-[400px] sm:h-[800px] bg-[#39FF14]/5 blur-[160px] rounded-full pointer-events-none -mr-20 sm:-mr-40 -mt-20 sm:-mt-40" />
+
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 sm:gap-20 lg:gap-24 items-center">
+            <div className="space-y-8 sm:space-y-12">
+              <div className="space-y-3 sm:space-y-4">
+                <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">The Intelligence Layer</h2>
+                <p className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter leading-[0.95]">

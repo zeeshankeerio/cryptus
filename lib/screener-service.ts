@@ -56,9 +56,9 @@ const RSI_PERIOD = 14;
 const KLINE_LIMIT = 1000; // 1000 candles (Max API limit) - provides ~66 15m candles for accurate Wilder smoothing
 const KLINE_LIMIT_1H = 200; // 200 1h candles: Excellent Wilder stability for 1h RSI
 const BATCH_SIZE = 16;
-const FETCH_RETRY_COUNT = 4; // increased for 600-coin robustness
+const FETCH_RETRY_COUNT = 2; // reduced for faster fail-over during spikes
 const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
-const KLINE_TIMEOUT_MS = 22_000; // 22s per kline fetch to reduce timeouts at scale
+const KLINE_TIMEOUT_MS = 8000; // 8s per kline fetch to prevent death-spirals
 
 // ── Binance API Weight Tracking (Rate Limit Protection) ──
 let globalWeight = 0;

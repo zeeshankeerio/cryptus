@@ -152,7 +152,7 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
     }).catch(() => {
       toast.error('Failed to copy');
     });
-  }, [narration]);
+  }, [narration, entry]);
 
   return (
     <span
@@ -400,8 +400,7 @@ const ScreenerRow = memo(function ScreenerRow({
     tick, coinConfigs, entry, rsiPeriod,
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
-    globalShowSignalTags, globalSignalThresholdMode, globalThresholdsEnabled,
-    globalOverbought, globalOversold, globalVolatilityEnabled
+    globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold
   ]);
 
   const display = liveState || {
@@ -1360,8 +1359,7 @@ const ScreenerCard = memo(function ScreenerCard({
     tick, coinConfigs, entry, rsiPeriod,
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
-    globalShowSignalTags, globalSignalThresholdMode, globalThresholdsEnabled,
-    globalOverbought, globalOversold, globalVolatilityEnabled, globalVolumeSpikeThreshold
+    globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold
   ]);
 
   const display = liveState || {
@@ -2638,6 +2636,7 @@ export default function ScreenerDashboard() {
     globalSignalThresholdMode, globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch,
     globalUseEma, globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     visibleCols, refreshInterval, pairCount, smartMode, showHeader, rsiPeriod, soundEnabled,
+    watchlist,
     alertsEnabled
   ]);
 
@@ -3148,7 +3147,7 @@ export default function ScreenerDashboard() {
         setLoading(false);
       }
     }
-  }, [pairCount, smartMode, rsiPeriod, search, exchange, handleUpgradeRequired, entitlements.maxRecords, entitlements.availableRecordOptions]);
+  }, [pairCount, smartMode, rsiPeriod, search, exchange, handleUpgradeRequired, entitlements.maxRecords, entitlements.availableRecordOptions, syncStates, watchlist]);
 
   // ── Stable ref so all async effects always call the latest fetchData
   // without adding `fetchData` to their dependency arrays (which causes race conditions).
@@ -5000,7 +4999,7 @@ const NumericAdjuster = memo(({
     if (value.toString() !== localValue && document.activeElement !== document.getElementById(`input-${label}`)) {
       setLocalValue(value.toString());
     }
-  }, [value, label]);
+  }, [value, label, localValue]);
 
   const handleManualChange = (val: string) => {
     // Only allow digits

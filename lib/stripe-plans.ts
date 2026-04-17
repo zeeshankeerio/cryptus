@@ -86,6 +86,17 @@ export async function getPlansFromStripe(client: Stripe): Promise<StripePlan[]> 
     return cache.plans;
   }
 
+  // ── 2026 Resilience: Development Fast-Path ──
+  // Local development should NEVER be blocked by Stripe API latencies.
+  if (process.env.NODE_ENV === "development") {
+    const devPlans: StripePlan[] = [
+      { name: "monthly", priceId: "price_dev_monthly", limits: { alerts: 500 } },
+      { name: "yearly", priceId: "price_dev_yearly", limits: { alerts: 500 } },
+    ];
+    console.log("[stripe-plans] Using Hardcoded Dev Plans (Fast-Init)");
+    return devPlans;
+  }
+
   try {
     const productId = await getOrCreateProduct(client);
     const { monthlyPriceId, yearlyPriceId } = await ensurePrices(client, productId);

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import React from 'react';
 import { Coins, Globe, CircleDollarSign, Gauge } from 'lucide-react';
