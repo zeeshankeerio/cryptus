@@ -5,12 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { 
-  Zap, 
-  ShieldCheck, 
-  BarChart3, 
-  TrendingUp, 
-  Bell, 
+import {
+  Zap,
+  ShieldCheck,
+  BarChart3,
+  TrendingUp,
+  Bell,
   Cpu,
   Smartphone,
   Activity,
@@ -84,9 +84,9 @@ export default function LandingPage() {
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="relative w-9 h-9 sm:w-14 sm:h-14 overflow-hidden rounded-xl border border-[#39FF14]/20 shadow-lg shadow-[#39FF14]/10 bg-gradient-to-br from-[#39FF14]/10 to-transparent">
-              <Image 
-                src="/logo/rsiq-mindscapeanalytics.png" 
-                alt="RSIQ Pro | Institutional Crypto Terminal" 
+              <Image
+                src="/logo/rsiq-mindscapeanalytics.png"
+                alt="RSIQ Pro | Institutional Crypto Terminal"
                 fill
                 priority
                 loading="eager"
@@ -98,11 +98,12 @@ export default function LandingPage() {
               <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-[0.3em] sm:tracking-[0.4em] text-slate-500 leading-none mt-0.5">Global Terminal</span>
             </div>
           </div>
-          
+
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-8 mr-auto ml-16">
             <a href="#features" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Features</a>
             <a href="#logic" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">The Logic</a>
+            <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Pricing</a>
             <a href="#mobile" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Mobile</a>
             <Link href="/services" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Services</Link>
             <Link href="/about" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">About</Link>
@@ -114,8 +115,8 @@ export default function LandingPage() {
             <Link href={session ? "/terminal" : "/login"} className="hidden sm:block text-xs font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
               {session ? "Account" : "Login"}
             </Link>
-            <Link 
-              href={session ? "/terminal" : "/register"} 
+            <Link
+              href={session ? "/terminal" : "/register"}
               className="px-4 py-2.5 sm:px-6 sm:py-3 rounded-xl bg-[#39FF14] text-black text-[10px] sm:text-[11px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] shadow-xl shadow-[#39FF14]/20 hover:scale-105 active:scale-95 transition-all"
             >
               {session ? "Terminal" : "Launch"}
@@ -142,6 +143,7 @@ export default function LandingPage() {
               <div className="px-4 py-4 flex flex-col gap-1">
                 <a href="#features" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Features</a>
                 <a href="#logic" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">The Logic</a>
+                <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Pricing</a>
                 <a href="#mobile" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Mobile</a>
                 <Link href="/services" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Services</Link>
                 <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">About</Link>
@@ -162,12 +164,12 @@ export default function LandingPage() {
       {/* ─── Hero Section ─── */}
       <section className="relative pt-24 sm:pt-32 md:pt-36 pb-12 sm:pb-20 md:pb-24 px-4 sm:px-6 z-10 overflow-hidden">
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full pointer-events-none">
-          <motion.div 
+          <motion.div
             animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.2, 0.1] }}
             transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
             className="absolute top-0 left-1/4 w-[400px] sm:w-[600px] h-[400px] sm:h-[600px] bg-[#39FF14]/10 blur-[120px] rounded-full"
           />
-          <motion.div 
+          <motion.div
             animate={{ scale: [1.2, 1, 1.2], opacity: [0.05, 0.15, 0.05] }}
             transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 1 }}
             className="absolute bottom-0 right-1/4 w-[300px] sm:w-[500px] h-[300px] sm:h-[500px] bg-emerald-500/10 blur-[100px] rounded-full"
@@ -188,28 +190,28 @@ export default function LandingPage() {
           </motion.div>
 
           <div className="flex flex-col items-center">
-            <motion.h1 
+            <motion.h1
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-[2.8rem] sm:text-6xl md:text-8xl lg:text-9xl font-black text-center text-white tracking-tighter leading-[1.05] sm:leading-[0.85] mb-4 drop-shadow-2xl"
+              className="text-[2.8rem] sm:text-6xl md:text-8xl lg:text-9xl font-black text-center text-white tracking-tighter leading-[1.05] sm:leading-[0.85] mb-4 drop-shadow-2xl relative z-10"
             >
               THE ALPHA <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-[#39FF14] to-emerald-800">TERMINAL.</span>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">TERMINAL.</span>
             </motion.h1>
-            
-            <h2 className="text-[9px] sm:text-xs md:text-sm font-black uppercase tracking-[0.2em] sm:tracking-[0.6em] text-[#39FF14] mb-10 sm:mb-16 text-center px-4">The Global Crypto Market Scanner for Professional Traders</h2>
+
+            <h2 className="text-[9px] sm:text-xs md:text-sm font-black uppercase tracking-[0.2em] sm:tracking-[0.6em] text-[#39FF14] mb-10 sm:mb-16 text-center px-4">Institutional Speed for Professional Signal Execution</h2>
           </div>
 
-          <motion.p 
+          <motion.p
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
             className="text-xs sm:text-base md:text-xl text-slate-400 max-w-4xl text-center leading-relaxed mb-10 sm:mb-12 font-medium px-6 sm:px-0"
           >
-            <strong className="text-white">Stop missing critical setups.</strong> Retail traders lose their edge by manually checking charts. RSIQ Pro solves this by instantly scanning <span className="text-[#39FF14]">500+ assets in real-time</span>. Get institution-grade alerts, <strong>verified historical win-rates</strong>, and <span className="text-white">AI-generated signal narratives</span> instantly formatted for 1-click sharing.
+            <strong className="text-white">Stop operating with a 60-second delay.</strong> Retail traders miss high-alpha moves because candles haven't closed. RSIQ Pro gives you the lead by scanning <span className="text-[#39FF14]">500+ assets tick-by-tick</span>. Get the lead, <strong>verify the logic</strong>, and <span className="text-white">execute before the crowd</span>.
           </motion.p>
 
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
@@ -219,25 +221,25 @@ export default function LandingPage() {
               {/* Left HUD Stats */}
               <div className="hidden md:flex flex-col gap-4">
                 <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
-                   <div className="flex items-center gap-2 mb-1">
-                     <Cpu size={14} className="text-[#39FF14]" />
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engine Latency</span>
-                   </div>
-                   <div className="text-xl font-black text-white">0.5ms</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Cpu size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Engine Latency</span>
+                  </div>
+                  <div className="text-xl font-black text-white">0.5ms</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
-                   <div className="flex items-center gap-2 mb-1">
-                     <Activity size={14} className="text-[#39FF14]" />
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Ticks / Day</span>
-                   </div>
-                   <div className="text-xl font-black text-white text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">2.4B+</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Activity size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Ticks / Day</span>
+                  </div>
+                  <div className="text-xl font-black text-white text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">2.4B+</div>
                 </div>
               </div>
 
               {/* Main CTAs */}
               <div className="flex flex-col gap-4">
-                <Link 
-                  href={session ? "/terminal" : "/register"} 
+                <Link
+                  href={session ? "/terminal" : "/register"}
                   className="w-full px-8 py-5 sm:py-7 rounded-2xl bg-[#39FF14] text-black font-black uppercase tracking-[0.25em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all text-[12px] sm:text-[14px] active:scale-95 text-center group"
                 >
                   {session ? "Enter Terminal" : "Launch Terminal"}
@@ -254,18 +256,18 @@ export default function LandingPage() {
               {/* Right HUD Stats */}
               <div className="hidden md:flex flex-col gap-4">
                 <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
-                   <div className="flex items-center gap-2 mb-1">
-                     <Globe size={14} className="text-[#39FF14]" />
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Symbols</span>
-                   </div>
-                   <div className="text-xl font-black text-white">580+</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Globe size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Active Symbols</span>
+                  </div>
+                  <div className="text-xl font-black text-white">580+</div>
                 </div>
                 <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 backdrop-blur-md">
-                   <div className="flex items-center gap-2 mb-1">
-                     <ShieldCheck size={14} className="text-[#39FF14]" />
-                     <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Security Grade</span>
-                   </div>
-                   <div className="text-xl font-black text-white">ENTERPRISE</div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <ShieldCheck size={14} className="text-[#39FF14]" />
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Security Grade</span>
+                  </div>
+                  <div className="text-xl font-black text-white">ENTERPRISE</div>
                 </div>
               </div>
             </div>
@@ -303,16 +305,16 @@ export default function LandingPage() {
         <div className="max-w-[1400px] mx-auto">
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-10">
             {/* Main Terminal Image */}
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -50 }}
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               className="xl:col-span-8 relative p-1.5 rounded-[32px] bg-gradient-to-b from-white/10 to-transparent border border-white/10 shadow-2xl group overflow-hidden"
             >
-              <Image 
-                src="/images/system_images/main_dashboard.png" 
-                alt="RSIQ Pro Institutional Terminal" 
-                width={2560} 
+              <Image
+                src="/images/system_images/main_dashboard.png"
+                alt="RSIQ Pro Institutional Terminal"
+                width={2560}
                 height={1440}
                 className="w-full h-auto rounded-[26px] object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-[1.02]"
               />
@@ -327,7 +329,7 @@ export default function LandingPage() {
 
             {/* Sidebar High-Performance Stats */}
             <div className="xl:col-span-4 flex flex-col gap-6">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
@@ -343,7 +345,7 @@ export default function LandingPage() {
                 </div>
               </motion.div>
 
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: 50 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
@@ -364,38 +366,144 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── Global Real-Time Intelligence (TradingView) ─── */}
-      <section className="py-20 sm:py-32 bg-white/[0.01] border-y border-white/5 relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-16 space-y-4">
-             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">Live Market Pulse</h2>
-             <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Unified Multi-Asset Authority.</p>
+      {/* ─── Global Real-Time Intelligence (Market Intelligence Hub) ─── */}
+      <section className="py-24 sm:py-32 md:py-40 bg-white/[0.01] border-y border-white/5 relative overflow-hidden">
+        {/* Abstract Background Elements */}
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-[#39FF14]/[0.02] blur-[150px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-emerald-500/[0.02] blur-[120px] rounded-full pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 relative z-10">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <motion.h2
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.6em] text-[#39FF14]"
+            >
+              Situational Awareness
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tighter leading-[0.95]"
+            >
+              Global Market <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Surveillance.</span>
+            </motion.p>
           </div>
-          
-          <div className="flex flex-row lg:grid lg:grid-cols-3 gap-4 sm:gap-6 overflow-x-auto lg:overflow-x-hidden snap-x snap-mandatory pb-6 sm:pb-0 px-4 sm:px-0 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="w-[85vw] lg:w-full flex-shrink-0 snap-center rounded-3xl border border-white/10 bg-[#0A0E17] h-[350px] sm:h-[400px] overflow-hidden relative group">
-               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">BTC / USD - REAL-TIME</span>
-               </div>
-               <TradingViewMiniChart symbol="BINANCE:BTCUSDT" />
-            </div>
 
-            <div className="w-[85vw] lg:w-full flex-shrink-0 snap-center rounded-3xl border border-white/10 bg-[#0A0E17] h-[350px] sm:h-[400px] overflow-hidden relative group">
-               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">GOLD / USD - REAL-TIME</span>
-               </div>
-               <TradingViewMiniChart symbol="OANDA:XAUUSD" />
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            {/* Module 1: Signal Confluence */}
+            <IntelligenceCard
+              icon={<Layers className="text-[#39FF14]" />}
+              subtitle="The Logic Layer"
+              title="Deep Signal Confluence"
+              delay={0.1}
+            >
+              <div className="space-y-3 mt-4">
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Our Neural Engine syncs <strong className="text-white">5+ indicators</strong> across all timeframes to identify institutional-grade setups in real-time.
+                </p>
+                <div className="space-y-2">
+                  <SignalRibbon label="RSI(14) 15M / 1H Align" value="OVERSOLD" status="bullish" />
+                  <SignalRibbon label="MACD Histogram Divergence" value="CONFIRMED" status="bullish" />
+                  <SignalRibbon label="EMA 20/50 Multi-Cross" value="BULLISH" status="bullish" />
+                  <SignalRibbon label="Stochastic K/D Signal" value="NEUTRAL" status="neutral" />
+                </div>
+              </div>
+            </IntelligenceCard>
 
-            <div className="w-[85vw] lg:w-full flex-shrink-0 snap-center rounded-3xl border border-white/10 bg-[#0A0E17] h-[350px] sm:h-[400px] overflow-hidden relative group">
-               <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">EUR / USD - REAL-TIME</span>
-               </div>
-               <TradingViewMiniChart symbol="FX:EURUSD" />
-            </div>
+            {/* Module 2: Whale Surveillance */}
+            <IntelligenceCard
+              icon={<ShieldCheck className="text-emerald-400" />}
+              subtitle="Smart Money"
+              title="Whale Surveillance"
+              delay={0.2}
+            >
+              <div className="space-y-3 mt-4">
+                <p className="text-sm text-slate-400 leading-relaxed mb-6">
+                  Intercept the footprints of institutional capital. Track big wallet movements and margin exhaustion levels instantly.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-4 rounded-2xl bg-[#39FF14]/5 border border-[#39FF14]/10 flex flex-col items-center">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Buy Volume</span>
+                    <span className="text-sm font-black text-[#39FF14] tracking-tight">$42.8M</span>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-red-500/5 border border-red-500/10 flex flex-col items-center">
+                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Liq. Risk</span>
+                    <span className="text-sm font-black text-red-500 tracking-tight">V. LOW</span>
+                  </div>
+                </div>
+                <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/5 mt-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Recent Footprint</span>
+                    <span className="text-[8px] text-slate-600 font-bold tabular-nums">1.4s ago</span>
+                  </div>
+                  <p className="text-[10px] text-white/80 font-medium leading-tight italic">"Large Buy Wall detected at $94,800. Net Flow: +1,240 BTC."</p>
+                </div>
+              </div>
+            </IntelligenceCard>
+
+            {/* Module 3: Execution Hub */}
+            <IntelligenceCard
+              icon={<Zap className="text-amber-400" />}
+              subtitle="Infrastructure"
+              title="Global Authority"
+              delay={0.3}
+            >
+              <div className="h-[260px] relative rounded-2xl overflow-hidden border border-white/5 bg-black/40 group/tv">
+                <div className="absolute top-3 left-3 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[8px] font-black uppercase tracking-widest text-white">BTC / USD LIVE</span>
+                </div>
+                <TradingViewMiniChart symbol="BINANCE:BTCUSDT" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
+                <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                  <span>Low Latency: 0.5ms</span>
+                  <span>Uptime: 99.9%</span>
+                </div>
+              </div>
+            </IntelligenceCard>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── The ROI of Speed (Split Comparison) ─── */}
+      <section className="py-20 sm:py-32 px-4 sm:px-6 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Profit Gap</h2>
+            <p className="text-3xl sm:text-5xl font-black text-white tracking-tighter">Quantifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Pro Edge.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 relative">
+            {/* Center Connector */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-px h-[80%] bg-white/5 hidden lg:block" />
+
+            <ComparisonModule
+              status="retail"
+              title="The Retail Friction"
+              points={[
+                "Manual chart flipping across 10+ tabs",
+                "60-second delay waiting for candle closure",
+                "Analysis paralysis during high volatility",
+                "Silent setups missed while away from desk",
+                "Guessing signal strength with zero backtest data"
+              ]}
+            />
+
+            <ComparisonModule
+              status="pro"
+              title="The Alpha Pro Edge"
+              points={[
+                "500+ symbols scanned autonomously every tick",
+                "Real-time lead alerts before retail closes candles",
+                "Instantly verified confluence win-rate tracking",
+                "Institutional Whale volume & Liquidation flux",
+                "Native Push alerts triggered 24/7 in your pocket"
+              ]}
+            />
           </div>
         </div>
       </section>
@@ -403,7 +511,7 @@ export default function LandingPage() {
       {/* ─── The Alpha Logic Section ─── */}
       <section id="logic" className="py-20 sm:py-32 md:py-40 border-y border-white/5 bg-white/[0.01] px-4 sm:px-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-[400px] sm:w-[800px] h-[400px] sm:h-[800px] bg-[#39FF14]/5 blur-[160px] rounded-full pointer-events-none -mr-20 sm:-mr-40 -mt-20 sm:-mt-40" />
-        
+
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 sm:gap-20 lg:gap-24 items-center">
             <div className="space-y-8 sm:space-y-12">
@@ -414,35 +522,35 @@ export default function LandingPage() {
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Winning Execution.</span>
                 </p>
                 <p className="text-slate-400 text-sm sm:text-base leading-relaxed mt-4 max-w-md">
-                  <strong className="text-slate-200">The Problem:</strong> Information Fragmentation. Most traders lose because they are forced to synthesize 5+ disconnected tools while the market moves instantly.<br/><br/>
+                  <strong className="text-slate-200">The Problem:</strong> Information Fragmentation. Most traders lose because they are forced to synthesize 5+ disconnected tools while the market moves instantly.<br /><br />
                   <strong className="text-[#39FF14]">The Solution:</strong> A Unified Command Center. We merge real-time liquidation flux, institutional indicators, and smart money footprints into a single low-latency decision engine.
                 </p>
               </div>
 
               <div className="space-y-6 sm:space-y-8">
-                <AnalysisItem 
-                  title="59-Second Alpha Edge" 
-                  desc="Don't wait for candles to close. Our Neural Engine calculates 'Approximated Indicators' tick-by-tick, giving you up to a minute of lead-time over standard screeners." 
+                <AnalysisItem
+                  title="59-Second Alpha Lead"
+                  desc="Don't wait for candles to close. The Alpha Logic Engine (ALE-v4) calculates approximated indicators per-tick, giving you the lead before standard retail screeners even refresh."
                 />
-                <AnalysisItem 
-                  title="Signal Win Rate Tracker" 
-                  desc="Stop guessing. Our system backtests and tracks the exact historical win rate of every signal pattern globally, displaying verifiable accuracy ratios to build ultimate conviction." 
+                <AnalysisItem
+                  title="Neural Divergence Detection"
+                  desc="Identifies RSI and MACD divergences before they manifest in price, allowing for high-precision institutional reversal entries."
                 />
-                <AnalysisItem 
-                  title="Viral Signal Narration" 
-                  desc="Every signal generates an institutional-grade, human-readable narrative explaining WHY the setup is valid (e.g., 'RSI oversold + Bullish MACD cross')." 
+                <AnalysisItem
+                  title="Signal Win-Rate Tracker"
+                  desc="Stop guessing. Every signal pattern is indexed and tracked against historical outcomes, providing real-time accuracy ratios for every alert."
                 />
-                <AnalysisItem 
-                  title="One-Click Signal Sharing" 
-                  desc="Instantly capture and share premium setup cards with your community on X, Telegram, or Discord. Elevate your status with our verified, branded signal images." 
+                <AnalysisItem
+                  title="Whale & Liq. Flux Tracking"
+                  desc="Merge technicals with the orderbook. ALE-v4 overlays large trade flow and margin liquidation clusters directly onto the confluence logic."
                 />
-                <AnalysisItem 
-                  title="Heatmap Correlation Matrix" 
-                  desc="Quantify cross-asset dependency. Instantly track how BTC movements systematically correlate with ETH, Gold, and DXY in real-time to hedge sophisticated portfolios." 
+                <AnalysisItem
+                  title="HHI Concentration Alpha"
+                  desc="Monitor the Herfindahl-Hirschman Index for market concentration. Know when the top 5 wallets are shifting the entire asset's momentum."
                 />
-                <AnalysisItem 
-                  title="Adaptive Load Shedding" 
-                  desc="In extreme high-volatility environments, the engine intelligently downshifts generic UI repaints to prioritize raw data fidelity, ensuring zero connection loss." 
+                <AnalysisItem
+                  title="Adaptive Load Shedding"
+                  desc="Engineered for high-volatility resilience. ALE-v4 prioritizes 0.5ms data fidelity during extreme market cascades, ensuring your alerts stay live."
                 />
               </div>
             </div>
@@ -457,109 +565,134 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── Mobile / PWA Experience Section ─── */}
-      <section id="mobile" className="py-20 sm:py-32 md:py-40 px-4 sm:px-6 overflow-hidden">
-        <div className="max-w-7xl mx-auto">
+      {/* ─── Mobile / PWA Experience Section (Tightened Window) ─── */}
+      <section id="mobile" className="py-24 sm:py-32 md:py-48 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-white/[0.01]">
+        {/* Background Decorative Element */}
+        <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#39FF14]/5 blur-[120px] rounded-full pointer-events-none -translate-y-1/2 -ml-32 opacity-30" />
+        
+        <div className="max-w-6xl mx-auto relative z-10">
+          <div className="grid grid-cols-1 lg:grid-cols-2 items-center gap-10 lg:gap-12 xl:gap-16">
+            
+            {/* Column 1: Narrative (Left Side) */}
+            <div className="flex flex-col items-start space-y-6 lg:space-y-8">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="space-y-3"
+              >
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#39FF14]/10 border border-[#39FF14]/20 mb-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                  <span className="text-[10px] font-black uppercase tracking-[0.3em] text-[#39FF14]">Always Informed</span>
+                </div>
+                <h3 className="text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter leading-[0.9] lg:leading-[0.85]">
+                  THE TERMINAL <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">IN YOUR POCKET.</span>
+                </h3>
+              </motion.div>
 
-          {/* Section Header — always centered on mobile */}
-          <div className="text-center mb-10 sm:mb-0 sm:hidden">
-            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-[#39FF14] mb-3">Always Informed</p>
-            <h3 className="text-3xl font-black text-white tracking-tighter leading-[0.95]">
-              The Terminal in<br />Your Pocket.
-            </h3>
-          </div>
+              <p className="text-sm sm:text-base lg:text-lg text-slate-400 font-medium leading-relaxed max-w-lg">
+                Experience institutional-grade logic anywhere. Our high-performance PWA grants full terminal access with biometric security, real-time push confluence alerts, and native install speed on iOS and Android.
+              </p>
 
-          <div className="flex flex-col xl:flex-row items-center gap-10 sm:gap-16 xl:gap-32">
+              {/* High-Performance Feature Grid */}
+              <div className="grid grid-cols-2 gap-4 sm:gap-6 w-full max-w-md pt-2">
+                <MobileFeature icon={<Bell size={18} />} text="Push Alerts" />
+                <MobileFeature icon={<Download size={18} />} text="Install PWA" />
+                <MobileFeature icon={<ShieldCheck size={18} />} text="Biometric" />
+                <MobileFeature icon={<Wifi size={18} />} text="Offline Ready" />
+              </div>
 
-            {/* Highly Polished Mobile Mockup Image */}
-            <div className="flex-shrink-0 w-full flex justify-center order-2 xl:order-1 relative px-4">
-              <motion.div 
+              {/* Action Button */}
+              <div className="pt-4">
+                <Link
+                  href="/register"
+                  className="group inline-flex items-center gap-4 px-8 py-4 sm:py-5 rounded-2xl bg-[#39FF14] text-black font-black uppercase text-[12px] sm:text-[13px] tracking-[0.2em] shadow-[0_20px_60px_rgba(57,255,20,0.3)] hover:shadow-[0_20px_80px_rgba(57,255,20,0.5)] transition-all active:scale-95"
+                >
+                  Authorize Mobile Access
+                  <ArrowUpRight size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Column 2: Mobile Mockup (Right Side) */}
+            <div className="relative flex justify-center lg:justify-end py-10 lg:py-0">
+              <motion.div
                 initial={{ opacity: 0, scale: 0.95 }}
                 whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
-                transition={{ duration: 1, ease: [0.22, 1, 0.36, 1] }}
-                className="relative group"
+                transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+                className="relative group w-full max-w-[300px] sm:max-w-[380px] xl:max-w-[440px]"
               >
-                {/* Dynamic Aura */}
-                <div className="absolute -inset-20 -z-10 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.15),transparent_70%)] blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+                {/* Aura Bloom */}
+                <div className="absolute -inset-20 -z-10 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.1),transparent_75%)] blur-[100px] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
                 
-                <div className="relative w-[280px] sm:w-[320px] md:w-[420px] xl:w-[480px]">
-                  {/* Premium Shadow Casting */}
-                  <div className="absolute inset-x-10 bottom-0 h-10 bg-black/40 blur-[40px] rounded-full scale-x-150 translate-y-20 opacity-50" />
-                  
-                  <Image 
-                    src="/images/rsi-mindscapeanalytics.png" 
-                    alt="RSIQ Pro Mobile Terminal" 
-                    width={1200} 
+                {/* iPhone Frame + App Image */}
+                <div className="relative">
+                  <Image
+                    src="/images/rsi-mindscapeanalytics.png"
+                    alt="RSIQ Pro PWA Native Terminal"
+                    width={1200}
                     height={2400}
-                    className="w-full h-auto drop-shadow-[0_20px_50px_rgba(0,0,0,0.9)] relative z-10"
+                    className="w-full h-auto drop-shadow-[0_40px_100px_rgba(0,0,0,0.6)] relative z-10"
                     priority
                   />
 
-                  {/* Glassmorph Badges */}
+                  {/* The Institutional Blade Tag - Precision Positioning */}
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.8, x: 20 }}
+                    whileInView={{ opacity: 1, scale: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.4 }}
+                    className="absolute -top-4 -right-4 sm:-top-6 sm:-right-8 z-20 pointer-events-none"
+                  >
+                    <div className="relative">
+                      <div className="absolute -inset-1.5 bg-[#39FF14]/30 blur-xl rounded-2xl animate-pulse" />
+                      <div className="relative bg-[#081008]/95 backdrop-blur-3xl border border-[#39FF14]/30 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl overflow-hidden">
+                        {/* Technical Scanline */}
+                        <div className="absolute inset-0 opacity-20 bg-[linear-gradient(rgba(57,255,20,0.1)_1px,transparent_1px)] bg-[size:100%_4px] animate-[scan_6s_linear_infinite]" />
+                        
+                        <div className="relative flex items-center justify-center">
+                          <span className="flex h-3 w-3">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-40"></span>
+                            <span className="relative inline-flex rounded-full h-3 w-3 bg-[#39FF14]"></span>
+                          </span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-black text-white tracking-[0.1em] uppercase leading-none mb-1">Retail Lag</span>
+                          <span className="text-[8px] font-black text-[#39FF14] tracking-[0.1em] uppercase leading-none opacity-80">System Cleared</span>
+                        </div>
+                        <div className="ml-2 pl-3 border-l border-white/10">
+                          <Zap size={16} className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.5)]" />
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+
+                  {/* Badges - Tightened positioning */}
                   <motion.div
                     animate={{ y: [0, -10, 0] }}
-                    transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                    className="absolute -right-6 top-[20%] bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-20 hidden md:block"
+                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute -left-6 top-[25%] hidden xl:flex bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-3xl shadow-2xl z-20 flex-col items-center gap-2"
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/30 flex items-center justify-center">
-                        <Smartphone className="text-[#39FF14]" size={20} />
-                      </div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">PWA Native</span>
+                    <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-[#39FF14] border border-emerald-500/20">
+                      <Smartphone size={20} />
                     </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">PWA Native</span>
                   </motion.div>
 
                   <motion.div
                     animate={{ y: [0, 10, 0] }}
-                    transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-                    className="absolute -left-6 bottom-[25%] bg-slate-900/60 backdrop-blur-2xl border border-white/10 rounded-2xl p-4 shadow-2xl z-20 hidden md:block"
+                    transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                    className="absolute -right-6 bottom-[15%] hidden xl:flex bg-black/60 backdrop-blur-xl border border-white/10 p-4 rounded-3xl shadow-2xl z-20 flex-col items-center gap-2"
                   >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star key={i} size={10} className="text-[#39FF14] fill-[#39FF14]" />
-                        ))}
-                      </div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Institutional</span>
+                    <div className="flex gap-1.5">
+                      {[...Array(5)].map((_, i) => <Star key={i} size={10} className="text-[#39FF14] fill-[#39FF14]" />)}
                     </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">Institutional</span>
                   </motion.div>
                 </div>
               </motion.div>
-            </div>
-
-            {/* Text + Features */}
-            <div className="flex-1 order-1 xl:order-2 space-y-6 sm:space-y-10">
-              {/* Desktop Header — hidden on mobile (shown above) */}
-              <div className="hidden sm:block space-y-3">
-                <h2 className="text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Always Informed</h2>
-                <h3 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter leading-[0.95]">
-                  The Terminal <br /> in Your Pocket.
-                </h3>
-              </div>
-
-              <p className="text-sm sm:text-base lg:text-lg text-slate-500 font-medium leading-relaxed max-w-xl">
-                Experience full terminal functionality on the go. Our PWA allows you to install RSIQ Pro as a native application with lightning-fast performance and no browser overhead.
-              </p>
-
-              {/* Feature Grid */}
-              <div className="grid grid-cols-2 gap-3 sm:gap-5 pt-2 sm:pt-4">
-                <MobileFeature icon={<Bell size={16} />} text="Push Alerts" />
-                <MobileFeature icon={<Download size={16} />} text="Installable PWA" />
-                <MobileFeature icon={<ShieldCheck size={16} />} text="Biometric Ready" />
-                <MobileFeature icon={<Wifi size={16} />} text="Offline Capable" />
-              </div>
-
-              {/* Inline CTA on mobile */}
-              <div className="pt-2 sm:pt-4">
-                <Link 
-                  href="/register"
-                  className="inline-flex items-center gap-3 px-6 sm:px-8 py-3.5 sm:py-4 rounded-2xl bg-[#39FF14] text-black font-black uppercase text-[11px] sm:text-[12px] tracking-[0.2em] shadow-[0_12px_40px_rgba(57,255,20,0.3)] hover:shadow-[0_16px_56px_rgba(57,255,20,0.5)] transition-all active:scale-95"
-                >
-                  Get Mobile Access
-                  <ArrowUpRight size={16} />
-                </Link>
-              </div>
             </div>
           </div>
         </div>
@@ -570,24 +703,24 @@ export default function LandingPage() {
         <div className="absolute top-1/2 left-0 w-[500px] h-[500px] bg-[#39FF14]/5 blur-[140px] rounded-full pointer-events-none -ml-64 opacity-50" />
         <div className="max-w-7xl mx-auto relative">
           <div className="text-center mb-16 sm:mb-24 space-y-4">
-             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Professional Spectrum</h2>
-             <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Engineered for the Top 1%.</p>
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14]">The Professional Spectrum</h2>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Engineered for the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Top 1%.</span></p>
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-            <PersonaCard 
+            <PersonaCard
               icon={<Zap className="text-[#39FF14]" />}
               role="The Scalper"
               needs="Absolute speed. Whale alerts. Zero-latency liquidation tracking for micro-entries."
               impact="Captures alpha in the milliseconds before the retail crowd reacts."
             />
-            <PersonaCard 
+            <PersonaCard
               icon={<ShieldCheck className="text-emerald-400" />}
               role="The Fund Manager"
               needs="HHI Index tracking. Neural risk matrix. Diversification armor for high-capital portfolios."
               impact="Protects enterprise assets during volatility cascades."
             />
-            <PersonaCard 
+            <PersonaCard
               icon={<MessageCircle className="text-blue-400" />}
               role="The Elite Provider"
               needs="Signal Narration. Instant X/Discord generation. High-aesthetic dashboards for streams."
@@ -602,39 +735,39 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-20 md:mb-24 space-y-3 sm:space-y-4">
             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-[#39FF14]">RSI & MACD Crypto Scanner</h2>
-            <h3 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Everything for Professional Trading.</h3>
+            <h3 className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Everything for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Professional Trading.</span></h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
-            <FeatureCard 
-              icon={<Zap />} 
-              title="Global Market Reach" 
-              desc="Simultaneously track 500+ active symbols including Top Crypto pairs, premier Forex pairs, and precious metals like Gold (XAU) and Silver (XAG)." 
+            <FeatureCard
+              icon={<Zap />}
+              title="Global Market Reach"
+              desc="Simultaneously track 500+ active symbols including Top Crypto pairs, premier Forex pairs, and precious metals like Gold (XAU) and Silver (XAG)."
             />
-            <FeatureCard 
-              icon={<BarChart3 />} 
-              title="Confluence Strategy" 
-              desc="Never trade a single indicator again. Our engine combines 5+ technical signals for a unified decision score." 
+            <FeatureCard
+              icon={<BarChart3 />}
+              title="Confluence Strategy"
+              desc="Never trade a single indicator again. Our engine combines 5+ technical signals for a unified decision score."
             />
-            <FeatureCard 
-              icon={<Bell />} 
-              title="Real-Time Alerts" 
-              desc="Get instant push notifications and desktop sound alerts the second a setup aligns with your exact custom parameters." 
+            <FeatureCard
+              icon={<Bell />}
+              title="Real-Time Alerts"
+              desc="Get instant push notifications and desktop sound alerts the second a setup aligns with your exact custom parameters."
             />
-            <FeatureCard 
-              icon={<Cpu />} 
-              title="Deep Customization" 
-              desc="Input your custom RSI period, define unique thresholds, and isolate volatile markets to match your exact trading style." 
+            <FeatureCard
+              icon={<Cpu />}
+              title="Deep Customization"
+              desc="Input your custom RSI period, define unique thresholds, and isolate volatile markets to match your exact trading style."
             />
-            <FeatureCard 
-              icon={<LineChart />} 
-              title="MACD + EMA Integration" 
-              desc="Full trend analysis built-in. EMA Golden/Death crosses and MACD histograms integrated into the main scanner." 
+            <FeatureCard
+              icon={<LineChart />}
+              title="MACD + EMA Integration"
+              desc="Full trend analysis built-in. EMA Golden/Death crosses and MACD histograms integrated into the main scanner."
             />
-            <FeatureCard 
-              icon={<Layers />} 
-              title="Multi-Timeframe Sync" 
-              desc="Track 1m, 5m, 15m, and 1h intervals simultaneously. Align your micro entries with higher timeframe macro dominance." 
+            <FeatureCard
+              icon={<Layers />}
+              title="Multi-Timeframe Sync"
+              desc="Track 1m, 5m, 15m, and 1h intervals simultaneously. Align your micro entries with higher timeframe macro dominance."
             />
           </div>
         </div>
@@ -645,25 +778,25 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
             <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-amber-400">Future Roadmap</h2>
-            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Expanding the Alpha Edge.</p>
+            <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">Expanding the <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Alpha Edge.</span></p>
             <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-4 font-medium">We are continuously pushing the boundaries of retail trading technology. Here is what is deploying next to your terminal.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
-            <FeatureCard 
-              icon={<Cpu />} 
-              title="Autonomous Webhooks" 
-              desc="Connect RSIQ Pro directly to your broker or algorithmic trading bots via customizable JSON webhook triggers. Completely automate your execution." 
+            <FeatureCard
+              icon={<Cpu />}
+              title="Autonomous Webhooks"
+              desc="Connect RSIQ Pro directly to your broker or algorithmic trading bots via customizable JSON webhook triggers. Completely automate your execution."
             />
-            <FeatureCard 
-              icon={<LineChart />} 
-              title="Advanced Flow & Options Insights" 
-              desc="Incorporate dark pool prints, options delta exposure, and institutional orderbook flow directly into the scanning confluence logic." 
+            <FeatureCard
+              icon={<LineChart />}
+              title="Advanced Flow & Options Insights"
+              desc="Incorporate dark pool prints, options delta exposure, and institutional orderbook flow directly into the scanning confluence logic."
             />
-            <FeatureCard 
-              icon={<Handshake />} 
-              title="Alpha Syndicates" 
-              desc="Share your customized screening layouts and trigger conditions with your community through private generated share-links." 
+            <FeatureCard
+              icon={<Handshake />}
+              title="Alpha Syndicates"
+              desc="Share your customized screening layouts and trigger conditions with your community through private generated share-links."
             />
           </div>
         </div>
@@ -674,7 +807,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 sm:mb-16">
             <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.45em] text-[#39FF14]">Mindscape Services</p>
-            <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">Build More Than A Scanner</h2>
+            <h2 className="mt-4 text-3xl sm:text-5xl font-black text-white tracking-tight">Build <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">More Than A Scanner</span></h2>
             <p className="mt-4 text-sm sm:text-base text-slate-400 max-w-3xl mx-auto">
               Turn RSIQ Pro into your growth engine with productized AI automation, SaaS engineering, and managed infrastructure from Mindscape Analytics.
             </p>
@@ -709,12 +842,62 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ─── The Subscription Advantage (Pricing) ─── */}
+      <section id="pricing" className="py-24 sm:py-32 md:py-48 px-4 sm:px-6 relative overflow-hidden bg-white/[0.01]">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#39FF14]/[0.02] blur-[160px] rounded-full pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="text-center mb-16 sm:mb-24 space-y-4">
+            <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.6em] text-[#39FF14]">The Subscription Edge</h2>
+            <p className="text-4xl sm:text-6xl font-black text-white tracking-tighter leading-[0.9]">Select Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Terminal Grade.</span></p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 max-w-6xl mx-auto">
+            <PlanCard
+              tier="Elite Alpha Trial"
+              price="Free"
+              features={[
+                "14-Day Full Feature Access",
+                "Real-Time Mobile Push alerts",
+                "Advanced RSI & Whale tracking",
+                "Unlimited Symbol Monitoring",
+                "Institutional sound synthesis"
+              ]}
+            />
+            <PlanCard
+              tier="Monthly Alpha Pro"
+              price="$20"
+              features={[
+                "500+ Registered Live Symbols",
+                "0.5ms WebSocket lead-time",
+                "Native PWA Mobile Notifications",
+                "Sawtooth Audio Alerts",
+                "Alpha Logic Engine (ALE-v4) access"
+              ]}
+            />
+            <PlanCard
+              highlight
+              tier="Annual Alpha Pro"
+              price="$200"
+              features={[
+                "All Monthly Pro Capabilities",
+                "Real-Time Mobile Push alerts",
+                "2 Months Free (Yearly discount)",
+                "Priority Technical Concierge",
+                "Early access to ALE-v5 webhooks",
+                "Lifetime Logic Hardening updates"
+              ]}
+            />
+          </div>
+        </div>
+      </section>
+
       {/* ─── About Section ─── */}
       <section id="about" className="py-20 sm:py-28 md:py-32 px-4 sm:px-6 border-t border-white/5 bg-white/[0.01]">
         <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8 sm:gap-12 items-stretch">
           <div className="rounded-3xl border border-white/10 bg-[#0a0f1a] p-7 sm:p-10">
             <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">About Mindscape</p>
-            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Systems-First Engineering Partner</h3>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Systems-First <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Engineering Partner</span></h3>
             <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed">
               Mindscape Analytics builds AI systems that replace manual work. From sales automation and voice AI to full SaaS platforms and cloud operations, the team focuses on measurable business outcomes, not feature clutter.
             </p>
@@ -727,7 +910,7 @@ export default function LandingPage() {
 
           <div className="rounded-3xl border border-[#39FF14]/30 bg-[#101a12] p-7 sm:p-10">
             <p className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] text-[#39FF14]">Lead Actions</p>
-            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Turn Interest Into Projects</h3>
+            <h3 className="mt-4 text-3xl sm:text-4xl font-black text-white tracking-tight">Turn Interest <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Into Projects</span></h3>
             <p className="mt-5 text-sm sm:text-base text-slate-300 leading-relaxed">
               Running RSIQ Pro and need custom workflows, client automation, or white-label SaaS delivery? Use direct Mindscape channels below to open a strategy call or request a proposal.
             </p>
@@ -775,26 +958,26 @@ export default function LandingPage() {
       {/* ─── Affiliates & Collaboration ─── */}
       <section id="affiliate" className="py-20 sm:py-32 bg-gradient-to-b from-[#05080F] to-[#0A0E17] border-t border-white/5 relative overflow-hidden px-4 sm:px-6">
         <div className="absolute top-1/2 left-1/2 w-full max-w-3xl h-[400px] bg-[#39FF14]/5 blur-[120px] rounded-full pointer-events-none transform -translate-x-1/2 -translate-y-1/2" />
-        
+
         <div className="max-w-5xl mx-auto relative z-10">
           <div className="p-8 sm:p-16 rounded-[4rem] bg-white/[0.02] border border-white/5 shadow-2xl flex flex-col items-center text-center group">
             <div className="w-16 h-16 rounded-3xl bg-white/5 flex items-center justify-center text-white mb-8 border border-white/10 shadow-lg group-hover:scale-110 group-hover:border-[#39FF14]/30 group-hover:text-[#39FF14] transition-all duration-500">
               <Handshake size={32} />
             </div>
             <h2 className="text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14] mb-4">Strategic Partnerships</h2>
-            <h3 className="text-4xl sm:text-6xl font-black text-white tracking-tighter mb-6">Open for Collaboration.</h3>
+            <h3 className="text-4xl sm:text-6xl font-black text-white tracking-tighter mb-6">Open for <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Collaboration.</span></h3>
             <p className="text-slate-400 text-sm sm:text-lg max-w-2xl mx-auto mb-10 sm:mb-14 leading-relaxed font-medium">
               We are actively looking for elite traders, fund managers, and community leaders to join our exclusive affiliate network. Bring institutional-grade tools to your audience and earn high-tier revenue share.
             </p>
-            
+
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-              <a 
+              <a
                 href="mailto:partners@mindscapeanalytics.com"
                 className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl bg-white text-black font-black uppercase tracking-[0.2em] hover:bg-slate-200 transition-all text-xs text-center shadow-xl hover:scale-105"
               >
                 Apply as Affiliate
               </a>
-              <a 
+              <a
                 href="mailto:contact@mindscapeanalytics.com"
                 className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl border border-white/20 text-white font-black uppercase tracking-[0.2em] hover:bg-white/5 transition-all text-xs text-center hover:scale-105"
               >
@@ -808,12 +991,12 @@ export default function LandingPage() {
       {/* ─── Final CTA ─── */}
       <section className="py-28 sm:py-40 md:py-60 px-4 sm:px-6 relative overflow-hidden bg-gradient-to-b from-transparent to-[#0A0E17]">
         <div className="absolute inset-0 bg-[#39FF14]/[0.02] [mask-image:radial-gradient(circle_at_center,black,transparent)] pointer-events-none" />
-        
+
         <div className="max-w-4xl mx-auto text-center space-y-10 sm:space-y-16 relative z-10">
-          <h2 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black text-white tracking-tighter leading-[0.88] sm:leading-[0.85]">READY FOR<br className="sm:hidden" /> THE ALPHA?</h2>
+          <h2 className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-black text-white tracking-tighter leading-[0.88] sm:leading-[0.85]">READY FOR<br className="sm:hidden" /> <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">THE ALPHA?</span></h2>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 sm:gap-8 pt-4 sm:pt-10 px-4 sm:px-0">
-            <Link 
-              href="/register" 
+            <Link
+              href="/register"
               className="w-full sm:w-auto px-10 sm:px-16 py-5 sm:py-8 rounded-2xl sm:rounded-3xl bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] sm:tracking-[0.3em] shadow-[0_20px_60px_rgba(57,255,20,0.4)] hover:shadow-[0_40px_140px_rgba(57,255,20,0.6)] transition-all text-sm group text-center"
             >
               Create Your Terminal
@@ -859,7 +1042,7 @@ export default function LandingPage() {
 
 function PersonaCard({ icon, role, needs, impact }: { icon: React.ReactNode; role: string; needs: string; impact: string }) {
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -5 }}
       whileTap={{ scale: 0.98 }}
       className="p-6 sm:p-10 rounded-[28px] sm:rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col"
@@ -892,12 +1075,12 @@ function AnalysisItem({ title, desc }: { title: string; desc: string }) {
 
 function StatBox({ value, label, highlight = false }: { value: string; label: string; highlight?: boolean }) {
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ scale: 1.05 }}
       className={cn(
         "p-5 sm:p-7 md:p-10 rounded-3xl sm:rounded-[40px] border flex flex-col items-center justify-center text-center gap-1.5 sm:gap-2",
-        highlight 
-          ? "bg-[#39FF14] border-[#39FF14] text-black shadow-2xl shadow-[#39FF14]/30" 
+        highlight
+          ? "bg-[#39FF14] border-[#39FF14] text-black shadow-2xl shadow-[#39FF14]/30"
           : "bg-white/[0.03] border-white/5 text-white"
       )}
     >
@@ -922,7 +1105,7 @@ function MobileFeature({ icon, text }: { icon: React.ReactNode; text: string }) 
 
 function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
-    <motion.div 
+    <motion.div
       whileHover={{ y: -8 }}
       className="p-6 sm:p-8 md:p-10 rounded-3xl sm:rounded-[40px] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all group relative overflow-hidden"
     >
@@ -999,5 +1182,156 @@ function TradingViewMiniChart({ symbol }: { symbol: string }) {
     <div className="tradingview-widget-container h-[calc(100%-80px)] w-full opacity-60 group-hover:opacity-100 transition-opacity mt-14 pointer-events-none relative z-0" ref={container}>
       <div className="tradingview-widget-container__widget h-full w-full"></div>
     </div>
+  );
+}
+
+function IntelligenceCard({ icon, title, subtitle, children, delay = 0 }: { icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay }}
+      className="group relative p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all duration-500 overflow-hidden flex flex-col h-full"
+    >
+      <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.1] group-hover:scale-125 transition-all duration-700">
+        {React.cloneElement(icon as React.ReactElement<any>, { size: 120 })}
+      </div>
+
+      <div className="flex items-center gap-4 mb-8">
+        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-[#39FF14] group-hover:border-[#39FF14]/40 transition-all">
+          {icon}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#39FF14]">{subtitle}</span>
+          <h3 className="text-xl font-black text-white tracking-tight">{title}</h3>
+        </div>
+      </div>
+
+      <div className="flex-1 relative z-10">
+        {children}
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+          <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Engine Stream</span>
+        </div>
+        <ArrowUpRight size={14} className="text-slate-600 group-hover:text-[#39FF14] transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+      </div>
+    </motion.div>
+  );
+}
+
+function SignalRibbon({ label, value, status }: { label: string; value: string; status: 'bullish' | 'bearish' | 'neutral' }) {
+  return (
+    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-white/[0.03] border border-white/5 hover:bg-white/[0.05] transition-all group/ribbon">
+      <div className="flex items-center gap-3">
+        <div className={cn(
+          "w-1.5 h-1.5 rounded-full",
+          status === 'bullish' ? "bg-[#39FF14]" : status === 'bearish' ? "bg-red-500" : "bg-slate-500"
+        )} />
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/ribbon:text-white transition-colors">{label}</span>
+      </div>
+      <span className={cn(
+        "text-[11px] font-black tabular-nums",
+        status === 'bullish' ? "text-[#39FF14]" : status === 'bearish' ? "text-red-500" : "text-white"
+      )}>{value}</span>
+    </div>
+  );
+}
+function ComparisonModule({ title, points, status }: { title: string; points: string[]; status: 'retail' | 'pro' }) {
+  return (
+    <div className={cn(
+      "p-8 rounded-[2.5rem] border flex flex-col h-full transition-all duration-500",
+      status === 'pro'
+        ? "bg-[#39FF14]/[0.01] border-[#39FF14]/20 shadow-[0_0_80px_rgba(57,255,20,0.05)]"
+        : "bg-white/[0.01] border-white/5 opacity-60 grayscale hover:grayscale-0 hover:opacity-100"
+    )}>
+      <div className="flex items-center gap-4 mb-8">
+        <div className={cn(
+          "w-12 h-12 rounded-2xl flex items-center justify-center border",
+          status === 'pro' ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/10 text-slate-500"
+        )}>
+          {status === 'pro' ? <Zap size={20} /> : <Lock size={20} />}
+        </div>
+        <h4 className="text-xl font-black text-white tracking-tight">{title}</h4>
+      </div>
+
+      <div className="space-y-4 flex-1">
+        {points.map((p, i) => (
+          <div key={i} className="flex items-start gap-3 group/point">
+            <div className={cn(
+              "mt-1.5 w-1.5 h-1.5 rounded-full",
+              status === 'pro' ? "bg-[#39FF14]" : "bg-slate-700"
+            )} />
+            <p className="text-sm font-medium text-slate-400 group-hover/point:text-slate-200 transition-colors leading-relaxed">
+              {p}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8 pt-6 border-t border-white/5">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+          Result: <span className={status === 'pro' ? "text-[#39FF14]" : "text-red-500"}>
+            {status === 'pro' ? "Alpha Captured" : "Retail Friction"}
+          </span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PlanCard({ tier, price, features, highlight = false }: { tier: string; price: string; features: string[]; highlight?: boolean }) {
+  return (
+    <motion.div
+      whileHover={{ y: -10 }}
+      className={cn(
+        "p-10 rounded-[3rem] border flex flex-col relative overflow-hidden transition-all duration-700 h-full",
+        highlight
+          ? "bg-[#39FF14]/[0.02] border-[#39FF14]/30 shadow-[0_40px_100px_rgba(57,255,20,0.1)]"
+          : "bg-white/[0.02] border-white/5"
+      )}
+    >
+      {highlight && (
+        <div className="absolute top-0 right-0 p-6">
+          <span className="px-3 py-1 rounded-full bg-[#39FF14] text-black text-[9px] font-black uppercase tracking-widest shadow-xl">Best Value</span>
+        </div>
+      )}
+
+      <div className="mb-8">
+        <h4 className={cn("text-[10px] font-black uppercase tracking-[0.4em] mb-2", highlight ? "text-[#39FF14]" : "text-slate-500")}>
+          {tier}
+        </h4>
+        <div className="flex items-baseline gap-1">
+          <span className="text-5xl font-black text-white tracking-tighter">{price}</span>
+          <span className="text-sm font-bold text-slate-500">
+            {price === "Free" ? "" : price === "$200" ? "/yr" : "/mo"}
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5 flex-1 pt-4">
+        {features.map((f, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className={cn("w-1 h-1 rounded-full", highlight ? "bg-[#39FF14]" : "bg-slate-700")} />
+            <span className="text-sm font-medium text-slate-400">{f}</span>
+          </div>
+        ))}
+      </div>
+
+      <Link
+        href="/register"
+        className={cn(
+          "mt-12 w-full py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all text-center",
+          highlight
+            ? "bg-[#39FF14] text-black shadow-xl shadow-[#39FF14]/20 hover:scale-[1.02]"
+            : "bg-white/5 text-white hover:bg-white/10"
+        )}
+      >
+        Select {tier} Plan
+      </Link>
+    </motion.div>
   );
 }
