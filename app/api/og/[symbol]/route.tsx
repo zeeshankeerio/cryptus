@@ -3,7 +3,7 @@ import { getScreenerData } from '../../../../lib/screener-service';
 import { getSymbolAlias } from '../../../../lib/symbol-utils';
 import type { ScreenerEntry } from '../../../../lib/types';
 
-export const runtime = 'edge';
+export const runtime = 'nodejs';
 
 export async function GET(
   request: Request,
