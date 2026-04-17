@@ -16,6 +16,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import { computeAllSmartMoney } from '@/lib/smart-money';
+import { notificationEngine } from '@/lib/notification-engine';
 import type {
   FundingRateData,
   LiquidationEvent,
@@ -117,19 +118,21 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
             return next.length > 100 ? next.slice(-100) : next;
           });
 
-          // Toast for large liquidations ($50K+)
-          if (liq.valueUsd >= 50000 && document.visibilityState === 'visible') {
+          // Institutional Notification for large liquidations ($50K+)
+          if (liq.valueUsd >= 50000) {
             const sizeStr = liq.valueUsd >= 1000000
               ? `$${(liq.valueUsd / 1000000).toFixed(1)}M`
               : `$${Math.round(liq.valueUsd / 1000)}K`;
-            const isLong = liq.side === 'Sell'; // Sell-side = long liquidated
-            toast[isLong ? 'error' : 'success'](
-              `💀 ${isLong ? 'LONG' : 'SHORT'} Liquidated - ${getSymbolAlias(liq.symbol)}`,
-              {
-                description: `${sizeStr} @ $${formatPrice(liq.price)} [${liq.exchange}]`,
-                duration: 4000,
-              }
-            );
+            const isLong = liq.side === 'Sell';
+            
+            notificationEngine.notify({
+              title: `💀 ${isLong ? 'LONG' : 'SHORT'} Liquidated - ${getSymbolAlias(liq.symbol)}`,
+              body: `${sizeStr} @ $${formatPrice(liq.price)} [${liq.exchange}]`,
+              symbol: liq.symbol,
+              exchange: liq.exchange,
+              priority: liq.valueUsd >= 500000 ? 'critical' : 'high',
+              type: 'liquidation'
+            });
           }
           break;
         }
@@ -141,19 +144,21 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
             return next.length > 50 ? next.slice(-50) : next;
           });
 
-          // Toast for significant whale trades ($250K+)
-          if (whale.valueUsd >= 250000 && document.visibilityState === 'visible') {
+          // Institutional Notification for significant whale trades ($250K+)
+          if (whale.valueUsd >= 250000) {
             const sizeStr = whale.valueUsd >= 1000000
               ? `$${(whale.valueUsd / 1000000).toFixed(1)}M`
               : `$${Math.round(whale.valueUsd / 1000)}K`;
             const isBuy = whale.side === 'buy';
-            toast[isBuy ? 'success' : 'error'](
-              `🐋 WHALE ${isBuy ? 'BUY' : 'SELL'} - ${getSymbolAlias(whale.symbol)}`,
-              {
-                description: `${sizeStr} @ $${formatPrice(whale.price)} [${whale.exchange}]`,
-                duration: 5000,
-              }
-            );
+            
+            notificationEngine.notify({
+              title: `🐋 WHALE ${isBuy ? 'BUY' : 'SELL'} - ${getSymbolAlias(whale.symbol)}`,
+              body: `${sizeStr} @ $${formatPrice(whale.price)} [${whale.exchange}]`,
+              symbol: whale.symbol,
+              exchange: whale.exchange,
+              priority: whale.valueUsd >= 1000000 ? 'critical' : 'high',
+              type: 'whale'
+            });
           }
           break;
         }

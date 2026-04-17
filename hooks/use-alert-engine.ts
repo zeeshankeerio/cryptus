@@ -8,6 +8,7 @@ import { formatPrice } from '@/lib/utils';
 import { alertCoordinator } from '@/lib/alert-coordinator-client';
 import { shouldSuppressAlert, getAlertBehavior, type AlertPriority } from '@/lib/alert-priority';
 import { recordSignal, evaluateOutcomes, getGlobalWinRate } from '@/lib/signal-tracker';
+import { notificationEngine } from '@/lib/notification-engine';
 
 // ── Wake Lock for mobile alert reliability (GAP-E4) ──
 let wakeLock: WakeLockSentinel | null = null;
@@ -696,30 +697,21 @@ export function useAlertEngine(
                 lastTriggered.current.set(alertKey, now);
                 alertCoordinator.setCooldown(coordinatorKey);
                 const val = timeframes.find(t => t.label === label)?.val ?? 0;
-                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
-                const zoneLabel = currentZone === 'OVERSOLD' ? 'BUY' : 'SELL';
                 const isGlobalAlert = isGlobalHit && !hasManualAlert;
+
+                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
                 const priceStr = formatPrice(live.price);
 
-                // Task 8.2/8.6: Use priority-based behavior for toast duration
-                const behavior = getAlertBehavior(alertPriority);
+                notificationEngine.notify({
+                  title: `${getSymbolAlias(symbol)} ${label} RSI ${currentZone}${isGlobalAlert ? ' [Global]' : ''}`,
+                  body: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]`,
+                  symbol,
+                  exchange: getExchange(),
+                  priority: alertPriority,
+                  type: 'rsi'
+                });
 
-                if (document.visibilityState === 'visible') {
-                  toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](
-                    `${getSymbolAlias(symbol)} ${label} RSI ${currentZone}${isGlobalAlert ? ' [Global]' : ''}`,
-                    { 
-                      duration: behavior.toastDuration, 
-                      description: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]` 
-                    }
-                  );
-                }
-                playAlertSoundRef.current(false, alertPriority);
                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
-                
-                triggerNativeRef.current(
-                  `${getSymbolAlias(symbol)} ${zoneLabel}${isGlobalAlert ? ' (Global)' : ''}`,
-                  `[${formattedExchange}] ${label} RSI reached ${(val as number).toFixed(1)} @ $${priceStr}`
-                );
               }
             }
             zoneState.current.set(stateKey, currentZone);

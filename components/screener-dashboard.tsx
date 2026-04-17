@@ -9,7 +9,7 @@ import {
   LayoutGrid, LayoutList, ChevronUp, ChevronDown, Clock,
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
   LogOut, User as UserIcon, Minus, Plus, AlertTriangle,
-  ArrowDownCircle, MinusCircle, ArrowUpCircle,
+  ArrowDownCircle, MinusCircle, ArrowUpCircle, Smartphone,
   Link as LinkIcon, Shield, Menu, X, SortAsc
 } from 'lucide-react';
 import { useSession, signOut } from '@/lib/auth-client';
@@ -35,6 +35,7 @@ import { generateSignalNarration } from '@/lib/signal-narration';
 import type { AssetClass } from '@/lib/asset-classes';
 import { useMarketData } from '@/hooks/use-market-data';
 import { toast } from 'sonner';
+import { notificationEngine } from '@/lib/notification-engine';
 
 // ─── Formatting helpers ────────────────────────────────────────
 
@@ -4493,6 +4494,7 @@ export default function ScreenerDashboard() {
             setGlobalUseDivergence={setGlobalUseDivergence}
             globalUseMomentum={globalUseMomentum}
             setGlobalUseMomentum={setGlobalUseMomentum}
+            isConnected={isConnected}
           />
         )}
       </AnimatePresence>
@@ -5342,7 +5344,8 @@ function GlobalSettingsModal({
   globalUseDivergence,
   setGlobalUseDivergence,
   globalUseMomentum,
-  setGlobalUseMomentum
+  setGlobalUseMomentum,
+  isConnected
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
@@ -5399,6 +5402,7 @@ function GlobalSettingsModal({
   setGlobalUseDivergence: (v: boolean) => void;
   globalUseMomentum: boolean;
   setGlobalUseMomentum: (v: boolean) => void;
+  isConnected: boolean;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
 
@@ -5686,6 +5690,60 @@ function GlobalSettingsModal({
                       ? "Tags always use industry standard 70/30 levels."
                       : "Tags respect per-coin custom thresholds or global extreme settings."}
                   </p>
+                </div>
+              </div>
+
+              {/* ── Institutional Notification Health ── */}
+              <div className="p-5 rounded-3xl border border-[#39FF14]/20 bg-[#39FF14]/[0.02] shadow-[0_0_50px_-15px_rgba(57,255,20,0.1)] mb-6 group/health">
+                <div className="flex flex-col mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#39FF14] flex items-center gap-2">
+                      <ShieldCheck size={14} className="animate-pulse" />
+                      Notification Health
+                    </span>
+                    <span className={cn("text-[8px] font-black px-2 py-0.5 rounded-full uppercase", isConnected ? "bg-[#39FF14]/10 text-[#39FF14]" : "bg-rose-500/10 text-rose-500")}>
+                      {isConnected ? "Engine Ready" : "Unstable"}
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase leading-relaxed">
+                    Verify background synchronization, sound delivery, and institutional vibration patterns for mobile.
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      notificationEngine.notify({
+                        title: "🔔 TEST SIGNAL: Success",
+                        body: "Notification engine is synchronized. Sound and vibrations verified.",
+                        symbol: "TEST",
+                        priority: "high",
+                        type: "test"
+                      });
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-[#39FF14]/40 hover:bg-[#39FF14]/5 transition-all group/btn"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#39FF14]/10 flex items-center justify-center text-[#39FF14] group-hover/btn:scale-110 transition-transform">
+                      <Bell size={16} />
+                    </div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/btn:text-[#39FF14]">Test Alert</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if ('Notification' in window) {
+                        Notification.requestPermission().then(p => {
+                          if (p === 'granted') toast.success('Push Permissions Granted');
+                        });
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-400/40 hover:bg-blue-400/5 transition-all group/perm"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-blue-400/10 flex items-center justify-center text-blue-400 group-hover/perm:scale-110 transition-transform">
+                      <Smartphone size={16} />
+                    </div>
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 group-hover/perm:text-blue-400">Grant Permission</span>
+                  </button>
                 </div>
               </div>
 

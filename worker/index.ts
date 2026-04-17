@@ -141,7 +141,7 @@ const showNativeNotification = (payload: any) => {
   const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
   const priority = payload.priority || 'medium';
 
-  // 2026 Institutional Urgency: Adjust behavior based on alert priority
+  // 2026 Institutional Urgency: Adjust behavior based on alert priority and type
   const options = {
     body,
     icon: icon || '/logo/rsiq-pro-icon.png',
@@ -157,14 +157,16 @@ const showNativeNotification = (payload: any) => {
   };
 
   // Aggressive vibration for high-stakes signals
-  if (priority === 'critical') {
-    options.vibrate = [500, 100, 500, 100, 500, 100, 500]; // Sustained emergency pulse
+  if (payload.type === 'whale') {
+    options.vibrate = [500, 100, 500]; // 🐋 Double long whale pulse
+  } else if (payload.type === 'liquidation') {
+    options.vibrate = [100, 50, 100, 50, 100, 50, 100]; // 💀 Rapid bone-rattle
+  } else if (priority === 'critical') {
+    options.vibrate = [500, 100, 500, 100, 500]; 
   } else if (priority === 'high') {
-    options.vibrate = [200, 100, 200, 100, 400]; // Triple distinct pulse
-  } else if (priority === 'medium') {
-    options.vibrate = [200, 100, 200]; // Double pulse
+    options.vibrate = [200, 100, 200];
   } else {
-    options.vibrate = [100]; // Single subtle tick for low priority
+    options.vibrate = [100];
   }
 
   return self.registration.showNotification(title, options);
