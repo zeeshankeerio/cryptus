@@ -69,8 +69,8 @@ export function PWAServiceWorkerRegistration() {
           if (!refreshing) {
             refreshing = true;
             console.log('[PWA] New service worker activated, reloading page');
-            // Optionally reload only on critical updates
-            // window.location.reload();
+            // Force reload to apply the new Service Worker logic immediately
+            window.location.reload();
           }
         });
       } catch (error) {
