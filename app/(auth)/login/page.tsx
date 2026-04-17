@@ -26,13 +26,24 @@ export default function LoginPage() {
   const { data: session, isPending: isSessionLoading } = useSession();
 
   // ── Auto-Redirect & Prefetch ──
+  // Institutional Guard: prevents the "Synchronizing..." stuck state by ensuring
+  // the router actually moves the user if a session is present.
   React.useEffect(() => {
     if (isSessionLoading) return;
-    router.prefetch("/terminal");
-
+    
     if (session) {
       setSuccess("Secure connection detected. Synchronizing...");
-      router.push("/terminal");
+      
+      // Prefetch terminal to speed up transition
+      router.prefetch("/terminal");
+      
+      // Use a small delay to allow the "Synchronizing" message to be seen 
+      // and ensure the browser has a moment to settle before the heavy terminal load.
+      const timer = setTimeout(() => {
+        router.push("/terminal");
+      }, 800);
+      
+      return () => clearTimeout(timer);
     }
   }, [session, isSessionLoading, router]);
 

@@ -33,11 +33,13 @@ export async function middleware(request: NextRequest) {
     publicPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   // ─── Phase 1: Cookie & Cache Check ───
-  // Check for session cookies with support for all common variations
-  const hasSessionCookie =
-    request.cookies.has("better-auth.session_token") ||
-    request.cookies.has("__Secure-better-auth.session_token") ||
-    request.cookies.has("__secure-better-auth.session_token");
+  // Check for session cookies with support for all common variations (Local, Vercel, Production)
+  const sessionToken = 
+    request.cookies.get("better-auth.session_token")?.value || 
+    request.cookies.get("__Secure-better-auth.session_token")?.value ||
+    request.cookies.get("__secure-better-auth.session_token")?.value;
+
+  const hasSessionCookie = Boolean(sessionToken);
 
   // Fast path: no cookie + not a public route → redirect to login
   if (!hasSessionCookie && !isPublicRoute) {
@@ -47,46 +49,50 @@ export async function middleware(request: NextRequest) {
   }
 
   // ─── Phase 2: Burst Cache & Validation ───
-  // Memory-resident burst cache to deduplicate session calls within high-concurrency windows.
   let session: Session | null = null;
-  const sessionToken = request.cookies.get("better-auth.session_token")?.value || 
-                       request.cookies.get("__Secure-better-auth.session_token")?.value ||
-                       "anon";
+  const cacheToken = sessionToken || "anon";
 
-  // 2026 Optimization: Skip heavy session validation for public routes.
-  // This prevents DB/Internal-API lag from blocking the landing page or login page.
-  if (hasSessionCookie && !isPublicRoute) {
-    const cached = sessionCache.get(sessionToken);
+  // 2026 Optimization: Skip heavy session validation for public routes if not necessary.
+  // We only validate if there's a cookie OR if it's a protected route.
+  if (hasSessionCookie || !isPublicRoute) {
+    const cached = sessionCache.get(cacheToken);
     const now = Date.now();
+    
     if (cached && now < cached.expires) {
       session = cached.data;
-    } else {
+    } else if (hasSessionCookie) {
       try {
-        const baseURL = `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+        const baseURL = request.nextUrl.origin;
         
+        // Use a more resilient session fetch with proper timeout and error handling
         const sessionResult = await betterFetch<Session>(
           "/api/auth/get-session",
           {
             baseURL,
             headers: {
               cookie: request.headers.get("cookie") || "",
-              "cache-control": "no-store",
+              "x-rsiq-middleware": "1", // Internal marker
             },
-            timeout: 10000, // 10s timeout for local dev resilience
+            timeout: 8000, // 8s timeout
           },
         );
 
-        if (sessionResult.error?.status === 429) {
-          console.warn("[middleware] 429 detected. Passing through.");
-          return NextResponse.next();
-        }
-
         if (sessionResult.error) {
-          console.warn("[middleware] Session fetch rejected:", sessionResult.error.statusText);
+          if (sessionResult.error.status === 401) {
+             // Explicitly unauthenticated
+             session = null;
+          } else if (sessionResult.error.status === 429) {
+            console.warn("[middleware] Rate limited by Auth API. Passing through.");
+            return NextResponse.next();
+          } else {
+            console.warn(`[middleware] Session fetch error (${sessionResult.error.status}):`, sessionResult.error.statusText);
+          }
+        } else {
+          session = sessionResult.data;
         }
         
-        session = sessionResult.data;
-        sessionCache.set(sessionToken, { data: session, expires: now + 5000 });
+        // Cache the result (even null for 2s to prevent hammering on invalid cookies)
+        sessionCache.set(cacheToken, { data: session, expires: now + (session ? 5000 : 2000) });
       } catch (e) {
         const errorMessage = e instanceof Error ? e.message : String(e);
         const isTimeout = errorMessage.includes("aborted") || errorMessage.includes("timeout");
@@ -96,11 +102,9 @@ export async function middleware(request: NextRequest) {
           errorMessage
         );
 
-        // ─── Phase 2.5: Soft-Gate Resilience (Critical for Production) ───
-        // If the auth check times out (likely due to DB pool saturation), we 
-        // DO NOT block the user. We allow the request to pass to the page.
+        // ─── Phase 2.5: Soft-Gate Resilience ───
+        // If the auth check times out, allow the request to pass to the page.
         // The client-side useSession() will handle the eventual auth check.
-        // This stops the infinite redirect loop during traffic spikes.
         if (isTimeout && !isPublicRoute) {
           console.warn("[middleware] Soft-Gate activated: allowing protected route access during latency spike.");
           return NextResponse.next();
