@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -92,10 +93,20 @@ export default function RegisterPage() {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-16 xl:px-32 relative z-10">
         <div className="w-full max-md mx-auto">
           <div className="mb-12">
-            <Link href="/" className="inline-flex items-center gap-2 group mb-1 transition-transform hover:scale-[1.02]">
-              <span className="text-3xl font-black tracking-tighter text-white">
-                RSIQ <span className="text-[#39FF14]">Pro</span>
-              </span>
+            <Link href="/" className="flex items-center gap-3 group mb-12 transition-transform hover:scale-[1.02]">
+               <div className="relative w-11 h-11 overflow-hidden rounded-xl border border-[#39FF14]/20 shadow-lg shadow-[#39FF14]/10 bg-gradient-to-br from-[#39FF14]/10 to-transparent">
+                  <Image 
+                    src="/logo/rsiq-mindscapeanalytics.png" 
+                    alt="RSIQ Pro" 
+                    fill
+                    priority
+                    className="object-cover scale-110 group-hover:scale-125 transition-transform duration-500"
+                  />
+               </div>
+               <div className="flex flex-col">
+                 <span className="text-xl font-black text-white tracking-tighter leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></span>
+                 <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500 leading-none mt-1">Global Terminal</span>
+               </div>
             </Link>
 
             <h1 className="text-4xl font-bold tracking-tight mb-3">Create Account</h1>

@@ -79,14 +79,19 @@ export default function LoginPage() {
       <div className="w-full lg:w-1/2 flex flex-col justify-center px-8 sm:px-16 xl:px-32 relative z-10">
         <div className="w-full max-w-md mx-auto">
           <div className="mb-12">
-            <Link href="/" className="inline-flex items-center gap-2 group mb-10 transition-transform hover:scale-[1.02]">
-               <div className="relative w-40 h-10">
+            <Link href="/" className="flex items-center gap-3 group mb-12 transition-transform hover:scale-[1.02]">
+               <div className="relative w-11 h-11 overflow-hidden rounded-xl border border-[#39FF14]/20 shadow-lg shadow-[#39FF14]/10 bg-gradient-to-br from-[#39FF14]/10 to-transparent">
                   <Image 
                     src="/logo/rsiq-mindscapeanalytics.png" 
                     alt="RSIQ Pro" 
                     fill
-                    className="object-contain"
+                    priority
+                    className="object-cover scale-110 group-hover:scale-125 transition-transform duration-500"
                   />
+               </div>
+               <div className="flex flex-col">
+                 <span className="text-xl font-black text-white tracking-tighter leading-none">RSIQ <span className="text-[#39FF14]">PRO</span></span>
+                 <span className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-500 leading-none mt-1">Global Terminal</span>
                </div>
             </Link>
 

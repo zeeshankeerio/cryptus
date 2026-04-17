@@ -4963,14 +4963,13 @@ function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClos
 
   return (
     <motion.div
-      initial={{ x: isMobile ? 0 : '100%', y: isMobile ? '100%' : 0 }}
-      animate={{ x: 0, y: 0 }}
-      exit={{ x: isMobile ? 0 : '100%', y: isMobile ? '100%' : 0 }}
+      initial={{ x: '100%' }}
+      animate={{ x: 0 }}
+      exit={{ x: '100%' }}
       transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       className={cn(
-        "fixed z-[200] bg-slate-900/90 backdrop-blur-2xl border-white/10 shadow-2xl overflow-hidden flex flex-col",
-        "bottom-0 left-0 right-0 top-0 sm:top-0 sm:left-auto sm:right-0 sm:h-screen sm:w-[22rem] sm:border-l",
-        isMobile ? "rounded-t-[2.5rem]" : ""
+        "fixed inset-y-0 right-0 z-[200] bg-slate-900/90 backdrop-blur-2xl border-l border-white/10 shadow-2xl overflow-hidden flex flex-col",
+        "w-[85vw] sm:w-[22rem]"
       )}
     >
       <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02] sticky top-0 z-10">
@@ -5214,15 +5213,15 @@ function GlobalSettingsModal({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-950/90 backdrop-blur-md"
+      className="fixed inset-0 z-[300] flex justify-end bg-slate-950/90 backdrop-blur-md"
       onClick={onClose}
     >
       <motion.div
-        initial={{ y: '100%' }}
-        animate={{ y: 0 }}
-        exit={{ y: '100%' }}
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="w-full max-w-lg bg-[#080F1B] border-t sm:border border-white/10 rounded-t-[2.5rem] sm:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-[85vw] sm:w-[32rem] max-w-lg bg-[#080F1B] border-l border-white/10 rounded-l-[2.5rem] shadow-2xl overflow-hidden flex flex-col h-full"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#080F1B]/95 backdrop-blur-md z-10">
@@ -5233,7 +5232,7 @@ function GlobalSettingsModal({
             </h2>
           </div>
           <button onClick={onClose} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <ChevronDown size={24} />
+            <X size={20} />
           </button>
         </div>
 

@@ -102,7 +102,7 @@ const nextConfig: NextConfig = {
     return [
       // PWA & Manifest files: always revalidate
       {
-        source: "/(manifest.json|sw.js|offline)",
+        source: "/(manifest.json|sw.js|offline|derivatives-worker.js)",
         headers: [
           { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
           // Force correct types for PWA core files

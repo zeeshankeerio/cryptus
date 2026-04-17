@@ -20,9 +20,9 @@
 // ── Constants ────────────────────────────────────────────────────
 const RECONNECT_BASE_MS = 2000;
 const RECONNECT_MAX_MS = 30000;
-const FLUSH_INTERVAL_MS = 300;
+const FLUSH_INTERVAL_MS = 400;
 const OI_POLL_INTERVAL_MS = 30000;
-let LIQUIDATION_THRESHOLD = 10000;         // Default $10K, can be toggled to $5K
+let LIQUIDATION_THRESHOLD = 1000;          // Default $1K (lowered from $10K for better visibility)
 const WHALE_THRESHOLD_USD = 100000;        // $100K+ = whale trade
 const MEGA_WHALE_THRESHOLD_USD = 500000;   // $500K+ = mega whale
 const ORDER_FLOW_WINDOW_MS = 60000;        // 1-minute accumulation window
@@ -192,8 +192,13 @@ function connectLiquidationStream() {
       console.log('[deriv-worker] Liquidation stream connected (Bybit Linear)');
       resetReconnect(STREAM_KEY);
 
-      // Subscribe to liquidations for all watched symbols
-      const topics = WHALE_WATCH_SYMBOLS.map(s => `allLiquidation.${s.toUpperCase()}`);
+      // Subscribe to liquidations for Top 20 whales + current monitored symbols
+      const symbolsToWatch = new Set([
+        ...WHALE_WATCH_SYMBOLS.map(s => s.toUpperCase()),
+        ...Array.from(currentSymbols)
+      ]);
+
+      const topics = Array.from(symbolsToWatch).slice(0, 50).map(s => `allLiquidation.${s}`);
       liquidationWs.send(JSON.stringify({
         op: 'subscribe',
         args: topics
@@ -531,6 +536,20 @@ function stop() {
 
 function updateSymbols(symbols) {
   currentSymbols = new Set(symbols.map(s => s.toUpperCase()));
+  
+  // Refresh liquidation subscriptions if socket is open
+  if (liquidationWs && liquidationWs.readyState === WebSocket.OPEN) {
+    const symbolsToWatch = new Set([
+      ...WHALE_WATCH_SYMBOLS.map(s => s.toUpperCase()),
+      ...Array.from(currentSymbols)
+    ]);
+    const topics = Array.from(symbolsToWatch).slice(0, 50).map(s => `allLiquidation.${s}`);
+    
+    liquidationWs.send(JSON.stringify({
+      op: 'subscribe',
+      args: topics
+    }));
+  }
 }
 
 // ── Message Handler ──────────────────────────────────────────────

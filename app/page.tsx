@@ -79,7 +79,7 @@ export default function LandingPage() {
       <div className="fixed inset-0 bg-[linear-gradient(rgba(57,255,20,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(57,255,20,0.03)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_at_center,black,transparent)] pointer-events-none z-0" />
 
       {/* ─── Header ─── */}
-      <nav className="fixed top-0 sm:top-8 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
+      <nav className="fixed top-6 sm:top-8 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -191,7 +191,7 @@ export default function LandingPage() {
             <motion.h1 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-[2.4rem] sm:text-6xl md:text-8xl lg:text-9xl font-black text-center text-white tracking-tighter leading-[1.05] sm:leading-[0.85] mb-4 drop-shadow-2xl"
+              className="text-[2.8rem] sm:text-6xl md:text-8xl lg:text-9xl font-black text-center text-white tracking-tighter leading-[1.05] sm:leading-[0.85] mb-4 drop-shadow-2xl"
             >
               THE ALPHA <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-br from-white via-[#39FF14] to-emerald-800">TERMINAL.</span>

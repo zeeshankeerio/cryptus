@@ -359,11 +359,11 @@ export const DerivativesPanel = memo(function DerivativesPanel({
     };
   }, [liquidations]);
 
-  const tabs: { id: ActiveTab; label: string; icon: any; count?: number }[] = [
-    { id: 'liquidations', label: 'Liquidations', icon: Flame, count: sortedLiquidations.length },
-    { id: 'whales', label: 'Whales', icon: Zap, count: sortedWhales.length },
-    { id: 'funding', label: 'Funding', icon: BarChart3, count: sortedFunding.length },
-    { id: 'flow', label: 'Flow', icon: Activity },
+  const tabs: { id: ActiveTab; label: string; mobileLabel: string; icon: any; count?: number }[] = [
+    { id: 'liquidations', label: 'Liquidations', mobileLabel: 'Liqs', icon: Flame, count: sortedLiquidations.length },
+    { id: 'whales', label: 'Whales', mobileLabel: 'Whales', icon: Zap, count: sortedWhales.length },
+    { id: 'funding', label: 'Funding', mobileLabel: 'Rates', icon: BarChart3, count: sortedFunding.length },
+    { id: 'flow', label: 'Flow', mobileLabel: 'Flow', icon: Activity },
   ];
 
   return (
@@ -384,7 +384,7 @@ export const DerivativesPanel = memo(function DerivativesPanel({
             </span>
           </div>
           {isConnected && (
-            <span className="text-[8px] font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+            <span className="hidden lg:flex text-[8px] font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full items-center gap-1">
               <span>{fundingRates.size} feeds</span>
               <span className="opacity-30">•</span>
               <span>{liquidations.length} liqs</span>
@@ -395,11 +395,11 @@ export const DerivativesPanel = memo(function DerivativesPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Liquidation Threshold Toggle */}
+          {/* Liquidation Threshold Toggle - Hidden on Mobile */}
           {isConnected && (
             <div 
               onClick={handleToggleThreshold}
-              className="flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 cursor-pointer hover:border-white/20 transition-all"
+              className="hidden sm:flex items-center bg-black/40 border border-white/10 rounded-lg p-0.5 cursor-pointer hover:border-white/20 transition-all shrink-0"
               title="Toggle Discovery Threshold ($5K vs $10K)"
             >
               <div className={cn(
@@ -413,14 +413,16 @@ export const DerivativesPanel = memo(function DerivativesPanel({
             </div>
           )}
 
-          {/* Market Pressure Gauge (compact) */}
+          {/* Market Pressure Gauge - Hidden on Mobile Header */}
           {marketPressure && (
-            <SmartMoneyGauge data={marketPressure} compact />
+            <div className="hidden md:block">
+              <SmartMoneyGauge data={marketPressure} compact />
+            </div>
           )}
 
-          {/* 5-min Liquidation Summary */}
+          {/* 5-min Liquidation Summary - Hidden on Mobile */}
           {liqStats.totalValue > 0 && (
-            <div className="flex items-center gap-1.5 text-[8px] font-mono">
+            <div className="hidden sm:flex items-center gap-1.5 text-[8px] font-mono shrink-0">
               <span className="text-red-400">${Math.round(liqStats.longValue / 1000)}K 📉</span>
               <span className="text-slate-600">|</span>
               <span className="text-green-400">${Math.round(liqStats.shortValue / 1000)}K 📈</span>
@@ -454,7 +456,8 @@ export const DerivativesPanel = memo(function DerivativesPanel({
                   )}
                 >
                   <tab.icon size={9} />
-                  {tab.label}
+                  <span className="hidden sm:inline-block">{tab.label}</span>
+                  <span className="sm:hidden">{tab.mobileLabel}</span>
                   {tab.count !== undefined && tab.count > 0 && (
                     <span className="text-[6.5px] bg-white/10 rounded-full px-1 tabular-nums ml-0.5">
                       {tab.count}
