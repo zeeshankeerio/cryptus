@@ -1851,16 +1851,23 @@ export default function ScreenerDashboard() {
       await signOut({
         fetchOptions: {
           onSuccess: () => {
-            router.push('/login');
+            // Context-aware exit: PWA drops to login, Web drops to landing page
+            const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+            const targetUrl = isPWA ? '/login' : '/';
+            router.push(targetUrl);
+            
             // Hard reload safety for institutional lag
             if (typeof window !== 'undefined') {
-              setTimeout(() => { window.location.href = '/login'; }, 500);
+              setTimeout(() => { window.location.href = targetUrl; }, 500);
             }
           }
         }
       });
     } catch (e) {
-      if (typeof window !== 'undefined') window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        const isPWA = window.matchMedia('(display-mode: standalone)').matches;
+        window.location.href = isPWA ? '/login' : '/';
+      }
     }
   };
 

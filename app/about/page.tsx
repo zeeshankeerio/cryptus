@@ -11,12 +11,11 @@ export default function AboutPage() {
         </Link>
 
         <div className="mt-8 rounded-3xl border border-white/10 bg-[#0a0f1a] p-8 sm:p-12">
-          <p className="text-[10px] uppercase tracking-[0.35em] font-black text-[#39FF14]">About Mindscape Analytics</p>
+          <p className="mt-4 text-[10px] uppercase tracking-[0.35em] font-black text-[#39FF14]">About Mindscape Analytics</p>
           <h1 className="mt-4 text-4xl sm:text-5xl font-black text-white tracking-tight">AI Systems Partner For Serious Operators</h1>
           <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed max-w-3xl">
             Mindscape Analytics engineers AI-first platforms that replace manual processes with intelligent systems.
-            RSIQ Pro is one deployment in a larger product and automation portfolio including SaaS applications,
-            lead-generation agents, voice automation, and managed cloud infrastructure.
+            We built RSIQ Pro to scratch our own itch for a latency-free, institutional-grade market scanner. It operates as the flagship analytics terminal within our broader portfolio of custom SaaS frameworks, lead-generation agents, and managed cloud infrastructure.
           </p>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-3">

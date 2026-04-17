@@ -175,8 +175,8 @@ export default function SubscriptionPage() {
               Subscription <span className="text-[#39FF14]">Control</span>
             </h1>
             <p className="mt-4 text-sm text-slate-400 max-w-2xl">
-              Same proven StoxiFy billing flow adapted for RSIQ Pro. Start with free trial,
-              then keep full scanner access via monthly or yearly maintenance plans.
+              Secure, enterprise-grade access management for RSIQ Pro. Start with a free trial,
+              then retain uninterrupted global scanner access via monthly or yearly operational plans.
             </p>
           </div>
           {isOwner && (

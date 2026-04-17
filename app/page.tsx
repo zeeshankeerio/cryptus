@@ -33,6 +33,9 @@ import {
   CircleDollarSign,
   Globe,
   Coins,
+  Mail,
+  Phone,
+  MapPin,
 } from 'lucide-react';
 import { useSession } from '@/lib/auth-client';
 import { useRouter } from 'next/navigation';
@@ -208,9 +211,9 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="text-sm sm:text-base md:text-xl text-slate-400 max-w-3xl text-center leading-relaxed mb-10 sm:mb-12 font-medium px-2 sm:px-0"
+            className="text-sm sm:text-base md:text-xl text-slate-400 max-w-4xl text-center leading-relaxed mb-10 sm:mb-12 font-medium px-2 sm:px-0"
           >
-            <strong className="text-white">Stop missing critical setups.</strong> Retail traders lose edge by manually checking charts. RSIQ Pro solves this by instantly scanning <span className="text-[#39FF14]">500+ assets in real-time</span>, delivering institutional-grade indicators (RSI, MACD, Order Flow) so you never miss a profitable convergence.
+            <strong className="text-white">Stop missing critical setups.</strong> Retail traders lose their edge by manually checking charts. RSIQ Pro solves this by instantly scanning <span className="text-[#39FF14]">500+ assets in real-time</span>. Get institution-grade alerts, <strong>verified historical win-rates</strong>, and <span className="text-white">AI-generated signal narratives</span> instantly formatted for 1-click sharing.
           </motion.p>
 
           <motion.div 
@@ -379,26 +382,35 @@ export default function LandingPage() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
                <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14]" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">BTC / USD - REATIME</span>
+                 <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">BTC / USD - REAL-TIME</span>
                </div>
-               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_btc&symbol=BINANCE%3ABTCUSDT&interval=1&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+               <iframe 
+                 src="https://s.tradingview.com/embed-widget/mini-symbol-overview/?locale=en#%7B%22symbol%22%3A%22BINANCE%3ABTCUSDT%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22dateRange%22%3A%221D%22%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Atrue%2C%22autosize%22%3Atrue%7D" 
+                 className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity mt-8 border-none pointer-events-none" 
+               />
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
                <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">GOLD / USD - REATIME</span>
+                 <div className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">GOLD / USD - REAL-TIME</span>
                </div>
-               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_gold&symbol=OANDA%3AXAUUSD&interval=15&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+               <iframe 
+                 src="https://s.tradingview.com/embed-widget/mini-symbol-overview/?locale=en#%7B%22symbol%22%3A%22OANDA%3AXAUUSD%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22dateRange%22%3A%221D%22%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Atrue%2C%22autosize%22%3Atrue%7D" 
+                 className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity mt-8 border-none pointer-events-none" 
+               />
             </div>
 
             <div className="rounded-3xl border border-white/10 bg-[#0A0E17] h-[400px] overflow-hidden relative group">
                <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2">
-                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-white">EUR / USD - REATIME</span>
+                 <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-white">EUR / USD - REAL-TIME</span>
                </div>
-               <iframe src="https://s.tradingview.com/widgetembed/?frameElementId=tradingview_eur&symbol=FX%3AEURUSD&interval=15&hidesidetoolbar=1&hidetoptoolbar=1&symboledit=0&saveimage=1&toolbarbg=f1f3f6&studies=[]&theme=dark&style=1&timezone=Etc%2FUTC&studies_overrides={}&overrides={}&enabled_features=[]&disabled_features=[]&locale=en&utm_source=rsiq.pro" className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity" />
+               <iframe 
+                 src="https://s.tradingview.com/embed-widget/mini-symbol-overview/?locale=en#%7B%22symbol%22%3A%22FX%3AEURUSD%22%2C%22width%22%3A%22100%25%22%2C%22height%22%3A%22100%25%22%2C%22dateRange%22%3A%221D%22%2C%22colorTheme%22%3A%22dark%22%2C%22isTransparent%22%3Atrue%2C%22autosize%22%3Atrue%7D" 
+                 className="w-full h-full opacity-60 group-hover:opacity-100 transition-opacity mt-8 border-none pointer-events-none" 
+               />
             </div>
           </div>
         </div>
@@ -429,16 +441,24 @@ export default function LandingPage() {
                   desc="Don't wait for candles to close. Our Neural Engine calculates 'Approximated Indicators' tick-by-tick, giving you up to a minute of lead-time over standard screeners." 
                 />
                 <AnalysisItem 
-                  title="Liquidation Convergence" 
-                  desc="Spot the exact microsecond institutional margin calls trigger. Identify local bottoms and tops as they are being defended by smart money liquidity walls." 
+                  title="Signal Win Rate Tracker" 
+                  desc="Stop guessing. Our system backtests and tracks the exact historical win rate of every signal pattern globally, displaying verifiable accuracy ratios to build ultimate conviction." 
                 />
                 <AnalysisItem 
                   title="Viral Signal Narration" 
-                  desc="Transform technical setups into community growth. Generate professional, narratively-driven signal calls with one click for X, Discord, or Telegram." 
+                  desc="Every signal generates an institutional-grade, human-readable narrative explaining WHY the setup is valid (e.g., 'RSI oversold + Bullish MACD cross')." 
+                />
+                <AnalysisItem 
+                  title="One-Click Signal Sharing" 
+                  desc="Instantly capture and share premium setup cards with your community on X, Telegram, or Discord. Elevate your status with our verified, branded signal images." 
+                />
+                <AnalysisItem 
+                  title="Heatmap Correlation Matrix" 
+                  desc="Quantify cross-asset dependency. Instantly track how BTC movements systematically correlate with ETH, Gold, and DXY in real-time to hedge sophisticated portfolios." 
                 />
                 <AnalysisItem 
                   title="Adaptive Load Shedding" 
-                  desc="In extreme high-volatility environments (Smart Mode), the engine downshifts UI repaints to prioritize raw data fidelity, ensuring zero connection loss." 
+                  desc="In extreme high-volatility environments, the engine intelligently downshifts generic UI repaints to prioritize raw data fidelity, ensuring zero connection loss." 
                 />
               </div>
             </div>
@@ -824,9 +844,28 @@ export default function LandingPage() {
               Book Automation Call
             </a>
           </div>
-          <div className="pt-20 sm:pt-40 opacity-20 flex flex-col items-center gap-3 sm:gap-4">
+          <div className="pt-20 sm:pt-32 opacity-60 flex justify-center gap-6">
+            <a href="mailto:info@mindscapeanalytics.com" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Email Mindscape Analytics">
+              <Mail size={18} />
+            </a>
+            <a href="tel:+13072106155" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Call Mindscape Analytics">
+              <Phone size={18} />
+            </a>
+            <a href="https://maps.google.com/?q=Sheridan,+WY,+US" target="_blank" rel="noreferrer" className="p-3 bg-white/5 rounded-full border border-white/10 hover:border-[#39FF14]/50 hover:text-[#39FF14] transition-all hover:scale-110" aria-label="Mindscape Analytics Headquarters">
+              <MapPin size={18} />
+            </a>
+          </div>
+          <div className="pt-8 opacity-20 flex flex-col items-center gap-3 sm:gap-4">
             <span className="text-base sm:text-xl font-black text-white">MINDSCAPE ANALYTICS LLC</span>
-            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.8em] sm:tracking-[1.5em] text-slate-500">Global Terminal &copy; 2026</span>
+            <div className="flex items-center gap-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 hover:[&_a]:text-[#39FF14] [&_a]:transition-colors">
+              <Link href="/legal/terms">Terms</Link>
+              <span className="text-white/20">•</span>
+              <Link href="/legal/privacy">Privacy</Link>
+            </div>
+            <p className="max-w-2xl text-center text-[9px] text-slate-500 uppercase tracking-wider font-bold leading-relaxed mt-4 px-4 border border-white/5 bg-white/[0.01] rounded-xl p-4">
+              <strong>Risk Disclaimer:</strong> RSIQ Pro is an analytical aggregation tool and does not provide financial advice. Trading inherently involves extreme risk, and you may lose some or all of your initial investment. Past performance of any system, methodology, or indicator is not indicative of future results.
+            </p>
+            <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-[0.8em] sm:tracking-[1.5em] text-slate-500 mt-4">Global Terminal &copy; 2026</span>
           </div>
         </div>
       </section>
