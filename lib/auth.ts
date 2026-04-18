@@ -135,8 +135,38 @@ export const auth = betterAuth({
     enabled: true,
     minPasswordLength: 8,
     maxPasswordLength: 128,
-    requireEmailVerification: false,
-    autoSignIn: true,
+    requireEmailVerification: true,
+    autoSignIn: false,
+  },
+
+  email: {
+    async sendEmail({ to, subject, body }) {
+      if (!process.env.RESEND_API_KEY) {
+        console.warn("[auth] RESEND_API_KEY is missing. Skipping email delivery.");
+        return;
+      }
+      try {
+        const res = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: "RSIQ Pro <noreply@rsiq.mindscapeanalytics.com>",
+            to,
+            subject,
+            html: body,
+          }),
+        });
+        if (!res.ok) {
+          const error = await res.json();
+          console.error("[auth] Resend API error:", error);
+        }
+      } catch (err) {
+        console.error("[auth] Failed to send email via Resend:", err);
+      }
+    },
   },
 
   session: {

@@ -15,6 +15,10 @@ const sessionCache = new Map<string, { data: any; expiresAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 10_000;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
+// ── Thundering Herd Prevention ──
+// Ensuring that 50 users hitting the API at once only trigger ONE exchange fetch.
+const pendingFetches = new Map<string, Promise<any>>();
+
 function takeRateLimitToken(key: string, limit: number): { ok: boolean; retryAfterSec: number } {
   const now = Date.now();
   const bucket = rateBuckets.get(key);
@@ -59,11 +63,20 @@ export async function GET(request: Request) {
     const cachedSession = sessionCache.get(sessionId);
     const now = Date.now();
 
-    const fetchTask = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange })
-      .catch(err => {
-        console.error('[screener-api] Fetch task failed:', err instanceof Error ? err.message : err);
-        return { data: [], meta: { total: 0, fetchedAt: Date.now() } as any };
-      });
+    const fetchKey = `${rawCount}:${rsiPeriod}:${exchange}:${smartMode}:${search}:${prioritySymbols.join(',')}`;
+    let fetchTask = pendingFetches.get(fetchKey);
+
+    if (!fetchTask) {
+      fetchTask = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange })
+        .finally(() => {
+          pendingFetches.delete(fetchKey);
+        })
+        .catch(err => {
+          console.error('[screener-api] Fetch task failed:', err instanceof Error ? err.message : err);
+          return { data: [], meta: { total: 0, fetchedAt: Date.now() } as any };
+        });
+      pendingFetches.set(fetchKey, fetchTask);
+    }
 
     const authTask = (cachedSession && now < cachedSession.expiresAt) 
       ? Promise.resolve(cachedSession.data) 

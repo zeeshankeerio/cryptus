@@ -138,7 +138,8 @@ const TICKER_CACHE_TTL = 15_000; // 15 seconds - faster price overlay freshness
 const TRAFFIC_WARM_COOLDOWN_MS = 45_000;
 
 // ── Result cache to avoid re-computing on rapid refreshes ──
-const resultCache = new Map<string, { data: ScreenerResponse; count: number; smartMode: boolean; ts: number }>();
+const RESULT_CACHE_MAX = 100;
+const resultCache = new LRUCache<string, { data: ScreenerResponse; count: number; smartMode: boolean; ts: number }>(RESULT_CACHE_MAX);
 const smartTuningByCount = new Map<number, SmartTuningState>();
 const trafficWarmLastRun = new Map<string, number>();
 
@@ -335,6 +336,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     market: getMarketType(sym),
     open1m: null,
     volStart1m: null,
+    longCandle: false,
   };
 }
 
@@ -377,7 +379,8 @@ function fromCachedResult(symbolCount: number, smartMode: boolean, rsiPeriod: nu
     // Partial match: find any cached result for this exchange/mode/period and slice it.
     // BUG FIX: Only slice if the cached result is >= requested symbolCount. 
     // If we request 500 and only have a 100-row cache, returning it is a bad UX.
-    for (const [key, val] of resultCache.entries()) {
+    for (const [key, cacheEntry] of resultCache.entries()) {
+      const val = cacheEntry.value;
       if (key.includes(`:${smartMode ? 'smart' : 'classic'}:rsi${rsiPeriod}:${exchange}`) && val.data.data.length >= symbolCount) {
         const sliced = val.data.data.slice(0, symbolCount);
         return {
@@ -1248,6 +1251,7 @@ function buildEntry(
       market: getMarketType(sym),
       open1m,
       volStart1m,
+      longCandle: false,
       historicalCloses: closes15m,
     };
   } catch (err) {

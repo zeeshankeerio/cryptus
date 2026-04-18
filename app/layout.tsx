@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     type: 'website',
   },
   verification: {
-    google: 'YOUR_GSC_VERIFICATION_TOKEN', // [ACTION REQUIRED] Replace with token from Google Search Console
+    google: '', // Replace with actual token from Google Search Console once available
   },
   twitter: {
     card: 'summary_large_image',
