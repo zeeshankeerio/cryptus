@@ -430,7 +430,10 @@ function startBybitSpotRestPoll() {
       try {
         const symbolParam = batch.join(',');
         const url = `https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbolParam}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
+        const res = await fetch(url, { 
+          signal: AbortSignal.timeout(4000),
+          cache: 'no-store' 
+        });
         if (!res.ok) continue;
         const payload = await res.json();
         const rows = payload.result?.list ?? [];
@@ -656,18 +659,20 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       const alertKey = `${t.s}-VOLATILITY-CANDLE`;
       if (now - (lastTriggered.get(alertKey) || 0) > COOLDOWN_MS) {
         lastTriggered.set(alertKey, now);
-        self.postMessage({
-          type: 'ALERT_TRIGGERED',
-          payload: {
-            symbol: t.s,
-            exchange: exchangeName,
-            timeframe: '1m',
-            value: curCandleSize / state.avgBarSize1m,
-            type: 'LONG_CANDLE',
-            price: curC,
-            direction: candleDirection
-          }
-        });
+        // Direct bridge for background notifications
+        if (alertChannel && globalAlertsEnabled && !isAnyTabVisible()) {
+          const alias = getSymbolAlias(t.s);
+          alertChannel.postMessage({
+            type: 'ALERT_NOTIFICATION',
+            payload: {
+              title: `⚡ VOLATILITY: ${alias}`,
+              body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Large ${candleDirection} move detected @ $${curC.toLocaleString()}`,
+              exchange: exchangeName,
+              priority: 'high',
+              type: 'rsi' // Map to existing notification logic
+            }
+          });
+        }
       }
     }
 
@@ -687,6 +692,21 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
             direction: candleDirection // Volume spike typically follows the price action direction
           }
         });
+
+        // Direct bridge for background notifications
+        if (alertChannel && globalAlertsEnabled && !isAnyTabVisible()) {
+          const alias = getSymbolAlias(t.s);
+          alertChannel.postMessage({
+            type: 'ALERT_NOTIFICATION',
+            payload: {
+              title: `📊 VOL SPIKE: ${alias}`,
+              body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Significant volume surge detected (${(curCandleVol / state.avgVolume1m).toFixed(1)}x) @ $${curC.toLocaleString()}`,
+              exchange: exchangeName,
+              priority: 'medium',
+              type: 'rsi'
+            }
+          });
+        }
       }
     }
 
@@ -1294,12 +1314,16 @@ if (isSharedWorker) {
   self.onconnect = (e) => {
     const port = e.ports[0];
     connectedPorts.add(port);
-    port.onmessage = (msg) => handleMessage(msg, port);
+    port.onmessage = (msg) => {
+      handleMessage(msg, port);
+    };
     port.start();
     console.log(`[worker] Shared tab connected (Total: ${connectedPorts.size})`);
   };
 } else {
-  self.onmessage = (e) => handleMessage(e);
+  self.onmessage = (e) => {
+    handleMessage(e);
+  };
 }
 
 // ── Utility Helpers ────────────────────────────────────────────

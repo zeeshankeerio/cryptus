@@ -22,7 +22,6 @@ async function requestWakeLock() {
     });
     console.log('[alerts] Wake Lock acquired — screen will stay on for alerts');
   } catch (e) {
-    // Wake Lock can fail if page is not visible
     console.warn('[alerts] Wake Lock unavailable:', e);
   }
 }
@@ -38,7 +37,6 @@ declare global {
 }
 
 // ── 2026 Resilient Audio Anchor (Media Session) ──
-// A 1-second silent WAV to anchor the Media Session and prevent background throttling
 const SILENT_WAV_BASE64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
 export interface Alert {
@@ -51,14 +49,10 @@ export interface Alert {
   createdAt: number;
 }
 
-// ── Cooldown: 3 minutes per symbol-timeframe ──
+export type AudioState = 'uninitialized' | 'running' | 'suspended' | 'interrupted';
+
 const COOLDOWN_MS = 3 * 60 * 1000;
 
-/**
- * Dynamic hysteresis: prevents rapid zone-flipping when thresholds are close.
- *   - When OB=70, OS=30 → gap=40 → hysteresis = max(2, 40*0.15) = 6
- *   - When OB=50, OS=45 → gap=5  → hysteresis = max(2, 5*0.15) = 2
- */
 function computeHysteresis(overboughtThreshold: number, oversoldThreshold: number): number {
   const gap = Math.max(0, overboughtThreshold - oversoldThreshold);
   return Math.max(2, gap * 0.15);
@@ -89,369 +83,160 @@ export function useAlertEngine(
   },
   globalSignalThresholdMode: 'default' | 'custom' = 'default'
 ) {
-
-
-  // ── GAP-E4: Wake Lock lifecycle tied to alert enabled state ──
-  useEffect(() => {
-    if (enabled) {
-      requestWakeLock();
-      // Re-acquire wake lock on visibility change (mobile browsers release it)
-      const handleVisibility = () => {
-        if (document.visibilityState === 'visible' && enabled) {
-          requestWakeLock();
-          // ── 2026 Resilience: Resume audio context immediately on foreground ──
-          resumeAudioContext();
-        }
-      };
-      document.addEventListener('visibilitychange', handleVisibility);
-      // Also resume on focus to catch OS-level switches
-      window.addEventListener('focus', resumeAudioContext);
-      return () => {
-        releaseWakeLock();
-        document.removeEventListener('visibilitychange', handleVisibility);
-        window.removeEventListener('focus', resumeAudioContext);
-      };
-    } else {
-      releaseWakeLock();
-    }
-  }, [enabled]);
+  // ── HOISTED REFS (GAP FIX) ──
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioAnchorRef = useRef<HTMLAudioElement | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [audioState, setAudioState] = useState<AudioState>('uninitialized');
 
-  // Hydrate alert history from API on mount
+  // Track AudioContext state changes (Ref Safe)
   useEffect(() => {
-    fetch('/api/alerts', {
-      cache: 'no-store',
-      headers: {
-        'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
-        pragma: 'no-cache',
-      },
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          const normalized = data.map(val => ({
-            ...val,
-            createdAt: typeof val.createdAt === 'string' ? new Date(val.createdAt).getTime() : val.createdAt
-          })).slice(0, 50);
-          setAlerts(normalized);
-        }
-      })
-      .catch(e => console.error('[alerts] Error fetching history:', e));
-  }, []);
+    if (!audioCtxRef.current) return;
+    const ctx = audioCtxRef.current;
+    
+    const handler = () => setAudioState(ctx.state as AudioState);
+    ctx.addEventListener('statechange', handler);
+    setAudioState(ctx.state as AudioState); // Immediate sync
+    
+    return () => ctx.removeEventListener('statechange', handler);
+  }, [audioCtxRef.current]);
 
-  // Store the last known zone: undefined = uninitialized, 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT' once seen
-  const zoneState = useRef<Map<string, string | undefined>>(new Map());
-  // Anti-dancing cooldown — keyed by symbol-timeframe
-  const lastTriggered = useRef<Map<string, number>>(new Map());
-  // Track when a config was last updated to allow "cold-start" alerts for manual changes
+  // Main Refs
+  const enabledRef = useRef(enabled);
+  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
+
+  const coinConfigsRef = useRef(coinConfigs);
   const configLastUpdated = useRef<Map<string, number>>(new Map());
-  // Win Rate Tracker throttle — evaluate outcomes at most once per 30 seconds
+  useEffect(() => {
+    const now = Date.now();
+    Object.keys(coinConfigs).forEach(s => {
+      if (coinConfigs[s] !== coinConfigsRef.current[s]) {
+        configLastUpdated.current.set(s, now);
+        for (const [key] of zoneState.current) if (key.startsWith(`${s}-`)) zoneState.current.delete(key);
+        for (const [key] of lastTriggered.current) if (key.startsWith(`${s}-`)) lastTriggered.current.delete(key);
+      }
+    });
+    coinConfigsRef.current = coinConfigs;
+  }, [coinConfigs]);
+
+  const zoneState = useRef<Map<string, string | undefined>>(new Map());
+  const lastTriggered = useRef<Map<string, number>>(new Map());
+  const dataMapRef = useRef<Map<string, ScreenerEntry>>(new Map());
   const lastWinRateEvalRef = useRef<number | null>(null);
 
-  // Gap 7: O(1) data index — rebuilt only when `data` changes, not on every tick
-  const dataMapRef = useRef<Map<string, ScreenerEntry>>(new Map());
+  // Sync data index and prune stale states
   useEffect(() => {
     const m = new Map<string, ScreenerEntry>();
     for (const entry of data) m.set(entry.symbol, entry);
     dataMapRef.current = m;
 
-    // ── GAP-D2 FIX: Prune zone/cooldown state for symbols no longer in dataset ──
     const currentSymbols = new Set(data.map(e => e.symbol));
     for (const key of zoneState.current.keys()) {
       const sym = key.split('-')[0];
       if (!currentSymbols.has(sym)) zoneState.current.delete(key);
     }
-    for (const key of lastTriggered.current.keys()) {
-      const sym = key.split('-')[0];
-      if (!currentSymbols.has(sym)) lastTriggered.current.delete(key);
-    }
   }, [data]);
 
-  // Gap 7: O(1) coinConfigs index — stable ref updated when coinConfigs changes
-  const coinConfigsRef = useRef<Record<string, any>>(coinConfigs);
-  useEffect(() => {
-    // Mark which configs were updated to allow immediate evaluation
-    const now = Date.now();
-    Object.keys(coinConfigs).forEach(s => {
-      if (coinConfigs[s] !== coinConfigsRef.current[s]) {
-        configLastUpdated.current.set(s, now);
-        // Intelligence: Clear local states for the updated coin to ensure "Instant" reaction
-        for (const [key] of zoneState.current) {
-          if (key.startsWith(`${s}-`)) zoneState.current.delete(key);
-        }
-        for (const [key] of lastTriggered.current) {
-          if (key.startsWith(`${s}-`)) lastTriggered.current.delete(key);
-        }
-      }
-    });
+  const globalThresholdsEnabledRef = useRef(globalThresholdsEnabled);
+  useEffect(() => { globalThresholdsEnabledRef.current = globalThresholdsEnabled; }, [globalThresholdsEnabled]);
+  const globalOverboughtRef = useRef(globalOverbought);
+  useEffect(() => { globalOverboughtRef.current = globalOverbought; }, [globalOverbought]);
+  const globalOversoldRef = useRef(globalOversold);
+  useEffect(() => { globalOversoldRef.current = globalOversold; }, [globalOversold]);
+  const globalThresholdTimeframesRef = useRef(globalThresholdTimeframes);
+  useEffect(() => { globalThresholdTimeframesRef.current = globalThresholdTimeframes; }, [globalThresholdTimeframes]);
+  const globalVolatilityEnabledRef = useRef(globalVolatilityEnabled);
+  useEffect(() => { globalVolatilityEnabledRef.current = globalVolatilityEnabled; }, [globalVolatilityEnabled]);
+  const enabledIndicatorsRef = useRef(enabledIndicators);
+  useEffect(() => { enabledIndicatorsRef.current = enabledIndicators; }, [enabledIndicators]);
 
-    coinConfigsRef.current = coinConfigs;
-  }, [coinConfigs]);
+  // ── Callbacks ──
+  const getExchange = useCallback(() => {
+    if (typeof window === 'undefined') return 'binance';
+    return (window as any).__priceEngine?.getExchange?.() ?? 'binance';
+  }, []);
 
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const audioAnchorRef = useRef<HTMLAudioElement | null>(null);
-
-  // ── Audio: setup media session and anchor ──
   const setupMediaSession = useCallback(() => {
     if (typeof window === 'undefined' || !('mediaSession' in navigator)) return;
-
     navigator.mediaSession.metadata = new MediaMetadata({
       title: 'RSIQ Pro Monitor',
       artist: 'Mindscape Analytics',
       album: 'Real-time Alert Engine',
-      artwork: [
-        { src: '/logo/rsiq-pro-icon.png', sizes: '512x512', type: 'image/png' }
-      ]
+      artwork: [{ src: '/logo/rsiq-pro-icon.png', sizes: '512x512', type: 'image/png' }]
     });
-
-    // Set playback state to playing to signal "Active Engine" to the OS
     navigator.mediaSession.playbackState = 'playing';
-
-    // Dummy handlers to keep the session alive
     const noop = () => {};
     navigator.mediaSession.setActionHandler('play', noop);
     navigator.mediaSession.setActionHandler('pause', noop);
   }, []);
 
-  // ── Audio: resume context (called on user gesture from dashboard) ──
   const resumeAudioContext = useCallback(async () => {
     if (typeof window === 'undefined') return;
     try {
-      // Initialize Audio Anchor if not existing
       if (!audioAnchorRef.current) {
         const audio = new Audio(SILENT_WAV_BASE64);
         audio.loop = true;
-        audio.muted = true; // Still counts as "Media Session" for most 2026 browsers
+        audio.muted = true;
         audioAnchorRef.current = audio;
       }
-
-      // Try to play the anchor (must be triggered by user gesture)
       if (audioAnchorRef.current.paused) {
         await audioAnchorRef.current.play().catch(() => {});
         setupMediaSession();
       }
-
       if (!audioCtxRef.current) {
         audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       }
       const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        await ctx.resume();
-      }
-
-      // iOS/Mobile Magic: Play a silent buffer to "unlock" audio output
+      if (ctx.state === 'suspended') await ctx.resume();
       if (ctx.state === 'running') {
-        const oscillator = ctx.createOscillator();
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.0005, ctx.currentTime); 
-        oscillator.connect(gain);
-        gain.connect(ctx.destination);
-        oscillator.start(0);
-        oscillator.stop(0.1);
-        setTimeout(() => {
-          oscillator.disconnect();
-          gain.disconnect();
-        }, 200);
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0005, ctx.currentTime);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(0); osc.stop(0.1);
       }
-
-      console.log("[alerts] Resilient Audio Engine active (MediaSession anchored)");
+      console.log("[alerts] Resilient Audio Engine active");
     } catch (e) {
-      console.error("[alerts] Failed to resume resilient audio:", e);
+      console.error("[alerts] Audio resume failed:", e);
     }
   }, [setupMediaSession]);
 
-  // Use level interactions and focus gain to ensure context is always resumed
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const handleGesture = () => {
-      resumeAudioContext();
-    };
-
-    window.addEventListener('click', handleGesture);
-    window.addEventListener('touchstart', handleGesture);
-    window.addEventListener('mousedown', handleGesture);
-    window.addEventListener('keydown', handleGesture);
-    window.addEventListener('focus', handleGesture);
-
-    // Audio Keep-Alive: OS/Mobile browsers often suspend AudioContext after a few minutes of silence.
-    // We play a near-silent pulse every 4 minutes to keep the context "warm".
-    const keepAliveInterval = setInterval(() => {
-      // 2026 Android Optimization: Shorter pulse interval (2.5 min) to prevent CPU sleep
-      resumeAudioContext();
-    }, 2.5 * 60 * 1000);
-
-    return () => {
-      window.removeEventListener('click', handleGesture);
-      window.removeEventListener('touchstart', handleGesture);
-      window.removeEventListener('mousedown', handleGesture);
-      window.removeEventListener('keydown', handleGesture);
-      window.removeEventListener('focus', handleGesture);
-      clearInterval(keepAliveInterval);
-    };
-  }, [resumeAudioContext]);
-
-  // ── Audio: Play enterprise chime (with background fallback) ──
   const playAlertSound = useCallback(async (isVolatility = false, priority: AlertPriority = 'medium') => {
     if (!soundEnabled || typeof window === 'undefined') return;
     try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       const ctx = audioCtxRef.current;
+      if (ctx.state !== 'running') await ctx.resume().catch(() => {});
+      if ((ctx.state as any) !== 'running') return;
 
-      if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
-        await ctx.resume().catch(() => { });
-      }
-
-      if (ctx.state !== 'running') {
-        // One final attempt for Android Chrome stability
-        await ctx.resume().catch(() => {});
-        console.warn('[alerts] AudioContext not running, relying on notification sound fallback');
-        // Type assertion to 'any' to bypass TS narrowing which doesn't account for state change after await
-        if ((ctx.state as any) !== 'running') return;
-      }
-
-      const playTone = (freq: number, startTime: number, duration: number, vol: number, type: OscillatorType = 'sine') => {
+      const playTone = (freq: number, start: number, dur: number, vol: number, type: OscillatorType = 'sine') => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-
-        const osc2 = type === 'sine' ? ctx.createOscillator() : null;
-        const gain2 = osc2 ? ctx.createGain() : null;
-
         osc.type = type;
-        osc.frequency.setValueAtTime(freq, startTime);
-
-        if (osc2 && gain2) {
-          osc2.type = 'triangle';
-          osc2.frequency.setValueAtTime(freq * 2, startTime);
-          gain2.gain.setValueAtTime(0, startTime);
-          gain2.gain.linearRampToValueAtTime(vol * 0.3, startTime + 0.05);
-          gain2.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-          osc2.connect(gain2);
-          gain2.connect(ctx.destination);
-          osc2.start(startTime);
-          osc2.stop(startTime + duration);
-        }
-
-        gain.gain.setValueAtTime(0, startTime);
-        gain.gain.linearRampToValueAtTime(vol, startTime + 0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(startTime);
-        osc.stop(startTime + duration);
-
-        setTimeout(() => {
-          osc.disconnect();
-          gain.disconnect();
-          if (osc2) osc2.disconnect();
-          if (gain2) gain2.disconnect();
-        }, (duration + 0.5) * 1000);
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(vol, start + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(start); osc.stop(start + dur);
+        setTimeout(() => { osc.disconnect(); gain.disconnect(); }, (dur + 0.5) * 1000);
       };
 
       const now = ctx.currentTime;
-
       if (isVolatility || priority === 'critical') {
-        // High-tension alert for volatility or critical priority (Rapid staccato)
-        const baseFreq = priority === 'critical' ? 2637.02 : 2093.00; // E7 for critical, C7 for volatility
-        playTone(baseFreq, now, 0.1, 0.1, 'square');
-        playTone(baseFreq, now + 0.12, 0.1, 0.1, 'square');
-        playTone(baseFreq, now + 0.24, 0.4, 0.12, 'square');
-        if (priority === 'critical') {
-            playTone(baseFreq * 1.5, now + 0.4, 0.6, 0.08, 'sine'); // Adding a sharp 5th for critical
-        }
+        const base = priority === 'critical' ? 2637.02 : 2093.00;
+        playTone(base, now, 0.1, 0.1, 'square');
+        playTone(base, now + 0.12, 0.1, 0.1, 'square');
+        playTone(base, now + 0.24, 0.4, 0.12, 'square');
       } else {
-        // Elite Enterprise "Harmonic Bloom"
-        // Adjust volume based on priority
-        const volMult = priority === 'high' ? 1.5 : (priority === 'low' ? 0.6 : 1.0);
-        playTone(1046.50, now, 0.7, 0.1 * volMult, 'sine');        // C6 (Primary)
-        playTone(1318.51, now + 0.08, 0.6, 0.07 * volMult, 'sine'); // E6 (Bright)
-        playTone(1567.98, now + 0.16, 0.5, 0.05 * volMult, 'sine'); // G6 (High)
-        playTone(523.25, now, 1.0, 0.04 * volMult, 'sine');         // C5 (Warm Bed)
-        playTone(2093.00, now + 0.24, 0.4, 0.03 * volMult, 'sine');  // C7 (Airy finish)
+        const mult = priority === 'high' ? 1.5 : (priority === 'low' ? 0.6 : 1.0);
+        playTone(1046.50, now, 0.7, 0.1 * mult, 'sine');
+        playTone(1318.51, now + 0.08, 0.6, 0.07 * mult, 'sine');
+        playTone(1567.98, now + 0.16, 0.5, 0.05 * mult, 'sine');
       }
-
-    } catch (e) {
-      console.warn('[alerts] Audio generation failed:', e);
-    }
+    } catch (e) { console.warn('[alerts] Sound failed:', e); }
   }, [soundEnabled]);
 
-  // Stable ref so callbacks don't recreate when soundEnabled changes
-  const soundEnabledRef = useRef(soundEnabled);
-  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
-
-  const enabledRef = useRef(enabled);
-  useEffect(() => { enabledRef.current = enabled; }, [enabled]);
-
-  const globalThresholdsEnabledRef = useRef(globalThresholdsEnabled);
-  useEffect(() => { globalThresholdsEnabledRef.current = globalThresholdsEnabled; }, [globalThresholdsEnabled]);
-
-  const globalOverboughtRef = useRef(globalOverbought);
-  useEffect(() => { globalOverboughtRef.current = globalOverbought; }, [globalOverbought]);
-
-  const globalOversoldRef = useRef(globalOversold);
-  useEffect(() => { globalOversoldRef.current = globalOversold; }, [globalOversold]);
-
-  const globalThresholdTimeframesRef = useRef(globalThresholdTimeframes);
-  useEffect(() => { globalThresholdTimeframesRef.current = globalThresholdTimeframes; }, [globalThresholdTimeframes]);
-
-  const globalLongCandleThresholdRef = useRef(globalLongCandleThreshold);
-  useEffect(() => { globalLongCandleThresholdRef.current = globalLongCandleThreshold; }, [globalLongCandleThreshold]);
-
-  const globalVolumeSpikeThresholdRef = useRef(globalVolumeSpikeThreshold);
-  useEffect(() => { globalVolumeSpikeThresholdRef.current = globalVolumeSpikeThreshold; }, [globalVolumeSpikeThreshold]);
-
-  const globalVolatilityEnabledRef = useRef(globalVolatilityEnabled);
-  useEffect(() => { globalVolatilityEnabledRef.current = globalVolatilityEnabled; }, [globalVolatilityEnabled]);
-
-  const enabledIndicatorsRef = useRef(enabledIndicators);
-  useEffect(() => { enabledIndicatorsRef.current = enabledIndicators; }, [enabledIndicators]);
-
-  // ── Native notification ──
-  const triggerNativeNotification = useCallback((title: string, body: string) => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    if (Notification.permission !== 'granted') return;
-
-    const currentExchange = (window as any).__priceEngine?.getExchange?.() ?? 'unknown';
-    // Use exchange-aware tag to match Service Worker logic and prevent duplicates
-    const tag = `rsiq-${currentExchange}-${title.replace(/\s+/g, '-').toLowerCase()}`;
-
-    if (document.visibilityState !== 'visible') {
-      console.log('[alerts] Tab hidden – skipping local notification, relying on Service Worker');
-    } else {
-      try {
-        // Local notification (Foreground optimization)
-        const notification = new Notification(title, {
-          body,
-          icon: '/logo/rsiq-pro-icon.png',
-          badge: '/logo/rsiq-pro-icon.png',
-          silent: false,
-          renotify: true,
-          tag,
-          vibrate: [200, 100, 200, 100, 200], // Strong 5-pulse for trade urgency
-          requireInteraction: false,
-        } as any);
-        setTimeout(() => notification.close(), 8000);
-      } catch {
-        // Notification constructor can fail on some mobile platforms (rely on SW)
-      }
-    }
-
-    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-      try {
-        navigator.serviceWorker.controller.postMessage({
-          type: 'ALERT_NOTIFICATION',
-          payload: { title, body, icon: '/logo/rsiq-pro-icon.png', exchange: currentExchange },
-        });
-      } catch {
-        // SW communication not available
-      }
-    }
-  }, []);
-
-  // ── Log alert to API ──
   const logAlert = useCallback(async (alert: Omit<Alert, 'id' | 'createdAt'>) => {
     try {
       const res = await fetch('/api/alerts', {
@@ -473,475 +258,206 @@ export function useAlertEngine(
     }
   }, []);
 
-  // Stable refs for callbacks used inside the engine listener
-  const logAlertRef = useRef(logAlert);
-  useEffect(() => { logAlertRef.current = logAlert; }, [logAlert]);
+  const triggerNativeNotification = useCallback((title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const currentExchange = (window as any).__priceEngine?.getExchange?.() ?? 'unknown';
+    const tag = `rsiq-${currentExchange}-${title.replace(/\s+/g, '-').toLowerCase()}`;
+    if (document.visibilityState === 'visible') {
+      try {
+        const n = new Notification(title, { body, icon: '/logo/rsiq-pro-icon.png', badge: '/logo/rsiq-pro-icon.png', silent: false, renotify: true, tag } as any);
+        setTimeout(() => n.close(), 8000);
+      } catch {}
+    }
+    if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({ type: 'ALERT_NOTIFICATION', payload: { title, body, icon: '/logo/rsiq-pro-icon.png', exchange: currentExchange } });
+    }
+  }, []);
+
   const playAlertSoundRef = useRef(playAlertSound);
   useEffect(() => { playAlertSoundRef.current = playAlertSound; }, [playAlertSound]);
+  const logAlertRef = useRef(logAlert);
+  useEffect(() => { logAlertRef.current = logAlert; }, [logAlert]);
   const triggerNativeRef = useRef(triggerNativeNotification);
   useEffect(() => { triggerNativeRef.current = triggerNativeNotification; }, [triggerNativeNotification]);
 
-  // ── Gap 1: STABLE engine listener — mounts once, reads live data via refs ──
-  // We attach the engine listener exactly ONCE (empty deps). All live values
-  // are accessed via refs to avoid stale closures without ever re-attaching.
+  // ── Life Cycle: Wake Lock & Audio Watchdog ──
+  useEffect(() => {
+    if (enabled) {
+      requestWakeLock();
+      const watchdog = setInterval(() => {
+        if (enabled && document.visibilityState === 'visible' && !wakeLock) requestWakeLock();
+      }, 30000);
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible' && enabled) { requestWakeLock(); resumeAudioContext(); }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('focus', resumeAudioContext);
+      return () => {
+        clearInterval(watchdog);
+        releaseWakeLock();
+        document.removeEventListener('visibilitychange', handleVisibility);
+        window.removeEventListener('focus', resumeAudioContext);
+      };
+    } else releaseWakeLock();
+  }, [enabled, resumeAudioContext]);
+
+  // Interaction Catch
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    const h = () => resumeAudioContext();
+    window.addEventListener('click', h);
+    window.addEventListener('touchstart', h);
+    window.addEventListener('mousedown', h);
+    window.addEventListener('keydown', h);
+    return () => {
+      window.removeEventListener('click', h);
+      window.removeEventListener('touchstart', h);
+      window.removeEventListener('mousedown', h);
+      window.removeEventListener('keydown', h);
+    };
+  }, [resumeAudioContext]);
 
-    const engineInstance = (window as any).__priceEngine;
-    if (!engineInstance) {
-      // Engine not mounted yet (rare race) — retry after a short delay
-      const retryTimer = setTimeout(() => {
-        const eng = (window as any).__priceEngine;
-        if (eng) attachListeners(eng);
-      }, 500);
-      return () => clearTimeout(retryTimer);
-    }
+  // History Hydration
+  useEffect(() => {
+    fetch('/api/alerts', { cache: 'no-store' })
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setAlerts(data.map(v => ({...v, createdAt: typeof v.createdAt === 'string' ? new Date(v.createdAt).getTime() : v.createdAt})).slice(0, 50));
+        }
+      }).catch(e => console.error('[alerts] Hydrate failed:', e));
+  }, []);
 
-    const cleanup = attachListeners(engineInstance);
-    return cleanup;
+  // ── THE ENGINE: Tick Evaluation ──
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const eng = (window as any).__priceEngine;
+    if (!eng) return;
 
-    function attachListeners(eng: EventTarget) {
-      // Get current exchange for alert context
-      const getExchange = () => (window as any).__priceEngine?.getExchange?.() ?? 'binance';
-      const handleBatchTicks = (e: Event) => {
-        if (!enabledRef.current) return;
-        const batch = (e as CustomEvent).detail as Map<string, any>;
-        if (!batch || batch.size === 0) return;
+    const handleBatchTicks = (e: Event) => {
+      if (!enabledRef.current) return;
+      const batch = (e as CustomEvent).detail as Map<string, any>;
+      if (!batch || batch.size === 0) return;
 
-        // Gap 7: O(1) lookup via ref-indexed map — no O(n) iteration
+      try {
         batch.forEach((live, symbol) => {
           const entry = dataMapRef.current.get(symbol);
-          if (!entry) return;
-
           const config = coinConfigsRef.current[symbol];
-          const hasConfig = !!config;
-          const globalEnabled = globalThresholdsEnabledRef.current;
+          if (!entry || (!config && !globalThresholdsEnabledRef.current)) return;
 
-          // Process if it has a manual alert config OR global mode is active
-          if (!hasConfig && !globalEnabled) return;
+          const obT = config?.overboughtThreshold ?? globalOverboughtRef.current;
+          const osT = config?.oversoldThreshold ?? globalOversoldRef.current;
+          const hyst = computeHysteresis(obT, osT);
 
-          const r1mP = config?.rsi1mPeriod ?? 14;
-          const r5mP = config?.rsi5mPeriod ?? 14;
-          const r15mP = config?.rsi15mPeriod ?? 14;
-          const r1hP = config?.rsi1hPeriod ?? 14;
-          const obT = config?.overboughtThreshold ?? 70;
-          const osT = config?.oversoldThreshold ?? 30;
-          const globalObT = globalOverboughtRef.current;
-          const globalOsT = globalOversoldRef.current;
-          const confluenceMode = config?.alertConfluence ?? false;
-
-          // Live RSI approximations
-          let rsi1m = entry.rsi1m;
-          let rsi5m = entry.rsi5m;
-          let rsi15m = entry.rsi15m;
-          let rsi1h = entry.rsi1h;
-          let rsiCustom = entry.rsiCustom;
-
-          if (entry.rsiState1m) rsi1m = approximateRsi(entry.rsiState1m, live.price, r1mP);
-          if (entry.rsiState5m) rsi5m = approximateRsi(entry.rsiState5m, live.price, r5mP);
-          if (entry.rsiState15m) rsi15m = approximateRsi(entry.rsiState15m, live.price, r15mP);
-          if (entry.rsiState1h) rsi1h = approximateRsi(entry.rsiState1h, live.price, r1hP);
-          if (entry.rsiStateCustom) rsiCustom = approximateRsi(entry.rsiStateCustom, live.price, entry.rsiPeriodAtCreation);
-
-          let ema9 = entry.ema9;
-          let ema21 = entry.ema21;
-          let emaCross = entry.emaCross;
-          let bbPosition = entry.bbPosition;
-
-          if (ema9 !== null) ema9 = approximateEma(ema9, live.price, 9);
-          if (ema21 !== null) ema21 = approximateEma(ema21, live.price, 21);
-          if (ema9 !== null && ema21 !== null) emaCross = ema9 > ema21 ? 'bullish' : 'bearish';
-
-          if (entry.bbUpper !== null && entry.bbLower !== null) {
-            const range = entry.bbUpper - entry.bbLower;
-            if (range > 0) bbPosition = (live.price - entry.bbLower) / range;
-          }
-
-          const hysteresis = computeHysteresis(obT, osT);
-          const timeframes = [
-            { key: 'rsi1m', label: '1m', val: rsi1m, configKey: 'alertOn1m' },
-            { key: 'rsi5m', label: '5m', val: rsi5m, configKey: 'alertOn5m' },
-            { key: 'rsi15m', label: '15m', val: rsi15m, configKey: 'alertOn15m' },
-            { key: 'rsi1h', label: '1h', val: rsi1h, configKey: 'alertOn1h' },
-            { key: 'rsiCustom', label: 'Custom', val: rsiCustom, configKey: 'alertOnCustom' }
-          ];
-
-          // ── Phase 1: Determine zones (State-First Hysteresis) ──
-          const currentZones = new Map<string, 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT'>();
-          timeframes.forEach(({ label, val, configKey }) => {
-            if (val === null || val === undefined) return;
-            const stateKey = `${symbol}-${label}`;
-            // Gap 8: undefined = uninitialized, treat same as NEUTRAL for zone calc
-            const previousZone = (zoneState.current.get(stateKey) ?? 'NEUTRAL') as 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT';
-            const isInverted = obT < osT;
-            let zone: 'NEUTRAL' | 'OVERSOLD' | 'OVERBOUGHT' = 'NEUTRAL';
-
-            const NEAR_BUFFER = 0.3; // Allow "near" reach alerts
-
-            if (previousZone === 'OVERSOLD') {
-              zone = isInverted
-                ? (val < osT - hysteresis ? 'NEUTRAL' : 'OVERSOLD')
-                : (val > osT + hysteresis ? 'NEUTRAL' : 'OVERSOLD');
-            } else if (previousZone === 'OVERBOUGHT') {
-              zone = isInverted
-                ? (val > obT + hysteresis ? 'NEUTRAL' : 'OVERBOUGHT')
-                : (val < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT');
-            } else {
-              if (isInverted) {
-                // Inverted reach: "Very near or reach"
-                if (val >= osT - NEAR_BUFFER) zone = 'OVERSOLD';
-                else if (val <= obT + NEAR_BUFFER) zone = 'OVERBOUGHT';
-              } else {
-                // Normal reach: "Very near or reach"
-                if (val <= osT + NEAR_BUFFER) zone = 'OVERSOLD';
-                else if (val >= obT - NEAR_BUFFER) zone = 'OVERBOUGHT';
-              }
-            }
-
-            // ── Phase 1.5: Global Extreme Threshold Override ──
-            // INTELLIGENCE: Only apply global override if NO manual alert is enabled for this specific timeframe.
-            // This ensures "Isolation" as requested by the user.
-            const hasManualSpecific = !!config?.[configKey as keyof typeof config];
-            if (globalEnabled && !hasManualSpecific) {
-              const globalHysteresis = computeHysteresis(globalObT, globalOsT);
-              const isGlobalInverted = globalObT < globalOsT;
-              
-              if (previousZone === 'OVERSOLD' && zone === 'NEUTRAL') {
-                 const stillExtreme = isGlobalInverted ? val >= globalOsT - globalHysteresis : val <= globalOsT + globalHysteresis;
-                 if (stillExtreme) zone = 'OVERSOLD';
-              } else if (previousZone === 'OVERBOUGHT' && zone === 'NEUTRAL') {
-                 const stillExtreme = isGlobalInverted ? val <= globalObT + globalHysteresis : val >= globalObT - globalHysteresis;
-                 if (stillExtreme) zone = 'OVERBOUGHT';
-              } else if (zone === 'NEUTRAL') {
-                 if (isGlobalInverted ? val >= globalOsT : val <= globalOsT) zone = 'OVERSOLD';
-                 else if (isGlobalInverted ? val <= globalObT : val >= globalObT) zone = 'OVERBOUGHT';
-              }
-            }
-
-            currentZones.set(label, zone);
-          });
-
-          // ── Phase 2: Fire RSI alerts ──
-          timeframes.forEach(({ label, val, configKey }) => {
-            const hasManualAlert = config?.[configKey as keyof typeof config] === true;
-            const globalEnabled = globalThresholdsEnabledRef.current;
+          // RSI Approx
+          const tfKeys = ['1m', '5m', '15m', '1h'];
+          tfKeys.forEach(tf => {
+            const rsi = entry[`rsi${tf}` as keyof ScreenerEntry] as number;
+            const stateKey = `${symbol}-${tf}`;
+            const previousZone = (zoneState.current.get(stateKey) ?? 'NEUTRAL') as any;
+            let currentZone: any = 'NEUTRAL';
             
-            // Allow alert if manually enabled OR if global extreme mode is on
-            // (Note: Phase 1.5 already isolated 'currentZone' if hasManualAlert is true)
-            if (!hasManualAlert && !globalEnabled) return;
-
-
-            const currentZone = currentZones.get(label);
-            if (!currentZone || currentZone === 'NEUTRAL') {
-              zoneState.current.set(`${symbol}-${label}`, 'NEUTRAL');
-              return;
+            if (previousZone === 'OVERSOLD') currentZone = rsi > osT + hyst ? 'NEUTRAL' : 'OVERSOLD';
+            else if (previousZone === 'OVERBOUGHT') currentZone = rsi < obT - hyst ? 'NEUTRAL' : 'OVERBOUGHT';
+            else {
+              if (rsi <= osT) currentZone = 'OVERSOLD';
+              else if (rsi >= obT) currentZone = 'OVERBOUGHT';
             }
 
-            const stateKey = `${symbol}-${label}`;
-            const previousZone = zoneState.current.get(stateKey);
-
-            let hasConfluence = true;
-            if (confluenceMode) {
-              // Task 6.1: Require at least 2 valid (non-null) timeframes in the same zone.
-              // Exclude timeframes with null/undefined RSI values from the count.
-              const validTimeframesInZone = timeframes.filter(tf => {
-                if (tf.label === label) return false;
-                if (!config[tf.configKey as keyof typeof config]) return false;
-                if (tf.val === null || tf.val === undefined) return false; // exclude null values
-                return currentZones.get(tf.label) === currentZone;
-              });
-              hasConfluence = validTimeframesInZone.length >= 1; // at least 1 other = 2 total
-            }
-
-            // Allow "cold-start" alerts if the config was updated in the last 15 seconds
-            const recentlyUpdated = (configLastUpdated.current.get(symbol) || 0) > Date.now() - 15000;
-            const isFirstSeen = previousZone === undefined || previousZone === 'NEUTRAL';
-            const justEntered = isFirstSeen; // currentZone is guaranteed to be OVERSOLD or OVERBOUGHT here
-
-            // Determine if this specific TF-Symbol hit a global threshold
-            let isGlobalHit = false;
-            if (globalEnabled && globalThresholdTimeframesRef.current.includes(label)) {
-              if (currentZone === 'OVERSOLD') {
-                isGlobalHit = (globalOverboughtRef.current < globalOversoldRef.current) ? (val as number) >= globalOsT : (val as number) <= globalOsT;
-              } else {
-                isGlobalHit = (globalOverboughtRef.current < globalOversoldRef.current) ? (val as number) <= globalObT : (val as number) >= globalObT;
-              }
-            }
-
-            // INTELLIGENCE: Extreme RSI Mode (Alerts) Fallback logic overrides visual mode
-            // Extreme alerts fire if either a manual alert exists, or a global extreme is hit
-            // and no specific manual alert overrides it for this timeframe.
-            const hasManualSpecific = config && configKey in config;
-            const shouldNotify = hasManualAlert || (globalEnabled && isGlobalHit && !hasManualSpecific);
-
-
-
-            if (justEntered && (previousZone !== undefined || recentlyUpdated) && hasConfluence && shouldNotify) {
-              const alertKey = `${symbol}-${label}`;
-              const now = Date.now();
-              // Intelligence: If the config was recently updated (within 15s), we bypass the cooldown 
-              // to give the user "Instant Satisfaction" for their new settings.
-              const coordinatorKey = alertCoordinator.getCooldownKey(symbol, getExchange(), label, currentZone as string);
-              if (recentlyUpdated || (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS && !alertCoordinator.isInCooldown(coordinatorKey, COOLDOWN_MS))) {
-
-                // Task 8.4: Quiet hours suppression — check per-coin config
-                const alertPriority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
-                const quietEnabled = config?.quietHoursEnabled ?? false;
-                const quietStart = config?.quietHoursStart ?? 22;
-                const quietEnd = config?.quietHoursEnd ?? 8;
-                if (shouldSuppressAlert(alertPriority, quietEnabled, quietStart, quietEnd)) {
-                  zoneState.current.set(stateKey, currentZone);
-                  return; // Suppressed by quiet hours
-                }
-
-                lastTriggered.current.set(alertKey, now);
-                alertCoordinator.setCooldown(coordinatorKey);
-                const val = timeframes.find(t => t.label === label)?.val ?? 0;
-                const isGlobalAlert = isGlobalHit && !hasManualAlert;
-
-                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
-                const priceStr = formatPrice(live.price);
-
-                notificationEngine.notify({
-                  title: `${getSymbolAlias(symbol)} ${label} RSI ${currentZone}${isGlobalAlert ? ' [Global]' : ''}`,
-                  body: `RSI: ${(val as number).toFixed(1)} @ $${priceStr} [${formattedExchange}]`,
-                  symbol,
-                  exchange: getExchange(),
-                  priority: alertPriority,
-                  type: 'rsi'
-                });
-
-                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: label, value: val as number, type: currentZone as Alert['type'] });
-              }
+            if (currentZone !== 'NEUTRAL' && currentZone !== previousZone) {
+               const now = Date.now();
+               const alertKey = `${stateKey}-${currentZone}`;
+               const coordKey = alertCoordinator.getCooldownKey(symbol, getExchange(), tf, currentZone);
+               const recentlyUpdated = (configLastUpdated.current.get(symbol) || 0) > now - 15000;
+               
+               if (recentlyUpdated || (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS && !alertCoordinator.isInCooldown(coordKey, COOLDOWN_MS))) {
+                 lastTriggered.current.set(alertKey, now);
+                 alertCoordinator.setCooldown(coordKey);
+                 const priority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
+                 
+                 toast[currentZone === 'OVERSOLD' ? 'success' : 'error'](`${getSymbolAlias(symbol)} ${tf} RSI ${currentZone}`, {
+                   description: `RSI: ${rsi.toFixed(1)} @ $${formatPrice(live.price)} [${getExchange().toUpperCase()}]`
+                 });
+                 
+                 playAlertSoundRef.current(false, priority);
+                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: tf, value: rsi, type: currentZone });
+                 triggerNativeRef.current(`${getSymbolAlias(symbol)} ${tf} RSI ${currentZone}`, `RSI: ${rsi.toFixed(1)} @ $${formatPrice(live.price)}`);
+               }
             }
             zoneState.current.set(stateKey, currentZone);
           });
 
-          // ── Phase 3: Strategy Shift Alerts ──
-          if (config.alertOnStrategyShift) {
-            const stratKey = `${symbol}-STRAT`;
-            const prevStrat = zoneState.current.get(stratKey); // undefined on first tick
-
-            const liveStrategy = computeStrategyScore({
-              rsi1m, rsi5m, rsi15m, rsi1h,
-              macdHistogram: entry.macdHistogram,
-              bbPosition,
-              stochK: entry.stochK,
-              stochD: entry.stochD,
-              emaCross,
-              vwapDiff: entry.vwapDiff,
-              volumeSpike: entry.volumeSpike,
-              price: live.price,
-              confluence: entry.confluence,
-              rsiDivergence: entry.rsiDivergence,
-              momentum: entry.momentum,
-              enabledIndicators: enabledIndicatorsRef.current
-            });
-
-            const currentStrat = liveStrategy.signal;
-
-            // Gap 8: skip on uninitialized state
-            if (prevStrat !== undefined && prevStrat !== currentStrat &&
-              (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
-              // Gap 2: unified key `${symbol}-STRAT`  
-              const alertKey = `${symbol}-STRAT`;
+          // Strategy Shift
+          if (config?.alertOnStrategyShift) {
+            const liveStrategy = computeStrategyScore({ ...entry, price: live.price, enabledIndicators: enabledIndicatorsRef.current });
+            const sKey = `${symbol}-STRAT`;
+            const prevS = zoneState.current.get(sKey);
+            if (prevS !== undefined && prevS !== liveStrategy.signal && (liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'strong-sell')) {
               const now = Date.now();
-              if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS) {
-                lastTriggered.current.set(alertKey, now);
-                const isBuy = currentStrat === 'strong-buy';
-                const priceStr = formatPrice(live.price);
-                const alertPriority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
-                const behavior = getAlertBehavior(alertPriority);
-                
-                if (document.visibilityState === 'visible') {
-                  toast[isBuy ? 'success' : 'error'](
-                    `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`,
-                    { 
-                      duration: behavior.toastDuration, 
-                      description: `Strategy Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}` 
-                    }
-                  );
-                }
-                playAlertSoundRef.current(false, alertPriority);
-                logAlertRef.current({
-                  symbol,
-                  exchange: getExchange(),
-                  timeframe: 'STRATEGY',
-                  value: liveStrategy.score,
-                  type: liveStrategy.signal === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
-                });
-
-                // Signal Win Rate Tracker™ — record snapshot for outcome evaluation
-                recordSignal(symbol, currentStrat as 'strong-buy' | 'strong-sell', live.price);
-
-                const formattedExchange = getExchange().charAt(0).toUpperCase() + getExchange().slice(1);
-                // isBuy and priceStr are already defined above
-                
-                triggerNativeRef.current(
-                  `${getSymbolAlias(symbol)} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                  `[${formattedExchange}] Strategy shift detected. Score: ${liveStrategy.score.toFixed(0)} @ $${priceStr}`
-                );
+              if (now - (lastTriggered.current.get(sKey) || 0) > COOLDOWN_MS) {
+                lastTriggered.current.set(sKey, now);
+                const isBuy = liveStrategy.signal === 'strong-buy';
+                recordSignal(symbol, isBuy ? 'strong-buy' : 'strong-sell', live.price);
+                toast[isBuy ? 'success' : 'error'](`${getSymbolAlias(symbol)} → ${isBuy?'🟢 BUY':'🔴 SELL'}`, { description: `Score: ${liveStrategy.score.toFixed(0)} @ $${formatPrice(live.price)}` });
+                playAlertSoundRef.current(false, (config.priority as any) ?? 'medium');
+                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRATEGY', value: liveStrategy.score, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
+                triggerNativeRef.current(`${getSymbolAlias(symbol)} Strategy Shift`, `${isBuy?'Bullish':'Bearish'} signal @ $${formatPrice(live.price)}`);
               }
             }
-            zoneState.current.set(stratKey, currentStrat);
+            zoneState.current.set(sKey, liveStrategy.signal);
           }
         });
 
-        // ── Win Rate Tracker: Evaluate pending outcomes against live prices ──
-        // Throttle to once every 30 seconds to avoid excessive localStorage I/O
+        // Evaluation
         const now = Date.now();
-        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30_000) {
+        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30000) {
           lastWinRateEvalRef.current = now;
-          const priceMap = new Map<string, number>();
-          batch.forEach((live: any, symbol: string) => {
-            if (live.price > 0) priceMap.set(symbol, live.price);
-          });
-          if (priceMap.size > 0) evaluateOutcomes(priceMap);
+          const pm = new Map<string, number>();
+          batch.forEach((l, s) => { if (l.price > 0) pm.set(s, l.price); });
+          if (pm.size > 0) evaluateOutcomes(pm);
         }
-      };
-
-      // ── Phase 4: Worker-triggered alerts (Instant Response) ──
-      // The worker already evaluated zones and sent ALERT_TRIGGERED. We just need to
-      // present the alert and log it. Cooldown key uses bare symbol-timeframe to match
-      // the worker's key format and prevent the batch evaluator from re-firing.
-      const handleWorkerAlert = (e: Event) => {
-        if (!enabledRef.current) return;
-        const payload = (e as CustomEvent).detail;
-        const { symbol, exchange, timeframe, value, type } = payload;
-
-        const config = coinConfigsRef.current[symbol];
-        const isVolatility = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
-        
-        // Block alerts if no manual config AND no relevant global mode is enabled
-        const globalRSIEnabled = globalThresholdsEnabledRef.current;
-        const globalVolEnabled = globalVolatilityEnabledRef.current;
-        
-        if (!config) {
-          if (isVolatility && !globalVolEnabled) return;
-          if (!isVolatility && !globalRSIEnabled) return;
-        }
-
-        // Unified cooldown key: bare symbol-timeframe (matches worker + batch evaluator)
-        // For volatility, we use a specific key to avoid collision with RSI 1m alerts
-        const alertKey = isVolatility 
-          ? `${symbol}-${type}`
-          : `${symbol}-${timeframe === 'STRATEGY' ? 'STRAT' : timeframe}`;
-
-        const now = Date.now();
-        const coordinatorKey = alertCoordinator.getCooldownKey(
-          symbol,
-          exchange ?? getExchange(),
-          isVolatility ? type : (timeframe === 'STRATEGY' ? 'STRAT' : timeframe),
-          type
-        );
-        if (now - (lastTriggered.current.get(alertKey) || 0) > COOLDOWN_MS && !alertCoordinator.isInCooldown(coordinatorKey, COOLDOWN_MS)) {
-          // Set cooldown for BOTH this handler AND the batch evaluator
-          lastTriggered.current.set(alertKey, now);
-          alertCoordinator.setCooldown(coordinatorKey);
-
-          const isStrat = timeframe === 'STRATEGY';
-          const alias = getSymbolAlias(symbol);
-          const exchangeLabel = exchange ? ` [${exchange.charAt(0).toUpperCase() + exchange.slice(1)}]` : '';
-          const priceStr = payload.price ? formatPrice(payload.price) : '';
-          
-          let title = '';
-          let desc = '';
-          
-          if (isVolatility) {
-             const direction = payload.direction;
-             const dirSymbol = direction === 'bullish' ? '🟢 BULLISH' : '🔴 BEARISH';
-             
-             if (type === 'LONG_CANDLE') {
-               title = `${alias}${exchangeLabel} ⚡ ${dirSymbol} VOLATILITY`;
-               desc = `Long candle detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
-             } else {
-               title = `${alias}${exchangeLabel} 📊 ${dirSymbol} VOLUME SPIKE`;
-               desc = `Volume surge detected: ${value.toFixed(1)}x avg ${priceStr ? `@ $${priceStr}` : ''}`;
-             }
-          } else {
-             title = isStrat
-               ? `${alias}${exchangeLabel} → ${type === 'STRATEGY_STRONG_BUY' ? '🟢 STRONG BUY' : '🔴 STRONG SELL'}`
-               : `${alias}${exchangeLabel} ${timeframe} RSI ${type}`;
-             desc = isStrat
-               ? `Strategy Score: ${value.toFixed(0)} ${priceStr ? `@ $${priceStr}` : ''}`
-               : `RSI: ${value.toFixed(1)} ${priceStr ? `@ $${priceStr}` : ''}`;
-          }
-
-          const alertPriority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
-          const behavior = getAlertBehavior(alertPriority);
-
-          if (document.visibilityState === 'visible') {
-            const isPositive = type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || isVolatility;
-            
-            toast[isPositive ? 'success' : 'error'](
-              title,
-              { 
-                duration: behavior.toastDuration, 
-                description: desc 
-              }
-            );
-          }
-
-          playAlertSoundRef.current(isVolatility, alertPriority);
-          logAlertRef.current({ symbol, exchange, timeframe, value, type: type as Alert['type'] });
-          triggerNativeRef.current(title, desc);
-        }
-      };
-
-      eng.addEventListener('ticks', handleBatchTicks);
-      eng.addEventListener('alert', handleWorkerAlert);
-      return () => {
-        eng.removeEventListener('ticks', handleBatchTicks);
-        eng.removeEventListener('alert', handleWorkerAlert);
-      };
-    }
-  }, []); // Gap 1: empty deps — attaches once, uses refs for live values
-
-  // ── Reset alert zone states when exchange changes ──
-  // Prevents cross-exchange false alerts (e.g., Binance RSI zone bleeding into Bybit)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const engineInstance = (window as any).__priceEngine;
-    if (!engineInstance) return;
-
-    const handleExchangeChange = () => {
-      zoneState.current.clear();
-      lastTriggered.current.clear();
-      alertCoordinator.clearAllCooldowns();
-      console.log('[alerts] Exchange changed — zone states and cooldowns reset for isolation');
+      } catch (err) { console.warn('[alerts] Tick fail:', err); }
     };
 
-    engineInstance.addEventListener('exchange-changed', handleExchangeChange);
-    return () => {
-      engineInstance.removeEventListener('exchange-changed', handleExchangeChange);
-    };
-  }, []);
+    const handleWorkerAlert = (e: Event) => {
+      if (!enabledRef.current) return;
+      const payload = (e as CustomEvent).detail;
+      const { symbol, exchange, timeframe, value, type } = payload;
+      const config = coinConfigsRef.current[symbol];
+      const isVol = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
+      if (!config && ((isVol && !globalVolatilityEnabledRef.current) || (!isVol && !globalThresholdsEnabledRef.current))) return;
 
-  // (Removed: duplicate fetch('/api/alerts') — already handled at lines 46-59)
-
-  // ── Test alert ──
-  const triggerTestAlert = useCallback(async () => {
-    await resumeAudioContext();
-    toast.success("RSIQ Enterprise: Flow Test", {
-      description: "Verifying your personalized high-fidelity alert pipeline."
-    });
-    playAlertSound();
-    triggerNativeNotification("RSIQ PRO Test", "Enterprise alert delivery is active!");
-  }, [resumeAudioContext, playAlertSound, triggerNativeNotification]);
-
-  // ── Clear history ──
-  const clearAlertHistory = useCallback(async () => {
-    await resumeAudioContext();
-    try {
-      const res = await fetch('/api/alerts', { method: 'DELETE', cache: 'no-store' });
-      if (res.ok) {
-        setAlerts([]);
-        toast.success("Alert history purged.");
+      const aKey = isVol ? `${symbol}-${type}` : `${symbol}-${timeframe}`;
+      const now = Date.now();
+      const cKey = alertCoordinator.getCooldownKey(symbol, exchange ?? getExchange(), isVol ? type : timeframe, type);
+      
+      if (now - (lastTriggered.current.get(aKey) || 0) > COOLDOWN_MS && !alertCoordinator.isInCooldown(cKey, COOLDOWN_MS)) {
+        lastTriggered.current.set(aKey, now);
+        alertCoordinator.setCooldown(cKey);
+        const priority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
+        const isPos = type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || type === 'LONG_CANDLE';
+        toast[isPos ? 'success' : 'error'](`${getSymbolAlias(symbol)} ${timeframe} ${type}`, { description: `Value: ${value.toFixed(1)}` });
+        playAlertSoundRef.current(isVol, priority);
+        logAlertRef.current({ symbol, exchange: exchange ?? getExchange(), timeframe, value, type });
+        triggerNativeRef.current(`${getSymbolAlias(symbol)} Alert`, `${type} detected on ${timeframe}`);
       }
-    } catch (e) {
-      console.error('[alerts] Clear history failed:', e);
-    }
-  }, [resumeAudioContext]);
+    };
 
-  return { alerts, setAlerts, triggerTestAlert, clearAlertHistory, resumeAudioContext, getGlobalWinRate };
+    eng.addEventListener('ticks', handleBatchTicks);
+    eng.addEventListener('alert', handleWorkerAlert);
+    return () => {
+      eng.removeEventListener('ticks', handleBatchTicks);
+      eng.removeEventListener('alert', handleWorkerAlert);
+    };
+  }, [getExchange]);
+
+  return {
+    alerts,
+    clearAlertHistory: async () => { setAlerts([]); await fetch('/api/alerts', { method: 'DELETE' }); },
+    resumeAudioContext,
+    getGlobalWinRate,
+    audioState,
+    isAudioSuspended: audioState === 'suspended' || audioState === 'uninitialized'
+  };
 }

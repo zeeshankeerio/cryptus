@@ -2641,7 +2641,14 @@ export default function ScreenerDashboard() {
     alertsEnabled
   ]);
 
-  const { alerts, clearAlertHistory, resumeAudioContext, getGlobalWinRate } = useAlertEngine(
+  const { 
+    alerts, 
+    clearAlertHistory, 
+    resumeAudioContext, 
+    getGlobalWinRate,
+    audioState,
+    isAudioSuspended
+  } = useAlertEngine(
     processedData,
     coinConfigs,
     alertsEnabled,
@@ -3274,6 +3281,27 @@ export default function ScreenerDashboard() {
     doFetch();
     return () => clearTimeout(retryTimerRef.current);
   }, []); // mount-only: fetchDataRef always points to latest fetchData
+  
+  // ── Global Interaction Monitor for Institutional Audio Resilience ──
+  useEffect(() => {
+    if (!hasMounted) return;
+    
+    const handleInteraction = () => {
+      // Resume on first click to satisfy browser autoplay policies
+      if (isAudioSuspended) {
+        resumeAudioContext().then(() => {
+          console.log('[screener] Audio context unlocked via interaction');
+        });
+      }
+    };
+    
+    window.addEventListener('mousedown', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+    return () => {
+      window.removeEventListener('mousedown', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+  }, [hasMounted, isAudioSuspended, resumeAudioContext]);
 
   // ── Auto-refresh (skips when tab is hidden) ──
   useEffect(() => {
@@ -3655,16 +3683,25 @@ export default function ScreenerDashboard() {
                       }} 
                       transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }} 
                       className={cn(
-                        "w-2 h-2 rounded-full", 
-                        !isConnected ? "bg-slate-700" : (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-[#39FF14] shadow-[0_0_8px_#39FF14]")
+                        "w-2 h-2 rounded-full transition-all duration-500", 
+                        !isConnected ? "bg-slate-700" : 
+                        (isAudioSuspended && soundEnabled) ? "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" :
+                        (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-[#39FF14] shadow-[0_0_8px_#39FF14]")
                       )} 
                     />
                     <div className="flex flex-col">
-                      <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-600 leading-none">
-                        {!isConnected ? "Offline" : (derivativesStale ? "Syncing" : "Ultra-Live")}
+                      <span className={cn(
+                        "text-[7px] font-black uppercase tracking-[0.2em] leading-none transition-colors",
+                        (isAudioSuspended && soundEnabled && isConnected) ? "text-amber-400" : "text-slate-600"
+                      )}>
+                        {!isConnected ? "Offline" : 
+                         (isAudioSuspended && soundEnabled) ? "Audio Muted" :
+                         (derivativesStale ? "Syncing" : "Ultra-Live")}
                       </span>
                       {isConnected && !derivativesStale && (
-                        <span className="text-[5px] font-bold text-[#39FF14]/50 uppercase tracking-tighter mt-0.5">Verified</span>
+                        <span className="text-[5px] font-bold text-[#39FF14]/50 uppercase tracking-tighter mt-0.5">
+                          {isAudioSuspended && soundEnabled ? "Tap to enable sound" : "Verified"}
+                        </span>
                       )}
                     </div>
 
@@ -3678,6 +3715,12 @@ export default function ScreenerDashboard() {
                         <div className="flex items-center justify-between">
                           <span className="text-[7px] font-black text-slate-500 uppercase">Intel Heartbeat</span>
                           <span className={cn("text-[7px] font-bold", !derivativesStale ? "text-[#39FF14]" : "text-amber-500")}>{!derivativesStale ? "Active" : "Re-syncing..."}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[7px] font-black text-slate-500 uppercase">Audio Stream</span>
+                          <span className={cn("text-[7px] font-bold", !isAudioSuspended ? "text-[#39FF14]" : "text-amber-500")}>
+                            {audioState === 'running' ? 'Active' : audioState === 'suspended' ? 'Blocked' : 'Idle'}
+                          </span>
                         </div>
                         <div className="pt-1 border-t border-white/5">
                           <p className="text-[6px] text-slate-600 leading-tight">Institutional-grade monitoring ensures zero-gap data liveness across all derivatives streams.</p>
@@ -3911,12 +3954,17 @@ export default function ScreenerDashboard() {
                       }} 
                       transition={{ duration: 1.5, repeat: Infinity }} 
                       className={cn(
-                        "w-1.5 h-1.5 rounded-full", 
-                        !isConnected ? "bg-slate-700" : (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]")
+                        "w-1.5 h-1.5 rounded-full transition-all duration-300", 
+                        !isConnected ? "bg-slate-700" : 
+                        (isAudioSuspended && soundEnabled) ? "bg-amber-400" :
+                        (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]")
                       )} 
                     />
-                    <span className="text-[7.5px] font-black tabular-nums text-slate-500 uppercase tracking-widest ml-1.5">
-                      {!isConnected ? "Off" : (derivativesStale ? "Sync" : "Live")}
+                    <span className={cn(
+                      "text-[7.5px] font-black tabular-nums uppercase tracking-widest ml-1.5 transition-colors",
+                      (isAudioSuspended && soundEnabled && isConnected) ? "text-amber-400" : "text-slate-500"
+                    )}>
+                      {!isConnected ? "Off" : (isAudioSuspended && soundEnabled) ? "Mute" : (derivativesStale ? "Sync" : "Live")}
                     </span>
                   </div>
                   

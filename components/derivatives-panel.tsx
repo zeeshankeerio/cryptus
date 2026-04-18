@@ -140,7 +140,8 @@ const LiquidationItem = memo(function LiquidationItem({ liq }: { liq: Liquidatio
           "font-black text-[10px]",
           liq.valueUsd >= 500000 ? (isLong ? "text-[#FF4B5C]" : "text-[#39FF14]") : "text-white/80"
         )}>{sizeStr}</span>
-        <span className="text-slate-600 text-[9px] font-mono">{timeStr}</span>
+        <span className="text-slate-600 text-[9px] font-mono shrink-0">@ ${formatPrice(Number(liq.price))}</span>
+        <span className="text-slate-700 text-[8px] font-mono shrink-0">{timeStr}</span>
       </div>
     </div>
   );
@@ -175,7 +176,7 @@ const WhaleItem = memo(function WhaleItem({ whale }: { whale: WhaleTradeEvent })
       </div>
       <div className="flex items-center gap-2 tabular-nums">
         <span className="font-black text-[10px] text-white/90">{sizeStr}</span>
-        <span className="text-slate-600 text-[9px] font-mono shrink-0">@ ${formatPrice(whale.price)}</span>
+        <span className="text-slate-600 text-[9px] font-mono shrink-0">@ ${formatPrice(Number(whale.price))}</span>
         <span className="text-slate-700 text-[8px] font-mono shrink-0">{timeStr}</span>
       </div>
     </div>

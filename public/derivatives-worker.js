@@ -40,6 +40,11 @@ const WHALE_WATCH_SYMBOLS = [
   'aptusdt', 'arbusdt', 'opusdt', 'suiusdt', 'pepeusdt'
 ];
 
+// ── Broadcast Channel for Service Worker Bridge (2026 Resilience) ──
+const alertChannel = typeof BroadcastChannel !== 'undefined' 
+  ? new BroadcastChannel('rsiq-alerts') 
+  : null;
+
 // ── State ────────────────────────────────────────────────────────
 let currentSymbols = new Set();
 let isRunning = false;
@@ -50,6 +55,7 @@ let liquidationBuffer = [];         // circular array of LiquidationEvent
 let whaleBuffer = [];               // circular array of WhaleTradeEvent
 let orderFlowBuffer = new Map();    // symbol → { buyVol, sellVol, tradeCount, windowStart }
 let oiBuffer = new Map();           // symbol → { value, prevValue, updatedAt }
+let lastPrices = new Map();        // symbol → last known price for fallback
 
 // Flush state
 let fundingDirty = false;
@@ -108,6 +114,26 @@ function generateId() {
 function broadcast(message) {
   if (typeof self !== 'undefined') {
     self.postMessage(message);
+    
+    // Direct Bridge: If this is a critical alert, send to SW channel immediately
+    if (alertChannel && (message.type === 'WHALE_TRADE' || message.type === 'LIQUIDATION')) {
+      const p = message.payload;
+      alertChannel.postMessage({
+        type: 'ALERT_NOTIFICATION',
+        payload: {
+          title: message.type === 'WHALE_TRADE' 
+            ? `🐋 WHALE ${p.side.toUpperCase()} - ${p.symbol}`
+            : `💀 ${p.side === 'Sell' ? 'LONG' : 'SHORT'} Liquidated - ${p.symbol}`,
+          body: message.type === 'WHALE_TRADE'
+            ? `$${Math.round(p.valueUsd / 1000)}K @ $${p.price.toLocaleString()} [Binance]`
+            : `$${Math.round(p.valueUsd / 1000)}K @ $${p.price.toLocaleString()} [Bybit]`,
+          symbol: p.symbol,
+          exchange: p.exchange,
+          priority: p.valueUsd >= 500000 ? 'critical' : 'high',
+          type: message.type === 'WHALE_TRADE' ? 'whale' : 'liquidation'
+        }
+      });
+    }
   }
 }
 
@@ -148,6 +174,9 @@ function connectFundingStream() {
           const nextFundingTime = parseInt(item.T);
 
           if (isNaN(rate) || isNaN(markPrice)) continue;
+
+          // Cache last price for alert fallback
+          lastPrices.set(symbol.toUpperCase(), markPrice);
 
           // Annualized: rate × 3 funding periods/day × 365 days × 100 for percentage
           const annualized = rate * 3 * 365 * 100;
@@ -227,9 +256,9 @@ function connectLiquidationStream() {
 
         if (data.topic && data.topic.startsWith('allLiquidation.') && data.data) {
           const liq = data.data;
-          const symbol = liq.symbol || data.topic.replace('allLiquidation.', '');
+          const symbol = (liq.symbol || data.topic.replace('allLiquidation.', '')).toUpperCase();
           const size = parseFloat(liq.size) || 0;
-          const price = parseFloat(liq.price) || 0;
+          const price = parseFloat(liq.price) || lastPrices.get(symbol) || 0;
           const valueUsd = size * price;
 
           // Only track significant liquidations (dynamic threshold)
@@ -319,8 +348,8 @@ function connectWhaleStream() {
         
         lastDataReceived = Date.now();
 
-        const symbol = data.s;
-        const price = parseFloat(data.p);
+        const symbol = data.s.toUpperCase();
+        const price = parseFloat(data.p) || lastPrices.get(symbol) || 0;
         const quantity = parseFloat(data.q);
         const isBuyerMaker = data.m;  // true = seller is taker (sell), false = buyer is taker (buy)
         const tradeTime = data.T || Date.now();
@@ -407,7 +436,10 @@ async function pollOpenInterest() {
   try {
     const res = await fetch(
       `/api/derivatives/oi?symbols=${OI_SYMBOLS.join(',')}`,
-      { signal: AbortSignal.timeout(12000) }
+      { 
+        signal: AbortSignal.timeout(12000),
+        cache: 'no-store' 
+      }
     );
     
     if (!res.ok) {

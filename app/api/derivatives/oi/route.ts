@@ -79,7 +79,9 @@ export async function GET(request: NextRequest) {
       cached: true,
     }, {
       headers: {
-        'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=5',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
         'X-Proxy-Source': 'RSIQ-Derivatives-Proxy',
       }
     });
