@@ -109,7 +109,154 @@ function getScoreBarColor(score: number): string {
 
 
 
-// ─── Signal Badge ──────────────────────────────────────────────
+// ─── Tactical Grid Constants ─────────────────────────────────────
+
+const COL_WIDTHS = {
+  rank: "w-[48px] min-w-[48px]",
+  star: "w-[40px] min-w-[40px]",
+  symbol: "w-[180px] min-w-[180px]",
+  price: "w-[125px] min-w-[125px]",
+  change: "w-[110px] min-w-[110px]",
+  volume: "w-[120px] min-w-[120px]",
+  rsi: "w-[90px] min-w-[90px]",
+  ema: "w-[115px] min-w-[115px]",
+  trend: "w-[100px] min-w-[100px]",
+  macd: "w-[105px] min-w-[105px]",
+  bb: "w-[100px] min-w-[100px]",
+  stoch: "w-[95px] min-w-[95px]",
+  signal: "w-[155px] min-w-[155px]",
+  edit: "w-[60px] min-w-[60px]",
+  confluence: "w-[100px] min-w-[100px]",
+  divergence: "w-[100px] min-w-[100px]",
+  momentum: "w-[90px] min-w-[90px]",
+  atr: "w-[90px] min-w-[90px]",
+  adx: "w-[90px] min-w-[90px]",
+  vwap: "w-[90px] min-w-[90px]",
+  funding: "w-[105px] min-w-[105px]",
+  flow: "w-[100px] min-w-[100px]",
+  smart: "w-[110px] min-w-[110px]",
+};
+
+// ─── Atomic Components ──────────────────────────────────────────
+
+const SortHeader = memo(function SortHeader({
+  label, sortKey, currentKey, currentDir, onSort, align = 'right', widthClass, stickyOffset
+}: {
+  label: string; sortKey: SortKey; currentKey: SortKey; currentDir: SortDir; onSort: (k: SortKey) => void; align?: 'left' | 'right' | 'center'; widthClass?: string; stickyOffset?: number;
+}) {
+  const isActive = currentKey === sortKey;
+  return (
+    <th
+      onClick={() => onSort(sortKey)}
+      style={stickyOffset !== undefined ? { left: stickyOffset } : {}}
+      className={cn(
+        "px-3 py-3 text-[10px] font-bold uppercase text-slate-500 cursor-pointer select-none transition-colors",
+        isActive ? "text-[#39FF14] bg-white/[0.02]" : "hover:text-slate-300 hover:bg-white/[0.01]",
+        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
+        widthClass || "w-32",
+        stickyOffset !== undefined && "sticky z-30 bg-[#0A0F1B]/95",
+        sortKey === 'price' && stickyOffset !== undefined && "shadow-[4px_0_8px_-4px_rgba(0,0,0,0.5)]"
+      )}
+    >
+      <div className={cn("flex items-center gap-1.5", align === 'right' ? 'justify-end' : align === 'center' ? 'justify-center' : 'justify-start')}>
+        <span className="tracking-widest whitespace-nowrap">{label}</span>
+        {isActive ? (
+          currentDir === 'asc' ? <ChevronUp size={12} className="text-[#39FF14]" /> : <ChevronDown size={12} className="text-[#39FF14]" />
+        ) : (
+          <SortAsc size={10} className="opacity-0 group-hover:opacity-40" />
+        )}
+      </div>
+    </th>
+  );
+});
+
+const IndicatorCell = memo(function IndicatorCell({
+  value,
+  formatted,
+  colorClass = "text-slate-300",
+  widthClass,
+  align = 'right',
+  title
+}: {
+  value: number | null;
+  formatted: string;
+  colorClass?: string;
+  widthClass: string;
+  align?: 'left' | 'right' | 'center';
+  title?: string;
+}) {
+  return (
+    <td
+      title={title}
+      className={cn(
+        "px-3 py-3 tabular-nums font-bold font-mono text-[11px] border-white/[0.01]",
+        colorClass,
+        align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
+        widthClass
+      )}
+    >
+      {formatted}
+    </td>
+  );
+});
+
+
+const SymbolCell = memo(function SymbolCell({
+  symbol, market, marketState, isLive, stickyOffset, onOpenSettings
+}: {
+  symbol: string; market: string; marketState?: string | null; isLive: boolean; stickyOffset: number; onOpenSettings: (s: string) => void;
+}) {
+  return (
+    <td
+      style={{ left: stickyOffset }}
+      className="sticky z-10 px-3 py-4 bg-[#0A0F1B]/95 w-[180px] min-w-[180px]"
+    >
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-1.5">
+          <div className="relative group shrink-0">
+            <span
+              className="font-black text-white text-[13px] tracking-tight hover:text-[#39FF14] transition-colors cursor-pointer"
+              onClick={() => onOpenSettings(symbol)}
+            >
+              {getSymbolAlias(symbol)}
+            </span>
+            {isLive && (
+              <div className="absolute -left-2.5 top-1.5 w-1 h-1 rounded-full bg-[#39FF14] shadow-[0_0_5px_#39FF14] animate-pulse" title="Institutional Heartbeat: Data Live" />
+            )}
+          </div>
+          <MarketBadge market={market as any} />
+          {market !== 'Crypto' && marketState !== 'REGULAR' && (
+            <span className="text-[7px] px-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-sm font-black uppercase tracking-tighter shadow-[0_0_8px_rgba(255,75,92,0.1)]">
+              {marketState || 'CLOSED'}
+            </span>
+          )}
+        </div>
+        <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">
+          {market === 'Crypto' ? 'USDT' : getSymbolTicker(symbol)}
+        </span>
+      </div>
+    </td>
+  );
+});
+
+const PriceCell = memo(function PriceCell({
+  price, lastChange, stickyOffset
+}: {
+  price: number; lastChange: number; stickyOffset: number;
+}) {
+  return (
+    <td
+      style={{ left: stickyOffset }}
+      className="sticky z-10 px-3 py-4 text-right tabular-nums font-bold font-mono text-[13px] bg-[#0A0F1B]/95 w-[125px] min-w-[125px] shadow-[4px_0_8px_-4px_rgba(0,0,0,0.5)]"
+    >
+      <span className={cn(
+        lastChange > 0 ? "text-[#39FF14]" : lastChange < 0 ? "text-[#FF4B5C]" : "text-slate-100"
+      )}>
+        ${formatPrice(price)}
+      </span>
+    </td>
+  );
+});
 
 function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   const styles: Record<string, string> = {
@@ -464,6 +611,9 @@ const ScreenerRow = memo(function ScreenerRow({
     }
   }, [display.strategySignal, isVisible]);
 
+  const stickyOffsetSym = visibleCols.has('rank') ? 88 : 40;
+  const stickyOffsetPrice = stickyOffsetSym + 180;
+
   return (
     <tr
       ref={rowRef}
@@ -482,9 +632,10 @@ const ScreenerRow = memo(function ScreenerRow({
       } as any}
     >
       {visibleCols.has('rank') && (
-        <td className="px-3 py-3 text-[10px] text-slate-600 font-bold tabular-nums font-mono">{idx + 1}</td>
+        <IndicatorCell value={idx + 1} formatted={(idx + 1).toString()} colorClass="text-slate-600" widthClass={COL_WIDTHS.rank} align="left" />
       )}
-      <td className="px-2 py-4 text-center">
+      
+      <td className={cn("px-2 py-4 text-center", COL_WIDTHS.star)}>
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
           className={cn(
@@ -495,47 +646,35 @@ const ScreenerRow = memo(function ScreenerRow({
           <Star size={13} fill={isStarred ? "currentColor" : "none"} strokeWidth={isStarred ? 0 : 2} />
         </button>
       </td>
-      <td className="px-3 py-4">
-        <div className="flex flex-col gap-0.5">
-          <div className="flex items-center gap-1.5">
-            <div className="relative group shrink-0">
-              <span className="font-black text-white text-[13px] tracking-tight hover:text-[#39FF14] transition-colors cursor-pointer" onClick={() => onOpenSettings(entry.symbol)}>{getSymbolAlias(entry.symbol)}</span>
-              {display.isLiveRsi && (
-                <div className="absolute -left-2.5 top-1.5 w-1 h-1 rounded-full bg-[#39FF14] shadow-[0_0_5px_#39FF14] animate-pulse" title="Institutional Heartbeat: Data Live" />
-              )}
-            </div>
-            <MarketBadge market={entry.market} />
-            {entry.market !== 'Crypto' && entry.marketState !== 'REGULAR' && (
-              <span className="text-[7px] px-1 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-sm font-black uppercase tracking-tighter shadow-[0_0_8px_rgba(255,75,92,0.1)]">
-                {entry.marketState || 'CLOSED'}
-              </span>
-            )}
-          </div>
-          {entry.market === 'Crypto' && <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">USDT</span>}
-          {entry.market !== 'Crypto' && <span className="text-slate-700 text-[8px] font-black uppercase tracking-wider opacity-60">{getSymbolTicker(entry.symbol)}</span>}
-        </div>
-      </td>
-      <td className="px-3 py-4 text-right tabular-nums font-bold font-mono text-[13px]">
-        <span
-          className={cn(
-            display.lastPriceChange > 0 ? "text-[#39FF14]" : display.lastPriceChange < 0 ? "text-[#FF4B5C]" : "text-slate-100"
-          )}
-        >
-          ${formatPrice(display.price)}
-        </span>
-      </td>
-      <td className={cn(
-        "px-3 py-3 text-right text-xs tabular-nums font-bold font-mono",
-        display.change24h > 0 ? "text-[#39FF14]" : display.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"
-      )}>
-        <div className="flex items-center justify-end gap-1.5">
-          {display.change24h > 0 ? <TrendingUp size={11} className="drop-shadow-[0_0_5px_rgba(57,255,20,0.3)]" /> : display.change24h < 0 ? <TrendingDown size={11} className="drop-shadow-[0_0_5px_rgba(255,75,92,0.3)]" /> : null}
-          {display.change24h > 0 ? '+' : ''}{display.change24h.toFixed(2)}%
-        </div>
-      </td>
-      <td className="px-3 py-3 text-right text-[10px] text-slate-500 tabular-nums font-mono font-bold">
-        {formatVolume(display.volume24h)}
-      </td>
+
+      <SymbolCell 
+        symbol={entry.symbol} 
+        market={entry.market} 
+        marketState={entry.marketState} 
+        isLive={!!display.isLiveRsi} 
+        stickyOffset={stickyOffsetSym}
+        onOpenSettings={onOpenSettings}
+      />
+
+      <PriceCell 
+        price={display.price} 
+        lastChange={display.lastPriceChange} 
+        stickyOffset={stickyOffsetPrice}
+      />
+
+      <IndicatorCell 
+        value={display.change24h} 
+        formatted={formatPct(display.change24h)} 
+        colorClass={display.change24h > 0 ? "text-[#39FF14]" : display.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"} 
+        widthClass={COL_WIDTHS.change} 
+      />
+
+      <IndicatorCell 
+        value={display.volume24h} 
+        formatted={formatVolume(display.volume24h)} 
+        colorClass="text-slate-500" 
+        widthClass={COL_WIDTHS.volume} 
+      />
 
       {visibleCols.has('rsi1m') && (
         <EditableRsiCell
@@ -545,6 +684,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          className={COL_WIDTHS.rsi}
         />
       )}
       {visibleCols.has('rsi5m') && (
@@ -555,6 +695,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          className={COL_WIDTHS.rsi}
         />
       )}
       {visibleCols.has('rsi15m') && (
@@ -565,6 +706,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          className={COL_WIDTHS.rsi}
         />
       )}
       {visibleCols.has('rsi1h') && (
@@ -575,49 +717,48 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          className={COL_WIDTHS.rsi}
         />
       )}
 
       {visibleCols.has('ema9') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-xs tabular-nums font-bold font-mono",
-          globalUseEma ? "text-slate-300" : "text-slate-700/40"
-        )}>
-          {globalUseEma && display.ema9 ? `$${formatPrice(display.ema9)}` : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.ema9} 
+          formatted={globalUseEma && display.ema9 ? `$${formatPrice(display.ema9)}` : '-'} 
+          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.ema} 
+        />
       )}
       {visibleCols.has('ema21') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-xs tabular-nums font-bold font-mono",
-          globalUseEma ? "text-slate-400" : "text-slate-700/40"
-        )}>
-          {globalUseEma && display.ema21 ? `$${formatPrice(display.ema21)}` : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.ema21} 
+          formatted={globalUseEma && display.ema21 ? `$${formatPrice(display.ema21)}` : '-'} 
+          colorClass={globalUseEma ? "text-slate-400" : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.ema} 
+        />
       )}
 
       {visibleCols.has('rsiCustom') && (
         <td className={cn(
           "px-3 py-3 text-right text-sm tabular-nums font-bold font-mono relative transition-all duration-300",
+          COL_WIDTHS.rsi,
           entry.rsiPeriodAtCreation !== rsiPeriod ? "bg-slate-800/10 opacity-30" : "bg-[#39FF14]/5",
           getRsiColor(display.rsiCustom)
         )}>
           <div className="flex items-center justify-end gap-1.5 flex-wrap max-w-[120px] ml-auto">
-
-            {/* Intelligence: Early Signal Badge - Only show if periods match to ensure formula accuracy */}
             {globalUseRsi && entry.rsiPeriodAtCreation === rsiPeriod && display.rsiCustom !== null && display.rsi15m !== null && (
               <>
                 {display.rsiCustom <= 30 && display.rsi15m > 30 && (
-                  <span className="text-[7px] px-1 bg-[#39FF14]/30 text-[#39FF14] rounded-full animate-pulse border border-[#39FF14]/30" title="Early Oversold (Custom Period)">EARLY BUY</span>
+                  <span className="text-[7px] px-1 bg-[#39FF14]/30 text-[#39FF14] rounded-full animate-pulse border border-[#39FF14]/30" title="Early Oversold">EARLY BUY</span>
                 )}
                 {display.rsiCustom >= 70 && display.rsi15m < 70 && (
-                  <span className="text-[7px] px-1 bg-[#722f37]/30 text-[#FF4B5C] rounded-full animate-pulse border border-[#FF4B5C]/30" title="Early Overbought (Custom Period)">EARLY SELL</span>
+                  <span className="text-[7px] px-1 bg-[#722f37]/30 text-[#FF4B5C] rounded-full animate-pulse border border-[#FF4B5C]/30" title="Early Overbought">EARLY SELL</span>
                 )}
               </>
             )}
-
             {entry.rsiPeriodAtCreation === rsiPeriod && globalUseDivergence && display.rsiDivergenceCustom && display.rsiDivergenceCustom !== 'none' && (
               <span className={cn(
-                "text-[8px] px-1 rounded-sm font-black tracking-tighter uppercase",
+                "text-[7px] px-1 rounded-sm font-black tracking-tighter uppercase",
                 display.rsiDivergenceCustom === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#722f37]/20 text-[#FF4B5C]"
               )}>
                 {display.rsiDivergenceCustom === 'bullish' ? 'DIV+' : 'DIV-'}
@@ -629,60 +770,49 @@ const ScreenerRow = memo(function ScreenerRow({
           </div>
         </td>
       )}
+
       {visibleCols.has('emaCross') && (
-        <td className={cn(
-          "px-3 py-4 text-right text-[10px] font-black uppercase transition-all duration-300 whitespace-nowrap",
-          !globalUseEma && "opacity-40"
-        )}>
-          {display.emaCross !== 'none' && display.emaCross !== null && (
-            <span className={cn(
-              "px-2 py-1 rounded border shadow-sm",
-              display.emaCross === 'bullish' ? "text-[#39FF14] border-[#39FF14]/40 bg-[#39FF14]/10" :
-                display.emaCross === 'bearish' ? "text-[#FF4B5C] border-[#FF4B5C]/40 bg-[#FF4B5C]/10" :
-                  "text-slate-500 border-white/10 bg-white/5"
-            )}>
-              {display.emaCross}
-            </span>
-          )}
-          {(display.emaCross === 'none' || display.emaCross === null) && <span className="text-slate-700 opacity-30 px-2">-</span>}
-        </td>
+        <IndicatorCell 
+          value={null} 
+          formatted={globalUseEma ? (display.emaCross === 'bullish' ? 'BULL' : display.emaCross === 'bearish' ? 'BEAR' : 'NEUTRAL') : '-'}
+          colorClass={globalUseEma ? (display.emaCross === 'bullish' ? "text-[#39FF14]" : display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-500") : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.trend}
+          align="right"
+        />
       )}
 
       {visibleCols.has('macdHistogram') && (
-        <td className={cn(
-          "px-3 py-4 text-right text-[11px] tabular-nums font-bold font-mono transition-all duration-300 whitespace-nowrap",
-          display.macdHistogram === null ? "text-slate-700" : display.macdHistogram > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]",
-          !globalUseMacd && "opacity-40"
-        )}>
-          {display.macdHistogram !== null ? formatNum(display.macdHistogram, 4) : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.macdHistogram} 
+          formatted={globalUseMacd && display.macdHistogram !== null ? formatNum(display.macdHistogram, 4) : '-'}
+          colorClass={globalUseMacd ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.macd}
+        />
       )}
 
       {visibleCols.has('bbUpper') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-[10px] tabular-nums font-bold font-mono",
-          globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"
-        )}>
-          {globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper)}` : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.bbUpper} 
+          formatted={globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper)}` : '-'} 
+          colorClass={globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.bb} 
+        />
       )}
       {visibleCols.has('bbLower') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-[10px] tabular-nums font-bold font-mono",
-          globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"
-        )}>
-          {globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower)}` : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.bbLower} 
+          formatted={globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower)}` : '-'} 
+          colorClass={globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.bb} 
+        />
       )}
-
       {visibleCols.has('bbPosition') && (
-        <td className={cn(
-          "px-3 py-4 text-right text-sm tabular-nums font-bold font-mono transition-opacity duration-300",
-          !globalUseBb && "opacity-20 grayscale",
-          display.bbPosition === null ? "text-slate-700" : display.bbPosition < 0.2 ? "text-[#39FF14]" : display.bbPosition > 0.8 ? "text-[#FF4B5C]" : "text-slate-400"
-        )}>
-          {globalUseBb ? formatNum(display.bbPosition) : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.bbPosition} 
+          formatted={globalUseBb ? formatNum(display.bbPosition) : '-'} 
+          colorClass={globalUseBb ? (display.bbPosition! < 0.2 ? "text-[#39FF14]" : display.bbPosition! > 0.8 ? "text-[#FF4B5C]" : "text-slate-400") : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.bb} 
+        />
       )}
 
       {visibleCols.has('stochK') && (
@@ -719,159 +849,108 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('vwapDiff') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-xs tabular-nums font-bold font-mono transition-opacity duration-300",
-          !globalUseVwap && "opacity-20 grayscale",
-          display.vwapDiff === null ? "text-slate-700" : display.vwapDiff > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
-        )}>
-          {globalUseVwap ? formatPct(display.vwapDiff) : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.vwapDiff} 
+          formatted={globalUseVwap && display.vwapDiff !== null ? formatPct(display.vwapDiff) : '-'} 
+          colorClass={globalUseVwap ? (display.vwapDiff! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.vwap} 
+        />
       )}
-      {visibleCols.has('longCandle') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-[11px] tabular-nums font-bold font-mono",
-          !globalVolatilityEnabled || display.curCandleSize == null || display.avgBarSize1m == null || display.avgBarSize1m <= 0 || (display.curCandleSize / display.avgBarSize1m) < globalLongCandleThreshold ? "text-slate-600" : "text-amber-400"
-        )}>
 
-          {globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && display.avgBarSize1m > 0 ? (
-            <div className="flex items-center justify-end gap-1.5">
-              {display.isLiveRsi && (
-                <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
-              )}
-              {(display.curCandleSize / display.avgBarSize1m) >= (globalLongCandleThreshold * 0.8) && (
-                <span className={cn("text-[8px]", display.candleDirection === 'bullish' ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
-                  {display.candleDirection === 'bullish' ? '🟢' : '🔴'}
-                </span>
-              )}
-              <span>{Number.isFinite(display.curCandleSize / display.avgBarSize1m) ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '0.0x'}</span>
-            </div>
-          ) : '-'}
-        </td>
+      {visibleCols.has('longCandle') && (
+        <IndicatorCell 
+          value={null} 
+          formatted={globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && (display.curCandleSize / display.avgBarSize1m) >= globalLongCandleThreshold ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '-'} 
+          colorClass="text-amber-400" 
+          widthClass={COL_WIDTHS.signal} 
+        />
       )}
+
       {visibleCols.has('volumeSpike') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-[11px] tabular-nums font-bold font-mono",
-          !globalVolatilityEnabled || display.curCandleVol == null || display.avgVolume1m == null || display.avgVolume1m <= 0 || (display.curCandleVol / display.avgVolume1m) < globalVolumeSpikeThreshold ? "text-slate-600" : "text-[#39FF14]"
-        )}>
-          {globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && display.avgVolume1m > 0 ? (
-            <div className="flex items-center justify-end gap-1.5">
-              {display.isLiveRsi && (
-                <div className="w-1 h-1 rounded-full bg-[#39FF14] animate-pulse" title="Real-Time" />
-              )}
-              <span>{Number.isFinite(display.curCandleVol / display.avgVolume1m) ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '0.0x'}</span>
-            </div>
-          ) : '-'}
-        </td>
+        <IndicatorCell 
+          value={null} 
+          formatted={globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && (display.curCandleVol / display.avgVolume1m) >= globalVolumeSpikeThreshold ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '-'} 
+          colorClass="text-[#39FF14]" 
+          widthClass={COL_WIDTHS.signal} 
+        />
       )}
 
       {visibleCols.has('momentum') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-sm tabular-nums font-bold font-mono transition-opacity duration-300",
-          !globalUseMomentum && "opacity-20 grayscale",
-          display.momentum === null ? "text-slate-700" : display.momentum > 0 ? "text-emerald-300" : display.momentum < 0 ? "text-red-300" : "text-slate-500"
-        )}>
-          {globalUseMomentum ? formatPct(display.momentum) : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.momentum} 
+          formatted={globalUseMomentum && display.momentum !== null ? formatPct(display.momentum) : '-'} 
+          colorClass={globalUseMomentum ? (display.momentum! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
+          widthClass={COL_WIDTHS.momentum} 
+        />
       )}
 
       {visibleCols.has('atr') && (
-        <td className="px-3 py-4 text-right text-[10px] tabular-nums font-bold font-mono text-amber-300/80">
-          {display.atr !== null ? display.atr.toFixed(display.atr < 1 ? 6 : 2) : '-'}
-        </td>
-      )}
-      {visibleCols.has('adx') && (
-        <td className={cn(
-          "px-3 py-3 text-right text-[10px] tabular-nums font-bold font-mono",
-          display.adx === null ? "text-slate-700" : display.adx >= 25 ? "text-[#39FF14]" : "text-slate-500"
-        )}>
-          {display.adx !== null ? display.adx.toFixed(1) : '-'}
-        </td>
+        <IndicatorCell 
+          value={display.atr} 
+          formatted={display.atr !== null ? formatPrice(display.atr) : '-'} 
+          colorClass="text-slate-500" 
+          widthClass={COL_WIDTHS.atr} 
+        />
       )}
 
-      {/* ─── Derivatives Intelligence Cells ─── */}
-      {visibleCols.has('fundingRate') && (
-        <td className="px-3 py-3 text-right text-[10px] tabular-nums font-bold font-mono">
-          {fundingRate ? (
-            <div className="flex flex-col items-end">
-              <span className={cn(
-                "transition-colors duration-300",
-                fundingRate.rate > 0 ? "text-[#39FF14]" : fundingRate.rate < 0 ? "text-[#FF4B5C]" : "text-slate-500"
-              )}>
-                {fundingRate.rate > 0 ? '+' : ''}{(fundingRate.rate * 100).toFixed(4)}%
-              </span>
-              <span className="text-[7px] text-slate-500 font-black opacity-60 uppercase">{fundingRate.annualized.toFixed(0)}% APR</span>
-            </div>
-          ) : <span className="text-slate-700">-</span>}
-        </td>
+      {visibleCols.has('adx') && (
+        <IndicatorCell 
+          value={display.adx} 
+          formatted={display.adx !== null ? display.adx.toFixed(1) : '-'} 
+          colorClass={display.adx && display.adx >= 25 ? "text-[#39FF14]" : "text-slate-600"} 
+          widthClass={COL_WIDTHS.adx} 
+        />
       )}
+
+      {visibleCols.has('fundingRate') && (
+        <IndicatorCell 
+          value={fundingRate?.rate || null} 
+          formatted={fundingRate ? `${(fundingRate.rate * 100).toFixed(4)}%` : '-'} 
+          colorClass={fundingRate ? (fundingRate.rate > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700"} 
+          widthClass={COL_WIDTHS.funding} 
+          title={fundingRate ? `Annualized: ${fundingRate.annualized.toFixed(0)}% APR` : undefined}
+        />
+      )}
+
       {visibleCols.has('orderFlow') && (
-        <td className="px-3 py-3 text-right min-w-[80px]">
+        <td className={cn("px-3 py-3 text-right", COL_WIDTHS.flow)}>
           {orderFlowData ? (
-            <div className="flex items-center justify-end gap-1">
-              <div className="w-10 h-1.5 rounded-full bg-slate-800 overflow-hidden flex shrink-0">
-                <div className="h-full bg-[#39FF14]/60 transition-all duration-700" style={{ width: `${orderFlowData.ratio * 100}%` }} />
-                <div className="h-full bg-[#FF4B5C]/60 transition-all duration-700" style={{ width: `${(1 - orderFlowData.ratio) * 100}%` }} />
+            <div className="flex items-center justify-end gap-1.5">
+              <div className="w-10 h-1.5 rounded-full bg-slate-800 overflow-hidden flex shrink-0 border border-white/5">
+                <div className="h-full bg-[#39FF14]/70 transition-all duration-700" style={{ width: `${orderFlowData.ratio * 100}%` }} />
+                <div className="h-full bg-[#FF4B5C]/70 transition-all duration-700" style={{ width: `${(1 - orderFlowData.ratio) * 100}%` }} />
               </div>
-              <span className={cn("text-[8px] font-black tabular-nums font-mono w-[30px]",
-                orderFlowData.pressure === 'strong-buy' ? "text-[#39FF14]" :
-                  orderFlowData.pressure === 'buy' ? "text-[#39FF14]/70" :
-                    orderFlowData.pressure === 'strong-sell' ? "text-[#FF4B5C]" :
-                      orderFlowData.pressure === 'sell' ? "text-[#FF4B5C]/70" : "text-slate-500"
-              )}>
+              <span className={cn("text-[9px] font-black tabular-nums font-mono", orderFlowData.ratio > 0.5 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
                 {(orderFlowData.ratio * 100).toFixed(0)}%
               </span>
             </div>
-          ) : <span className="text-slate-700 text-[10px] tabular-nums font-mono">-</span>}
-        </td>
-      )}
-      {visibleCols.has('smartMoney') && (
-        <td className="px-3 py-3 text-right">
-          {smartMoneyScore ? (
-            <span className={cn(
-              "text-[9px] font-black px-1.5 py-0.5 rounded-md",
-              smartMoneyScore.score >= 60 ? "bg-[#39FF14]/15 text-[#39FF14]" :
-                smartMoneyScore.score >= 30 ? "bg-[#39FF14]/10 text-[#39FF14]/70" :
-                  smartMoneyScore.score <= -60 ? "bg-[#FF4B5C]/15 text-[#FF4B5C]" :
-                    smartMoneyScore.score <= -30 ? "bg-[#FF4B5C]/10 text-[#FF4B5C]/70" :
-                      "bg-slate-800 text-slate-500"
-            )}>
-              {smartMoneyScore.score > 0 ? '+' : ''}{smartMoneyScore.score}
-            </span>
-          ) : <span className="text-slate-700 text-[10px]">-</span>}
+          ) : <span className="text-slate-800">-</span>}
         </td>
       )}
 
-      <td className="px-3 py-3 text-right w-[110px] min-w-[110px]">
-        <div className="flex justify-end items-center h-full">
-          <SignalBadge signal={display.signal.toLowerCase() as any} />
-        </div>
+      {visibleCols.has('smartMoney') && (
+        <IndicatorCell 
+          value={smartMoneyScore?.score || null} 
+          formatted={smartMoneyScore ? (smartMoneyScore.score > 0 ? `+${smartMoneyScore.score}` : `${smartMoneyScore.score}`) : '-'}
+          colorClass={smartMoneyScore ? (smartMoneyScore.score >= 30 ? "text-[#39FF14]" : smartMoneyScore.score <= -30 ? "text-[#FF4B5C]" : "text-slate-500") : "text-slate-800"}
+          widthClass={COL_WIDTHS.smart}
+        />
+      )}
+
+      <td className={cn("px-3 py-3 text-right", COL_WIDTHS.signal)}>
+        <SignalBadge signal={display.signal.toLowerCase() as any} />
       </td>
 
       {visibleCols.has('strategy') && (
-        <td className="px-3 py-3 text-right min-w-[120px] whitespace-nowrap">
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-2">
-              <span suppressHydrationWarning className="text-[9px] font-black text-slate-600 tabular-nums font-mono uppercase w-[32px] text-right" title="Time since signal started">
-                {formatTimeAgo(entry.signalStartedAt)}
-              </span>
-              <div className="w-12 h-1 bg-white/5 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${Math.min(100, Math.abs(display.strategyScore))}%` }}
-                  className={cn("h-full rounded-full transition-colors duration-1000", getScoreBarColor(display.strategyScore))}
-                  style={{ marginLeft: display.strategyScore < 0 ? 'auto' : 0 }}
-                />
-              </div>
-              <span className="text-[10px] font-black tabular-nums font-mono text-slate-500">{display.strategyScore}</span>
-            </div>
-            <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} />
-          </div>
+        <td className={cn("px-3 py-3 text-right", COL_WIDTHS.signal)}>
+          <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} />
         </td>
       )}
-      <td className="px-3 py-4 text-right hidden sm:table-cell">
+
+      <td className={cn("px-3 py-4 text-right hidden sm:table-cell", COL_WIDTHS.edit)}>
         <button
           onClick={() => onOpenSettings(entry.symbol)}
-          className="p-2 text-slate-600 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-all active:scale-90"
+          className="p-2 text-slate-700 hover:text-[#39FF14] hover:bg-[#39FF14]/10 rounded-lg transition-all active:scale-90"
           title="Customize RSI"
         >
           <Settings size={14} />
@@ -881,57 +960,6 @@ const ScreenerRow = memo(function ScreenerRow({
   );
 });
 
-// ─── Sortable Column Header ───────────────────────────────────
-
-function SortHeader({
-  label,
-  sortKey: key,
-  currentKey,
-  currentDir,
-  onSort,
-  align = 'left',
-}: {
-  label: string;
-  sortKey: SortKey;
-  currentKey: SortKey;
-  currentDir: SortDir;
-  onSort: (key: SortKey) => void;
-  align?: 'left' | 'right';
-}) {
-  const active = currentKey === key;
-  return (
-    <th
-      onClick={() => onSort(key)}
-      className={cn(
-        "px-3 py-3 text-[10px] font-bold uppercase tracking-widest cursor-pointer select-none transition-all duration-200 hover:text-white whitespace-nowrap",
-        align === 'right' ? 'text-right' : 'text-left',
-        active ? 'text-[#39FF14] bg-[#39FF14]/5' : 'text-slate-500'
-      )}
-    >
-      <span className={cn("flex items-center gap-1.5", align === 'right' ? "justify-end" : "justify-start")}>
-        {align === 'right' && active && (
-          <motion.span
-            initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="text-[#39FF14]"
-          >
-            {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </motion.span>
-        )}
-        {label}
-        {align !== 'right' && active && (
-          <motion.span
-            initial={{ y: currentDir === 'asc' ? 2 : -2, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="text-[#39FF14]"
-          >
-            {currentDir === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-          </motion.span>
-        )}
-      </span>
-    </th>
-  );
-}
 
 // ─── Editable RSI Cell (Inline Editing) ──────────────────────────
 
@@ -941,7 +969,8 @@ function EditableRsiCell({
   field,
   currentConfig,
   onSave,
-  disabled
+  disabled,
+  className
 }: {
   symbol: string;
   rsi: number | null;
@@ -949,6 +978,7 @@ function EditableRsiCell({
   currentConfig?: any;
   onSave: (symbol: string, config: any) => Promise<void>;
   disabled?: boolean;
+  className?: string;
 }) {
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(currentConfig?.[field] ?? 14);
@@ -971,7 +1001,7 @@ function EditableRsiCell({
 
   if (disabled) {
     return (
-      <td className="px-3 py-3 text-right text-sm tabular-nums font-bold font-mono text-slate-700/40">
+      <td className={cn("px-3 py-3 text-right text-xs tabular-nums font-bold font-mono text-slate-700/40", className)}>
         -
       </td>
     );
@@ -979,7 +1009,7 @@ function EditableRsiCell({
 
   if (editing) {
     return (
-      <td className="px-1 py-3 text-right">
+      <td className={cn("px-1 py-3 text-right", className)}>
         <input
           ref={inputRef}
           type="number"
@@ -998,6 +1028,7 @@ function EditableRsiCell({
       onClick={() => setEditing(true)}
       className={cn(
         "px-3 py-3 text-right text-sm tabular-nums font-bold font-mono cursor-pointer group/cell relative transition-all",
+        className,
         currentPeriod !== 14 ? "bg-[#39FF14]/[0.03]" : "hover:bg-white/[0.03]",
         getRsiColor(rsi)
       )}
@@ -1015,16 +1046,75 @@ function EditableRsiCell({
 
 // ─── Skeleton ──────────────────────────────────────────────────
 
-function SkeletonRows({ cols }: { cols: number }) {
+function SkeletonRows({ visibleCols }: { visibleCols: Set<string> }) {
+  const stickyOffsetSym = visibleCols.has('rank') ? 88 : 40;
+  const stickyOffsetPrice = visibleCols.has('rank') ? 268 : 220;
+
   return (
     <>
       {Array.from({ length: 15 }).map((_, i) => (
-        <tr key={i} className="border-b border-white/5">
-          {Array.from({ length: cols }).map((_, j) => (
-            <td key={j} className="px-3 py-4">
-              <div className={cn("skeleton h-4 bg-white/5 animate-pulse rounded", j === 0 ? 'w-6' : j === 1 ? 'w-20' : 'w-14 ml-auto')} />
+        <tr key={i} className="border-b border-white/5 h-[53px]">
+          {visibleCols.has('rank') && (
+            <td className={cn("px-3 py-4", COL_WIDTHS.rank)}>
+              <div className="skeleton h-3 w-4 bg-white/5 animate-pulse rounded" />
             </td>
-          ))}
+          )}
+          <td className={cn("px-2 py-4", COL_WIDTHS.star)}>
+            <div className="skeleton h-3 w-3 bg-white/5 animate-pulse rounded mx-auto" />
+          </td>
+          <td className={cn("px-3 py-4 sticky z-10 bg-[#0A0F1B]/95", COL_WIDTHS.symbol)} style={{ left: stickyOffsetSym }}>
+            <div className="flex items-center gap-2">
+              <div className="skeleton h-6 w-6 bg-white/5 animate-pulse rounded-full" />
+              <div className="skeleton h-3 w-16 bg-white/5 animate-pulse rounded" />
+            </div>
+          </td>
+          <td className={cn("px-3 py-4 sticky z-10 bg-[#0A0F1B]/95", COL_WIDTHS.price)} style={{ left: stickyOffsetPrice }}>
+            <div className="skeleton h-3 w-20 bg-white/5 animate-pulse rounded ml-auto" />
+          </td>
+          <td className={cn("px-3 py-4", COL_WIDTHS.change)}>
+            <div className="skeleton h-3 w-12 bg-white/5 animate-pulse rounded ml-auto" />
+          </td>
+          <td className={cn("px-3 py-4", COL_WIDTHS.volume)}>
+            <div className="skeleton h-3 w-14 bg-white/5 animate-pulse rounded ml-auto" />
+          </td>
+
+          {/* Dynamic Cols Skeletons */}
+          {Array.from(visibleCols).filter(id => !['rank'].includes(id)).map(id => {
+            let width = "w-[80px]";
+            if (id.startsWith('rsi')) width = COL_WIDTHS.rsi;
+            else if (id.startsWith('ema')) width = COL_WIDTHS.ema;
+            else if (id === 'emaCross') width = COL_WIDTHS.trend;
+            else if (id === 'macdHistogram') width = COL_WIDTHS.macd;
+            else if (id.startsWith('bb')) width = COL_WIDTHS.bb;
+            else if (id === 'stochK') width = COL_WIDTHS.stoch;
+            else if (id === 'confluence') width = COL_WIDTHS.confluence;
+            else if (id === 'divergence') width = COL_WIDTHS.divergence;
+            else if (id === 'momentum') width = COL_WIDTHS.momentum;
+            else if (id === 'atr') width = COL_WIDTHS.atr;
+            else if (id === 'adx') width = COL_WIDTHS.adx;
+            else if (id === 'vwapDiff') width = COL_WIDTHS.vwap;
+            else if (id === 'longCandle' || id === 'volumeSpike') width = COL_WIDTHS.signal;
+            else if (id === 'fundingRate') width = COL_WIDTHS.funding;
+            else if (id === 'orderFlow') width = COL_WIDTHS.flow;
+            else if (id === 'smartMoney') width = COL_WIDTHS.smart;
+            else if (id === 'strategy') width = COL_WIDTHS.signal;
+            
+            // Skip core cols already handled above
+            if (['rank', 'symbol', 'price', 'change24h', 'volume24h'].includes(id)) return null;
+
+            return (
+              <td key={id} className={cn("px-3 py-4", width)}>
+                <div className="skeleton h-3 w-12 bg-white/5 animate-pulse rounded ml-auto" />
+              </td>
+            );
+          })}
+
+          <td className={cn("px-3 py-4", COL_WIDTHS.signal)}>
+            <div className="skeleton h-5 w-20 bg-white/5 animate-pulse rounded-lg ml-auto" />
+          </td>
+          <td className={cn("px-3 py-4 hidden sm:table-cell", COL_WIDTHS.edit)}>
+            <div className="skeleton h-4 w-4 bg-white/5 animate-pulse rounded ml-auto" />
+          </td>
         </tr>
       ))}
     </>
@@ -2243,7 +2333,7 @@ export default function ScreenerDashboard() {
       .map(md => {
         const resolvedMarket = getMarketType(md.symbol);
         const closes = md.closes || [];
-        
+
         // ── Full Institutional Technical Suite (Preserved Logic) ──
         const rsi14 = calculateRsi(closes, 14);
         const rsi1m = closes.length >= 20 ? calculateRsi(closes.slice(-20), 14) : rsi14;
@@ -4084,8 +4174,8 @@ export default function ScreenerDashboard() {
                   <span className={cn(
                     "text-[8px] font-black tabular-nums leading-none mt-0.5 animate-pulse",
                     stats.volatilityLevel === 'EXTREME' ? "text-rose-500" :
-                    stats.volatilityLevel === 'HIGH' ? "text-orange-500" :
-                    stats.volatilityLevel === 'MED' ? "text-yellow-400" : "text-[#39FF14]/70"
+                      stats.volatilityLevel === 'HIGH' ? "text-orange-500" :
+                        stats.volatilityLevel === 'MED' ? "text-yellow-400" : "text-[#39FF14]/70"
                   )}>
                     {stats.volatilityLevel}
                   </span>
@@ -4292,48 +4382,57 @@ export default function ScreenerDashboard() {
               <thead className="sticky top-0 z-20 bg-[#0A0F1B]/95 border-b border-white/5">
                 <tr>
                   {visibleCols.has('rank') && (
-                    <th className="px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-left w-10 tracking-widest whitespace-nowrap">#</th>
+                    <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-left tracking-widest whitespace-nowrap", COL_WIDTHS.rank)}>#</th>
                   )}
-                  <th className="px-2 py-3 text-[10px] font-bold text-slate-500 text-center w-8 uppercase tracking-widest">★</th>
-                  <SortHeader label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="left" />
-                  <SortHeader label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                  <SortHeader label="24h Change" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                  <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
+                  <th className={cn("px-2 py-3 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest", COL_WIDTHS.star)}>★</th>
+                  <SortHeader 
+                    label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="left" 
+                    widthClass={COL_WIDTHS.symbol} 
+                    stickyOffset={visibleCols.has('rank') ? 88 : 40}
+                  />
+                  <SortHeader 
+                    label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" 
+                    widthClass={COL_WIDTHS.price} 
+                    stickyOffset={visibleCols.has('rank') ? 268 : 220}
+                  />
+                  
+                  <SortHeader label="24h Change" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.change} />
+                  <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.volume} />
 
-                  {visibleCols.has('rsi1m') && <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('rsi5m') && <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('rsi15m') && <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('rsi1h') && <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('rsiCustom') && <SortHeader label={`RSI (${rsiPeriod})`} sortKey="rsiCustom" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('ema9') && <SortHeader label="EMA 9" sortKey="ema9" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('ema21') && <SortHeader label="EMA 21" sortKey="ema21" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('emaCross') && <SortHeader label="Trend" sortKey="emaCross" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('macdHistogram') && <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('bbUpper') && <SortHeader label="BB Up" sortKey="bbUpper" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('bbLower') && <SortHeader label="BB Low" sortKey="bbLower" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('bbPosition') && <SortHeader label="BB Pos" sortKey="bbPosition" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('stochK') && <SortHeader label="Stoch" sortKey="stochK" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('confluence') && <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('divergence') && <SortHeader label="Diverg" sortKey="rsiDivergence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('momentum') && <SortHeader label="Momentum" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('atr') && <SortHeader label="ATR" sortKey="atr" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('adx') && <SortHeader label="ADX" sortKey="adx" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('vwapDiff') && <SortHeader label="VWAP %" sortKey="vwapDiff" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('longCandle') && <SortHeader label="Long Candle" sortKey="longCandle" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  {visibleCols.has('volumeSpike') && <SortHeader label="Vol Spike" sortKey="volumeSpike" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
+                  {visibleCols.has('rsi1m') && <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
+                  {visibleCols.has('rsi5m') && <SortHeader label="RSI 5m" sortKey="rsi5m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
+                  {visibleCols.has('rsi15m') && <SortHeader label="RSI 15m" sortKey="rsi15m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
+                  {visibleCols.has('rsi1h') && <SortHeader label="RSI 1h" sortKey="rsi1h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
+                  {visibleCols.has('rsiCustom') && <SortHeader label={`RSI (${rsiPeriod})`} sortKey="rsiCustom" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
+                  {visibleCols.has('ema9') && <SortHeader label="EMA 9" sortKey="ema9" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.ema} />}
+                  {visibleCols.has('ema21') && <SortHeader label="EMA 21" sortKey="ema21" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.ema} />}
+                  {visibleCols.has('emaCross') && <SortHeader label="Trend" sortKey="emaCross" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.trend} />}
+                  {visibleCols.has('macdHistogram') && <SortHeader label="MACD" sortKey="macdHistogram" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.macd} />}
+                  {visibleCols.has('bbUpper') && <SortHeader label="BB Up" sortKey="bbUpper" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.bb} />}
+                  {visibleCols.has('bbLower') && <SortHeader label="BB Low" sortKey="bbLower" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.bb} />}
+                  {visibleCols.has('bbPosition') && <SortHeader label="BB Pos" sortKey="bbPosition" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.bb} />}
+                  {visibleCols.has('stochK') && <SortHeader label="Stoch" sortKey="stochK" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.stoch} />}
+                  {visibleCols.has('confluence') && <SortHeader label="Confluence" sortKey="confluence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.confluence} />}
+                  {visibleCols.has('divergence') && <SortHeader label="Diverg" sortKey="rsiDivergence" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.divergence} />}
+                  {visibleCols.has('momentum') && <SortHeader label="Momentum" sortKey="momentum" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.momentum} />}
+                  {visibleCols.has('atr') && <SortHeader label="ATR" sortKey="atr" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.atr} />}
+                  {visibleCols.has('adx') && <SortHeader label="ADX" sortKey="adx" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.adx} />}
+                  {visibleCols.has('vwapDiff') && <SortHeader label="VWAP %" sortKey="vwapDiff" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.vwap} />}
+                  {visibleCols.has('longCandle') && <SortHeader label="Long Candle" sortKey="longCandle" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
+                  {visibleCols.has('volumeSpike') && <SortHeader label="Vol Spike" sortKey="volumeSpike" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
 
-                  {visibleCols.has('fundingRate') && <th className="px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap">Funding</th>}
-                  {visibleCols.has('orderFlow') && <th className="px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap">Flow</th>}
-                  {visibleCols.has('smartMoney') && <th className="px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap">Smart $</th>}
+                  {visibleCols.has('fundingRate') && <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap", COL_WIDTHS.funding)}>Funding</th>}
+                  {visibleCols.has('orderFlow') && <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap", COL_WIDTHS.flow)}>Flow</th>}
+                  {visibleCols.has('smartMoney') && <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-wider whitespace-nowrap", COL_WIDTHS.smart)}>Smart $</th>}
 
-                  <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />
-                  {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" />}
-                  <th className="px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 hidden sm:table-cell tracking-widest whitespace-nowrap">Edit</th>
+                  <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />
+                  {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
+                  <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 hidden sm:table-cell tracking-widest whitespace-nowrap", COL_WIDTHS.edit)}>Edit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
                 {(loading || (activeAssetClass !== 'crypto' && marketDataLoading && processedData.length === 0)) ? (
-                  <SkeletonRows cols={colCount} />
+                  <SkeletonRows visibleCols={visibleCols} />
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={colCount} className="px-6 py-32 text-center">
@@ -4677,8 +4776,8 @@ export default function ScreenerDashboard() {
                 <div className="space-y-3">
                   <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-600">Strategic Stack</span>
                   <div className="grid grid-cols-2 gap-1.5">
-                    <button 
-                      onClick={() => { setShowWatchlistOnly(!showWatchlistOnly); setShowMobileMenu(false); }} 
+                    <button
+                      onClick={() => { setShowWatchlistOnly(!showWatchlistOnly); setShowMobileMenu(false); }}
                       className={cn(
                         "py-3 rounded-lg flex flex-col items-center gap-1 transition-all border",
                         showWatchlistOnly ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" : "bg-white/5 border-white/5 text-slate-300"
@@ -4687,22 +4786,22 @@ export default function ScreenerDashboard() {
                       <Star size={18} fill={showWatchlistOnly ? "currentColor" : "none"} />
                       <span className="text-[8px] font-black uppercase tracking-widest">Watchlist</span>
                     </button>
-                    <button 
-                      onClick={() => { setShowCorrelation(true); setShowMobileMenu(false); }} 
+                    <button
+                      onClick={() => { setShowCorrelation(true); setShowMobileMenu(false); }}
                       className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-violet-500/10 active:text-violet-400 transition-all"
                     >
                       <LinkIcon size={18} />
                       <span className="text-[8px] font-black uppercase tracking-widest">Correlation</span>
                     </button>
-                    <button 
-                      onClick={() => { setShowPortfolio(true); setShowMobileMenu(false); }} 
+                    <button
+                      onClick={() => { setShowPortfolio(true); setShowMobileMenu(false); }}
                       className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-cyan-500/10 active:text-cyan-400 transition-all"
                     >
                       <Shield size={18} />
                       <span className="text-[8px] font-black uppercase tracking-widest">Risk Scan</span>
                     </button>
-                    <button 
-                      onClick={() => { handleExportCsv(); setShowMobileMenu(false); }} 
+                    <button
+                      onClick={() => { handleExportCsv(); setShowMobileMenu(false); }}
                       className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-blue-500/10 active:text-blue-400 transition-all"
                     >
                       <Download size={18} />
