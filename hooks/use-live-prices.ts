@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { mutate } from 'swr';
+import { FOREX_SYMBOLS, METALS_SYMBOLS, STOCKS_SYMBOLS } from '@/lib/asset-classes';
 
 export interface LiveTick {
   price: number;
@@ -203,9 +204,13 @@ class PriceTickEngine extends EventTarget {
     this.virtualPollInterval = setInterval(async () => {
       // Yahoo symbols: poll for indices that don't have a WebSocket source (Binance only)
       if (this.exchange === 'binance') {
-        const yahooSymbols = Array.from(this.symbols).filter(s =>
-          ['SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY'].includes(s)
-        );
+        const knownYahoo = new Set([
+          'SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY',
+          ...FOREX_SYMBOLS.map(s => s.yahoo),
+          ...METALS_SYMBOLS.map(s => s.yahoo),
+          ...STOCKS_SYMBOLS.map(s => s.yahoo),
+        ]);
+        const yahooSymbols = Array.from(this.symbols).filter(s => knownYahoo.has(s));
         if (yahooSymbols.length > 0) {
           await this.pollSymbolsViaRest(yahooSymbols, 'binance');
         }
@@ -321,7 +326,7 @@ class PriceTickEngine extends EventTarget {
             payload: {
               s: sym,
               c: entry.price,
-              o: entry.price,
+              o: entry.price / (1 + (entry.change24h / 100)),
               q: entry.volume24h,
               exchange
             }
@@ -512,6 +517,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
       if (now - lastUpdate >= throttle) {
         setLivePrices(new Map(pendingBatch));
         lastUpdate = now;
+        pendingBatch.clear();
       }
     };
 
@@ -524,6 +530,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
       if (now - lastUpdate >= throttle) {
         setLivePrices(new Map(pendingBatch));
         lastUpdate = now;
+        pendingBatch.clear();
       }
     }, 80);
 

@@ -640,7 +640,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       strategySignal: currentStrategy.signal,
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       avgBarSize1m: state.avgBarSize1m,
-      avgVolume1m: state.avgVolume1m
+      avgVolume1m: state.avgVolume1m,
+      vwapDiff: state.vwapDiff
     });
 
     // ── Live Volatility Alerts (Long Candle & Volume Spike) ──

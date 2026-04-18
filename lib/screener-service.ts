@@ -840,6 +840,7 @@ async function fetchYahooTickers(symbols: string[]): Promise<Map<string, Binance
       highPrice: (q.regularMarketDayHigh || 0).toString(),
       lowPrice: (q.regularMarketDayLow || 0).toString(),
       quoteVolume: (q.regularMarketVolume || 0).toString(),
+      marketState: q.marketState || 'REGULAR',
     });
   });
 
@@ -1233,7 +1234,7 @@ function buildEntry(
       curCandleSize: null,
       curCandleVol: null,
       candleDirection: null,
-      marketState: 'OPEN', // Default to OPEN, frontend handles Yahoo specifics
+      marketState: ticker?.marketState || 'REGULAR',
       rsiState1m,
       rsiState5m,
       rsiState15m,

@@ -111,6 +111,7 @@ export interface BinanceTicker {
   highPrice: string;
   lowPrice: string;
   quoteVolume: string;
+  marketState?: string;
 }
 
 // Binance kline: [openTime, open, high, low, close, volume, closeTime, ...]
