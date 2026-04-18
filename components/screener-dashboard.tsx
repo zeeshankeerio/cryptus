@@ -2289,6 +2289,7 @@ export default function ScreenerDashboard() {
           adx: 0,
           vwapDiff: (ema9 && md.price) ? ((md.price - ema9) / ema9) * 100 : 0,
           volumeSpike: false,
+          longCandle: false,
           vwap: ema21 ?? 0,
           confluence: 0,
           confluenceLabel: 'Mixed',
@@ -2743,10 +2744,13 @@ export default function ScreenerDashboard() {
     let neutral = 0;
     let sell = 0;
     let strongSell = 0;
+    let spikeCount = 0;
 
     for (const entry of processedData) {
       if (entry.signal === 'oversold') oversold++;
       else if (entry.signal === 'overbought') overbought++;
+
+      if (entry.volumeSpike || entry.longCandle) spikeCount++;
 
       switch (entry.strategySignal) {
         case 'strong-buy': strongBuy++; break;
@@ -2762,8 +2766,18 @@ export default function ScreenerDashboard() {
     const totalSignals = bullish + bearish + neutral || 1;
     const bias = Math.round(((bullish - bearish) / totalSignals) * 100);
 
-    return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias };
+    const pressureDist = {
+      sell: Math.round((bearish / totalSignals) * 100),
+      neutral: Math.round((neutral / totalSignals) * 100),
+      buy: Math.round((bullish / totalSignals) * 100),
+    };
+
+    const spikeRate = total > 0 ? spikeCount / total : 0;
+    const volatilityLevel = spikeRate > 0.15 ? 'EXTREME' : spikeRate > 0.08 ? 'HIGH' : spikeRate > 0.03 ? 'MED' : 'LOW';
+
+    return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias, pressureDist, volatilityLevel };
   }, [processedData]);
+
 
   // ─── Feed Health Aggregation ─────────────────────────────────
   const feedHealth = useMemo(() => {
@@ -3998,15 +4012,17 @@ export default function ScreenerDashboard() {
                 </div>
 
                 {/* Pressure */}
-                <div className="flex flex-col shrink-0 min-w-[70px] border-r border-white/5 pr-4">
+                <div className="flex flex-col shrink-0 min-w-[80px] border-r border-white/5 pr-4">
                   <div className="flex items-center justify-between mb-0.5">
                     <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Pressure</span>
-                    <span className="text-[7px] font-black tabular-nums text-slate-400 leading-none">84%</span>
+                    <span className={cn("text-[7px] font-black tabular-nums leading-none", stats.bias >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
+                      {Math.abs(stats.bias)}%
+                    </span>
                   </div>
                   <div className="w-full h-0.5 bg-slate-900 rounded-full overflow-hidden flex">
-                    <div className="h-full bg-red-500/70" style={{ width: '22%' }} />
-                    <div className="h-full bg-slate-800" style={{ width: '40%' }} />
-                    <div className="h-full bg-[#39FF14]/70" style={{ width: '38%' }} />
+                    <div className="h-full bg-rose-500/70" style={{ width: `${stats.pressureDist.sell}%` }} />
+                    <div className="h-full bg-slate-800" style={{ width: `${stats.pressureDist.neutral}%` }} />
+                    <div className="h-full bg-[#39FF14]/70" style={{ width: `${stats.pressureDist.buy}%` }} />
                   </div>
                 </div>
 
@@ -4030,8 +4046,16 @@ export default function ScreenerDashboard() {
                 {/* Vol */}
                 <div className="flex flex-col items-center shrink-0 pr-1">
                   <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Vol</span>
-                  <span className="text-[8px] font-black tabular-nums text-[#39FF14] leading-none mt-0.5 animate-pulse">HIGH</span>
+                  <span className={cn(
+                    "text-[8px] font-black tabular-nums leading-none mt-0.5 animate-pulse",
+                    stats.volatilityLevel === 'EXTREME' ? "text-rose-500" :
+                    stats.volatilityLevel === 'HIGH' ? "text-orange-500" :
+                    stats.volatilityLevel === 'MED' ? "text-yellow-400" : "text-[#39FF14]/70"
+                  )}>
+                    {stats.volatilityLevel}
+                  </span>
                 </div>
+
               </div>
             </div>
 

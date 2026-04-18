@@ -31,8 +31,9 @@ export interface ScreenerEntry {
   // ── New: VWAP ──
   vwap: number | null;
   vwapDiff: number | null;
-  // ── New: Volume spike ──
+  // ── New: Volume & Candle detector spikes ──
   volumeSpike: boolean;
+  longCandle: boolean;
   // ── New: Composite strategy ──
   strategyScore: number;
   strategySignal: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
