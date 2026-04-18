@@ -675,9 +675,12 @@ export async function getTopSymbols(count: number, exchange: string = 'binance')
     // Map back to strings
     const sortedBinance = usdtPairs.map((t) => t.symbol);
 
-    // Final merge: Yahoo symbols + Binance Specials first (Binance only), then the rest of sortedBinance
+    // CRITICAL FIX: Yahoo/Special symbols are APPENDED after the crypto symbols.
+    // This ensures we get `count` crypto symbols first, then multi-asset symbols on top.
+    // Previously these were prepended, consuming crypto slots and reducing crypto row count.
+    const cryptoFirst = sortedBinance.slice(0, count);
     const finalSymbols = exchange === 'binance'
-      ? [...new Set([...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL, ...sortedBinance])]
+      ? [...new Set([...cryptoFirst, ...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL])]
       : sortedBinance;
 
     symbolCache.set(exchange, { data: finalSymbols, ts: Date.now() });
@@ -689,6 +692,7 @@ export async function getTopSymbols(count: number, exchange: string = 'binance')
     return list.slice(0, count);
   }
 }
+
 
 /**
  * Fetch klines with retry logic for resilience at scale.

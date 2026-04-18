@@ -872,21 +872,37 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('longCandle') && (
-        <IndicatorCell 
-          value={null} 
-          formatted={globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= globalLongCandleThreshold ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '-'} 
-          colorClass="text-amber-400" 
-          widthClass={COL_WIDTHS.signal} 
-        />
+        (() => {
+          const hasData = globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m && display.avgBarSize1m > 0;
+          const ratio = hasData ? display.curCandleSize! / display.avgBarSize1m! : null;
+          const isTriggered = ratio !== null && ratio >= globalLongCandleThreshold;
+          return (
+            <IndicatorCell 
+              value={null} 
+              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'} 
+              colorClass={isTriggered ? "text-amber-400" : ratio !== null ? "text-slate-600" : "text-slate-700/40"} 
+              widthClass={COL_WIDTHS.signal} 
+              intensity={isTriggered}
+            />
+          );
+        })()
       )}
 
       {visibleCols.has('volumeSpike') && (
-        <IndicatorCell 
-          value={null} 
-          formatted={globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= globalVolumeSpikeThreshold ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '-'} 
-          colorClass="text-[#39FF14]" 
-          widthClass={COL_WIDTHS.signal} 
-        />
+        (() => {
+          const hasData = globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m && display.avgVolume1m > 0;
+          const ratio = hasData ? display.curCandleVol! / display.avgVolume1m! : null;
+          const isTriggered = ratio !== null && ratio >= globalVolumeSpikeThreshold;
+          return (
+            <IndicatorCell 
+              value={null} 
+              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'} 
+              colorClass={isTriggered ? "text-[#39FF14]" : ratio !== null ? "text-slate-600" : "text-slate-700/40"} 
+              widthClass={COL_WIDTHS.signal} 
+              intensity={isTriggered}
+            />
+          );
+        })()
       )}
 
       {visibleCols.has('momentum') && (
@@ -2424,30 +2440,45 @@ export default function ScreenerDashboard() {
       const live = livePrices.get(entry.symbol);
 
       // 2. Base merged entry
-      let merged: ScreenerEntry = live ? {
-        ...entry,
-        price: live.price,
-        change24h: live.change24h,
-        volume24h: live.volume24h,
-        rsi1m: live.rsi1m ?? entry.rsi1m,
-        rsi5m: live.rsi5m ?? entry.rsi5m,
-        rsi15m: live.rsi15m ?? entry.rsi15m,
-        rsi1h: live.rsi1h ?? entry.rsi1h,
-        rsiCustom: live.rsiCustom ?? entry.rsiCustom,
-        ema9: live.ema9 ?? entry.ema9,
-        ema21: live.ema21 ?? entry.ema21,
-        emaCross: (live.emaCross ?? entry.emaCross) as any,
-        macdHistogram: live.macdHistogram ?? entry.macdHistogram,
-        bbPosition: live.bbPosition ?? entry.bbPosition,
-        strategyScore: live.strategyScore ?? entry.strategyScore,
-        strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
-        curCandleSize: live.curCandleSize ?? entry.curCandleSize,
-        curCandleVol: live.curCandleVol ?? entry.curCandleVol,
-        avgBarSize1m: live.avgBarSize1m ?? entry.avgBarSize1m,
-        avgVolume1m: live.avgVolume1m ?? entry.avgVolume1m,
-        candleDirection: (live.candleDirection ?? entry.candleDirection) as any,
-        marketState: 'OPEN',
-      } : entry;
+      let merged: ScreenerEntry = live ? (() => {
+        // Compute live volatility booleans from real-time candle data
+        const mergedAvgBar = live.avgBarSize1m ?? entry.avgBarSize1m;
+        const mergedAvgVol = live.avgVolume1m ?? entry.avgVolume1m;
+        const mergedCandleSize = live.curCandleSize ?? entry.curCandleSize;
+        const mergedCandleVol = live.curCandleVol ?? entry.curCandleVol;
+        const liveVolumeSpike = (mergedCandleVol != null && mergedAvgVol && mergedAvgVol > 0)
+          ? (mergedCandleVol / mergedAvgVol) >= globalVolumeSpikeThreshold
+          : (live.volumeSpike ?? entry.volumeSpike);
+        const liveLongCandle = (mergedCandleSize != null && mergedAvgBar && mergedAvgBar > 0)
+          ? (mergedCandleSize / mergedAvgBar) >= globalLongCandleThreshold
+          : entry.longCandle;
+        return {
+          ...entry,
+          price: live.price,
+          change24h: live.change24h,
+          volume24h: live.volume24h,
+          rsi1m: live.rsi1m ?? entry.rsi1m,
+          rsi5m: live.rsi5m ?? entry.rsi5m,
+          rsi15m: live.rsi15m ?? entry.rsi15m,
+          rsi1h: live.rsi1h ?? entry.rsi1h,
+          rsiCustom: live.rsiCustom ?? entry.rsiCustom,
+          ema9: live.ema9 ?? entry.ema9,
+          ema21: live.ema21 ?? entry.ema21,
+          emaCross: (live.emaCross ?? entry.emaCross) as any,
+          macdHistogram: live.macdHistogram ?? entry.macdHistogram,
+          bbPosition: live.bbPosition ?? entry.bbPosition,
+          strategyScore: live.strategyScore ?? entry.strategyScore,
+          strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
+          curCandleSize: mergedCandleSize,
+          curCandleVol: mergedCandleVol,
+          avgBarSize1m: mergedAvgBar,
+          avgVolume1m: mergedAvgVol,
+          candleDirection: (live.candleDirection ?? entry.candleDirection) as any,
+          volumeSpike: liveVolumeSpike,
+          longCandle: liveLongCandle,
+          marketState: 'OPEN',
+        };
+      })() : entry;
 
       // ─── Phase 2: Institutional Logic Overlay ───
       // We apply the same weighted strategy logic to all assets (Crypto & traditional).
@@ -2544,7 +2575,8 @@ export default function ScreenerDashboard() {
     globalShowSignalTags, globalUseRsi, globalSignalThresholdMode,
     coinConfigs, globalThresholdsEnabled, globalOverbought, globalOversold,
     globalUseMacd, globalUseBb, globalUseStoch, globalUseEma, globalUseVwap,
-    globalUseConfluence, globalUseDivergence, globalUseMomentum
+    globalUseConfluence, globalUseDivergence, globalUseMomentum,
+    globalVolumeSpikeThreshold, globalLongCandleThreshold
   ]);
 
   // Sync state to Background Worker for Instant Alerts (Debounced)
@@ -2842,9 +2874,19 @@ export default function ScreenerDashboard() {
     localStorage.setItem('crypto-rsi-global-volatility-enabled', globalVolatilityEnabled ? '1' : '0');
   }, [globalVolatilityEnabled]);
 
-  // ─── Real-time Stats Engine ──────────────────────────────────
+  // ─── Real-time Stats Engine (Tab-Scoped) ──────────────────────
+  // CRITICAL FIX: Stats are computed from the active asset class tab only,
+  // so header counts exactly match what the user sees in the visible table.
   const stats = useMemo(() => {
-    const total = processedData.length;
+    const MARKET_MAP: Record<string, string[]> = {
+      crypto: ['Crypto'],
+      forex: ['Forex'],
+      metals: ['Metal'],
+      stocks: ['Index']
+    };
+    const targetMarkets = MARKET_MAP[activeAssetClass] || ['Crypto'];
+    const tabData = processedData.filter(e => targetMarkets.includes(e.market));
+    const total = tabData.length;
     let oversold = 0;
     let overbought = 0;
     let strongBuy = 0;
@@ -2854,7 +2896,7 @@ export default function ScreenerDashboard() {
     let strongSell = 0;
     let spikeCount = 0;
 
-    for (const entry of processedData) {
+    for (const entry of tabData) {
       if (entry.signal === 'oversold') oversold++;
       else if (entry.signal === 'overbought') overbought++;
 
@@ -2884,7 +2926,7 @@ export default function ScreenerDashboard() {
     const volatilityLevel = spikeRate > 0.15 ? 'EXTREME' : spikeRate > 0.08 ? 'HIGH' : spikeRate > 0.03 ? 'MED' : 'LOW';
 
     return { total, oversold, overbought, strongBuy, buy, neutral, sell, strongSell, bias, pressureDist, volatilityLevel };
-  }, [processedData]);
+  }, [processedData, activeAssetClass]);
 
 
   // ─── Feed Health Aggregation ─────────────────────────────────
@@ -3075,7 +3117,11 @@ export default function ScreenerDashboard() {
         searchCandidate
       ])].filter(Boolean).join(',');
 
-      const url = `/api/screener?count=${pairCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}&ts=${Date.now()}`;
+      // Over-request to compensate for multi-asset composition (Yahoo/Special symbols consume slots)
+      // This ensures the Crypto tab gets a full pairCount of crypto-specific entries
+      const multiAssetBuffer = exchange === 'binance' ? 30 : 0;
+      const effectiveCount = Math.min(pairCount + multiAssetBuffer, entitlements.maxRecords || pairCount + multiAssetBuffer);
+      const url = `/api/screener?count=${effectiveCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}&ts=${Date.now()}`;
 
       const res = await fetch(url, {
         signal: controller.signal,
