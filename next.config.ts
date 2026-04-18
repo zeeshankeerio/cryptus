@@ -66,7 +66,7 @@ const withPWA = withPWAInit({
         handler: 'NetworkFirst', 
         options: {
           cacheName: 'live-data-bypass',
-          networkTimeoutSeconds: 5, // 5s timeout for stability on mobile/slow networks
+          networkTimeoutSeconds: 3, // 3s timeout for fail-fast recovery on mobile
         },
       },
       // ── Real-time Engine Script Bypass ──

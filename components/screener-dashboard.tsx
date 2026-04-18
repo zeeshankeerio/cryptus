@@ -3213,7 +3213,7 @@ export default function ScreenerDashboard() {
 
   // Load coin configurations on mount
   useEffect(() => {
-    fetch('/api/config', { cache: 'no-store' })
+    fetch(`/api/config?ts=${Date.now()}`, { cache: 'no-store' })
       .then(res => res.json())
       .then(json => setCoinConfigs(json))
       .catch(err => console.error('[screener] Failed to load configs:', err));
@@ -3251,7 +3251,7 @@ export default function ScreenerDashboard() {
     const doFetch = async () => {
       await fetchDataRef.current();
       try {
-        const configRes = await fetch('/api/config', { cache: 'no-store' });
+        const configRes = await fetch(`/api/config?ts=${Date.now()}`, { cache: 'no-store' });
         if (configRes.ok) {
           const contentType = configRes.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
@@ -3294,6 +3294,33 @@ export default function ScreenerDashboard() {
       window.removeEventListener('touchstart', handleInteraction);
     };
   }, [hasMounted, isAudioSuspended, resumeAudioContext]);
+
+  // ── PWA Wake & Network Recovery ──────────────────────────────────
+  useEffect(() => {
+    if (!hasMounted) return;
+
+    const handleWake = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[Institutional Recovery] PWA Foregrounded. Forcing re-sync...');
+        fetchDataRef.current(true);
+      }
+    };
+
+    const handleOnline = () => {
+      console.log('[Institutional Recovery] Network restored. Re-establishing link...');
+      fetchDataRef.current(true);
+    };
+
+    window.addEventListener('visibilitychange', handleWake);
+    window.addEventListener('focus', handleWake);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      window.removeEventListener('visibilitychange', handleWake);
+      window.removeEventListener('focus', handleWake);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [hasMounted]);
 
   // ── Auto-refresh (skips when tab is hidden) ──
   useEffect(() => {
