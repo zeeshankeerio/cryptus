@@ -36,6 +36,7 @@ import type { AssetClass } from '@/lib/asset-classes';
 import { useMarketData } from '@/hooks/use-market-data';
 import { toast } from 'sonner';
 import { notificationEngine } from '@/lib/notification-engine';
+import { getMarketType } from '@/lib/market-utils';
 
 // ─── Formatting helpers ────────────────────────────────────────
 
@@ -701,9 +702,9 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('confluence') && (
         <td className={cn(
           "px-3 py-4 text-right text-[10px] font-black uppercase tracking-tighter transition-all duration-300 whitespace-nowrap",
-          display.confluence >= 15 ? "text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)]" : 
-          display.confluence <= -15 ? "text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)]" : 
-          "text-slate-600"
+          display.confluence >= 15 ? "text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)]" :
+            display.confluence <= -15 ? "text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)]" :
+              "text-slate-600"
         )}>
           {display.confluenceLabel || '-'}
         </td>
@@ -712,8 +713,8 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase whitespace-nowrap">
           {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)] animate-pulse">Bull Div</span> :
-            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)] animate-pulse">Bear Div</span> : 
-            <span className="text-slate-800">-</span>}
+            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)] animate-pulse">Bear Div</span> :
+              <span className="text-slate-800">-</span>}
         </td>
       )}
 
@@ -1647,7 +1648,7 @@ const ScreenerCard = memo(function ScreenerCard({
           <div className={cn("text-[8px] font-black font-mono tabular-nums flex items-center gap-0.5", display.change24h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
             {display.change24h > 0 ? '+' : ''}{display.change24h.toFixed(2)}%
           </div>
-          
+
           {/* Quick Indicator Sub-Bar (Mobile High Density) */}
           <div className="flex items-center gap-2 mt-1.5 opacity-80 scale-90 origin-right">
             {fundingRate && (
@@ -1860,7 +1861,7 @@ export default function ScreenerDashboard() {
             const isPWA = window.matchMedia('(display-mode: standalone)').matches;
             const targetUrl = isPWA ? '/login' : '/';
             router.push(targetUrl);
-            
+
             // Hard reload safety for institutional lag
             if (typeof window !== 'undefined') {
               setTimeout(() => { window.location.href = targetUrl; }, 500);
@@ -1887,7 +1888,7 @@ export default function ScreenerDashboard() {
         const res = await fetch('/api/user/preferences');
         if (!res.ok) throw new Error('Failed to load prefs');
         const prefs = await res.json();
-        
+
         if (prefs && Object.keys(prefs).length > 0) {
           isSyncingRef.current = true;
           try {
@@ -2001,7 +2002,7 @@ export default function ScreenerDashboard() {
       loadFlag('crypto-rsi-global-use-confluence', setGlobalUseConfluence);
       loadFlag('crypto-rsi-global-use-divergence', setGlobalUseDivergence);
       loadFlag('crypto-rsi-global-use-momentum', setGlobalUseMomentum);
-      
+
       setPreferencesSynced(true);
     };
 
@@ -2029,8 +2030,8 @@ export default function ScreenerDashboard() {
             if (payload.globalOverbought !== undefined) setGlobalOverbought(payload.globalOverbought);
             if (payload.globalOversold !== undefined) setGlobalOversold(payload.globalOversold);
             if (payload.globalThresholdsEnabled !== undefined) {
-               setGlobalThresholdsEnabled(payload.globalThresholdsEnabled);
-               setAlertsEnabled(payload.globalThresholdsEnabled);
+              setGlobalThresholdsEnabled(payload.globalThresholdsEnabled);
+              setAlertsEnabled(payload.globalThresholdsEnabled);
             }
             if (payload.pairCount !== undefined) setPairCount(payload.pairCount);
             if (payload.refreshInterval !== undefined) setRefreshInterval(payload.refreshInterval);
@@ -2039,7 +2040,7 @@ export default function ScreenerDashboard() {
             if (payload.rsiPeriod !== undefined) setRsiPeriod(payload.rsiPeriod);
             if (payload.soundEnabled !== undefined) setSoundEnabled(payload.soundEnabled);
             if (payload.visibleColumns !== undefined) setVisibleCols(new Set(payload.visibleColumns));
-            
+
             // Indicator Synching
             if (payload.globalUseRsi !== undefined) setGlobalUseRsi(payload.globalUseRsi);
             if (payload.globalUseMacd !== undefined) setGlobalUseMacd(payload.globalUseMacd);
@@ -2233,58 +2234,42 @@ export default function ScreenerDashboard() {
   // ProcessedData is the "base" data with non-live additions (like custom RSI values from the last API fetch).
   // It merges the SWR data (from API) with the Live WebSocket prices (from useLivePrices).
   const processedData = useMemo<ScreenerEntry[]>(() => {
-    // ─── BRANCH A: Tradify (Forex, Metals, Stocks) ───
-    if (activeAssetClass !== 'crypto') {
-      if (marketData.length === 0) return [];
-
-      // ── Asset class → market type mapping ──
-      const MARKET_TYPE_MAP: Record<string, ScreenerEntry['market']> = {
-        forex: 'Forex',
-        metals: 'Metal',
-        stocks: 'Stocks',
-      };
-      const resolvedMarket = MARKET_TYPE_MAP[activeAssetClass] || 'Index';
-
-      return marketData.map(md => {
-        // ── Full Technical Analysis from Historical Closes ──
+    // ─── Phase 1: Institutional Intelligence Normalization ───
+    // We prioritize the hardened backend stream (data).
+    // If backend data is warming up, we use the frontend hook (marketData) as a fallback.
+    const unifiedIds = new Set(data.map(d => d.symbol));
+    const normalizedMarketData = (marketData || [])
+      .filter(md => !unifiedIds.has(md.symbol))
+      .map(md => {
+        const resolvedMarket = getMarketType(md.symbol);
         const closes = md.closes || [];
+        
+        // ── Full Institutional Technical Suite (Preserved Logic) ──
         const rsi14 = calculateRsi(closes, 14);
         const rsi1m = closes.length >= 20 ? calculateRsi(closes.slice(-20), 14) : rsi14;
         const ema9 = latestEma(closes, 9);
         const ema21 = latestEma(closes, 21);
         const emaCross = detectEmaCross(closes, 9, 21);
-
-        // MACD (12/26/9) from full closes
-        const macdResult = calculateMacd(closes, 12, 26, 9);
-
-        // Bollinger Bands (20, 2σ)
-        const bbResult = calculateBollinger(closes, 20, 2);
-
-        // Stochastic RSI (14/14/3/3)
-        const stochResult = calculateStochRsi(closes, 14, 14, 3, 3);
+        const macdRes = calculateMacd(closes, 12, 26, 9);
+        const bbRes = calculateBollinger(closes, 20, 2);
+        const stochRes = calculateStochRsi(closes, 14, 14, 3, 3);
 
         const entry: ScreenerEntry = {
           symbol: md.symbol,
           price: md.price,
           change24h: md.changePercent,
           volume24h: md.volume,
-          rsi1m: rsi1m,
-          rsi5m: null,
-          rsi15m: rsi14,
-          rsi1h: null,
-          rsiCustom: rsi14,
-          ema9: ema9,
-          ema21: ema21,
-          emaCross,
-          macdHistogram: macdResult?.histogram ?? null,
-          macdLine: macdResult?.macdLine ?? null,
-          macdSignal: macdResult?.signalLine ?? null,
-          bbUpper: bbResult?.upper ?? null,
-          bbMiddle: bbResult?.middle ?? null,
-          bbLower: bbResult?.lower ?? null,
-          bbPosition: bbResult?.position ?? (md.price && md.sma50 ? (md.price > md.sma50 ? 0.7 : 0.3) : 0.5),
-          stochK: stochResult?.k ?? null,
-          stochD: stochResult?.d ?? null,
+          rsi1m, rsi5m: null, rsi15m: rsi14, rsi1h: null, rsiCustom: rsi14,
+          ema9, ema21, emaCross,
+          macdLine: macdRes?.macdLine ?? null,
+          macdSignal: macdRes?.signalLine ?? null,
+          macdHistogram: macdRes?.histogram ?? null,
+          bbUpper: bbRes?.upper ?? null,
+          bbMiddle: bbRes?.middle ?? null,
+          bbLower: bbRes?.lower ?? null,
+          bbPosition: bbRes?.position ?? (md.price && md.sma50 ? (md.price > md.sma50 ? 0.7 : 0.3) : 0.5),
+          stochK: stochRes?.k ?? null,
+          stochD: stochRes?.d ?? null,
           strategyScore: 0,
           strategySignal: 'neutral',
           strategyLabel: 'Neutral',
@@ -2302,7 +2287,7 @@ export default function ScreenerDashboard() {
           momentum: 0,
           atr: 0,
           adx: 0,
-          vwapDiff: ema9 && md.price ? ((md.price - ema9) / ema9) * 100 : 0,
+          vwapDiff: (ema9 && md.price) ? ((md.price - ema9) / ema9) * 100 : 0,
           volumeSpike: false,
           vwap: ema21 ?? 0,
           confluence: 0,
@@ -2310,68 +2295,22 @@ export default function ScreenerDashboard() {
           rsiPeriodAtCreation: rsiPeriod,
           rsiStateCustom: null,
           rsiDivergenceCustom: 'none',
-          rsiState1m: null,
-          rsiState5m: null,
-          rsiState15m: null,
-          rsiState1h: null,
-          ema9State: null,
-          ema21State: null,
-          macdFastState: null,
-          macdSlowState: null,
-          macdSignalState: null,
+          rsiState1m: null, rsiState5m: null, rsiState15m: null, rsiState1h: null,
+          ema9State: null, ema21State: null,
+          macdFastState: null, macdSlowState: null, macdSignalState: null,
           signalStartedAt: Date.now(),
           updatedAt: md.updatedAt,
           open1m: md.open,
           volStart1m: 0,
           historicalCloses: closes,
         };
-
-        // Re-run global strategy logic for tradify
-        const strategy = computeStrategyScore({
-          rsi1m: entry.rsi1m,
-          rsi5m: entry.rsi5m,
-          rsi15m: entry.rsi15m,
-          rsi1h: entry.rsi1h,
-          macdHistogram: entry.macdHistogram,
-          bbPosition: entry.bbPosition,
-          stochK: entry.stochK,
-          stochD: entry.stochD,
-          emaCross: entry.emaCross,
-          vwapDiff: entry.vwapDiff,
-          volumeSpike: entry.volumeSpike,
-          price: entry.price,
-          enabledIndicators: {
-            rsi: globalUseRsi,
-            macd: globalUseMacd,
-            bb: globalUseBb,
-            stoch: globalUseStoch,
-            ema: globalUseEma,
-            vwap: globalUseVwap,
-            confluence: globalUseConfluence,
-            divergence: globalUseDivergence,
-            momentum: globalUseMomentum,
-          }
-        });
-
-        entry.strategyScore = strategy.score;
-        entry.strategySignal = strategy.signal;
-        entry.strategyLabel = strategy.label;
-        entry.strategyReasons = strategy.reasons;
-
-        // Apply RSI threshold signals
-        if (globalShowSignalTags && globalUseRsi && entry.rsiCustom !== null) {
-          if (entry.rsiCustom <= globalOversold) entry.signal = 'oversold';
-          else if (entry.rsiCustom >= globalOverbought) entry.signal = 'overbought';
-        }
-
         return entry;
       });
-    }
 
-    // ─── BRANCH B: Crypto (Existing WebSocket Engine) ───
-    if (data.length === 0) return [];
+    const combinedData = [...data, ...normalizedMarketData];
+    if (combinedData.length === 0) return [];
 
-    return data.map(entry => {
+    return combinedData.map(entry => {
       // 1. Get live price data
       const live = livePrices.get(entry.symbol);
 
@@ -2400,6 +2339,44 @@ export default function ScreenerDashboard() {
         candleDirection: (live.candleDirection ?? entry.candleDirection) as any,
         marketState: 'OPEN',
       } : entry;
+
+      // ─── Phase 2: Institutional Logic Overlay ───
+      // We apply the same weighted strategy logic to all assets (Crypto & traditional).
+      // If the backend hasn't provided a score yet (fallback mode), we calculate a local one.
+      if (merged.strategyScore === 0) {
+        const strat = computeStrategyScore({
+          rsi1m: merged.rsi1m,
+          rsi5m: merged.rsi5m,
+          rsi15m: merged.rsi15m,
+          rsi1h: merged.rsi1h,
+          macdHistogram: merged.macdHistogram,
+          bbPosition: merged.bbPosition,
+          stochK: merged.stochK,
+          stochD: merged.stochD,
+          emaCross: merged.emaCross,
+          vwapDiff: merged.vwapDiff,
+          volumeSpike: merged.volumeSpike,
+          price: merged.price,
+          enabledIndicators: {
+            rsi: globalUseRsi,
+            macd: globalUseMacd,
+            bb: globalUseBb,
+            stoch: globalUseStoch,
+            ema: globalUseEma,
+            vwap: globalUseVwap,
+            confluence: globalUseConfluence,
+            divergence: globalUseDivergence,
+            momentum: globalUseMomentum,
+          }
+        });
+        merged = {
+          ...merged,
+          strategyScore: strat.score,
+          strategySignal: strat.signal,
+          strategyLabel: strat.label,
+          strategyReasons: strat.reasons,
+        };
+      }
 
       // Type safety enforcement for the unions
       if (live) {
@@ -2609,7 +2586,7 @@ export default function ScreenerDashboard() {
         localStorage.setItem('crypto-rsi-show-header', showHeader ? '1' : '0');
         localStorage.setItem('crypto-rsi-period', String(rsiPeriod));
         localStorage.setItem('crypto-rsi-visible-cols', JSON.stringify(Array.from(visibleCols)));
-        
+
         const saveFlag = (key: string, val: boolean) => localStorage.setItem(key, val ? '1' : '0');
         saveFlag('crypto-rsi-global-use-rsi', globalUseRsi);
         saveFlag('crypto-rsi-global-use-macd', globalUseMacd);
@@ -2642,10 +2619,10 @@ export default function ScreenerDashboard() {
     alertsEnabled
   ]);
 
-  const { 
-    alerts, 
-    clearAlertHistory, 
-    resumeAudioContext, 
+  const {
+    alerts,
+    clearAlertHistory,
+    resumeAudioContext,
     getGlobalWinRate,
     audioState,
     isAudioSuspended
@@ -2843,11 +2820,11 @@ export default function ScreenerDashboard() {
         }
 
         fetchData(true);
-        
+
         // ── Institutional Multi-Tab Sync ──
-        syncChannelRef.current?.postMessage({ 
-          type: 'CONFIGS_UPDATED', 
-          payload: { ...coinConfigs, [symbol]: updated } 
+        syncChannelRef.current?.postMessage({
+          type: 'CONFIGS_UPDATED',
+          payload: { ...coinConfigs, [symbol]: updated }
         });
       }
     } catch (err) {
@@ -2895,13 +2872,13 @@ export default function ScreenerDashboard() {
       const next = new Set(prev);
       if (next.has(symbol)) next.delete(symbol);
       else next.add(symbol);
-      
+
       // Sync to other tabs
       syncChannelRef.current?.postMessage({
         type: 'WATCHLIST_UPDATED',
         payload: Array.from(next)
       });
-      
+
       return next;
     });
   }, []);
@@ -3282,11 +3259,11 @@ export default function ScreenerDashboard() {
     doFetch();
     return () => clearTimeout(retryTimerRef.current);
   }, []); // mount-only: fetchDataRef always points to latest fetchData
-  
+
   // ── Global Interaction Monitor for Institutional Audio Resilience ──
   useEffect(() => {
     if (!hasMounted) return;
-    
+
     const handleInteraction = () => {
       // Resume on first click to satisfy browser autoplay policies
       if (isAudioSuspended) {
@@ -3295,7 +3272,7 @@ export default function ScreenerDashboard() {
         });
       }
     };
-    
+
     window.addEventListener('mousedown', handleInteraction);
     window.addEventListener('touchstart', handleInteraction);
     return () => {
@@ -3623,18 +3600,18 @@ export default function ScreenerDashboard() {
   const colCount = 7 + OPTIONAL_COLUMNS.filter((c) => visibleCols.has(c.id)).length;
 
   return (
-    <div className="w-full px-4 lg:px-8 pt-4 pb-32 lg:py-6">
+    <div className="w-full px-0 lg:px-8 pt-0 lg:pt-4 pb-32 lg:py-6">
       {/* ── Sticky Institutional Command Center (4-Row Architecture) ── */}
       {showHeader && (
-        <header className="sticky top-0 z-[40] mb-6 rounded-b-3xl border-b border-x border-white/10 bg-[#080F1B]/95 backdrop-blur-3xl px-4 py-2 sm:px-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300">
+        <header className="sticky top-0 z-[40] mb-4 lg:mb-6 rounded-none lg:rounded-b-3xl border-b border-x-0 lg:border-x border-white/10 bg-[#080F1B]/95 backdrop-blur-3xl px-3 py-2 sm:px-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all duration-300">
           {/* Subtle Dynamic Hub Glow */}
           <div className="absolute inset-0 overflow-hidden rounded-b-3xl pointer-events-none">
             <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#39FF14]/[0.03] rounded-full -mr-32 -mt-32 blur-[100px]" />
           </div>
 
-          <div className="flex flex-col gap-3.5 relative z-10 w-full">
+          <div className="flex flex-col gap-2.5 lg:gap-3.5 relative z-10 w-full">
 
-             {/* ROW 1: STRATEGIC IDENTITY & COMMAND SEARCH */}
+            {/* ROW 1: STRATEGIC IDENTITY & COMMAND SEARCH */}
             <div className="hidden lg:flex items-center justify-between gap-4 h-10">
               <div className="flex items-center gap-4 bg-black/40 border border-white/5 rounded-2xl p-0.5 pl-3 pr-0.5 shadow-inner h-full shrink-0">
                 <Link href="/" className="flex items-center gap-3 group px-1">
@@ -3677,27 +3654,27 @@ export default function ScreenerDashboard() {
               <div className="flex items-center gap-2 h-full">
                 <div className="flex items-center bg-black/40 border border-white/5 rounded-2xl p-0.5 h-full shadow-inner">
                   <div className="flex items-center gap-2 px-3 h-full border-r border-white/5 relative group/health">
-                    <motion.div 
-                      animate={{ 
+                    <motion.div
+                      animate={{
                         opacity: (isConnected && !derivativesStale) ? [1, 0.4, 1] : 1,
                         scale: (isConnected && !derivativesStale) ? [1, 1.2, 1] : 1
-                      }} 
-                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }} 
+                      }}
+                      transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                       className={cn(
-                        "w-2 h-2 rounded-full transition-all duration-500", 
-                        !isConnected ? "bg-slate-700" : 
-                        (isAudioSuspended && soundEnabled) ? "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" :
-                        (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-[#39FF14] shadow-[0_0_8px_#39FF14]")
-                      )} 
+                        "w-2 h-2 rounded-full transition-all duration-500",
+                        !isConnected ? "bg-slate-700" :
+                          (isAudioSuspended && soundEnabled) ? "bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.8)]" :
+                            (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-[#39FF14] shadow-[0_0_8px_#39FF14]")
+                      )}
                     />
                     <div className="flex flex-col">
                       <span className={cn(
                         "text-[7px] font-black uppercase tracking-[0.2em] leading-none transition-colors",
                         (isAudioSuspended && soundEnabled && isConnected) ? "text-amber-400" : "text-slate-600"
                       )}>
-                        {!isConnected ? "Offline" : 
-                         (isAudioSuspended && soundEnabled) ? "Audio Muted" :
-                         (derivativesStale ? "Syncing" : "Ultra-Live")}
+                        {!isConnected ? "Offline" :
+                          (isAudioSuspended && soundEnabled) ? "Audio Muted" :
+                            (derivativesStale ? "Syncing" : "Ultra-Live")}
                       </span>
                       {isConnected && !derivativesStale && (
                         <span className="text-[5px] font-bold text-[#39FF14]/50 uppercase tracking-tighter mt-0.5">
@@ -3784,26 +3761,26 @@ export default function ScreenerDashboard() {
             <div className="hidden lg:flex items-center gap-3 h-10 mb-1.5">
               {/* Asset Class Dock Integrated */}
               <div className="flex items-center gap-1.5 bg-black/40 border border-white/5 rounded-2xl p-1 px-3 shadow-inner h-full shrink-0">
-                  {[
-                    { id: 'crypto' as const, icon: '₿', count: assetClassCounts.crypto },
-                    { id: 'forex' as const, icon: '💱', count: assetClassCounts.forex },
-                    { id: 'metals' as const, icon: '🥇', count: assetClassCounts.metals },
-                    { id: 'stocks' as const, icon: '📈', count: assetClassCounts.stocks },
-                  ].map((ac) => (
-                    <button
-                      key={ac.id}
-                      onClick={() => setActiveAssetClass(ac.id)}
-                      className={cn(
-                        "relative px-2 py-1 text-[7px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5",
-                        activeAssetClass === ac.id
-                          ? "bg-white/10 text-white shadow-sm"
-                          : ac.count > 0 ? "text-slate-500 hover:text-slate-300" : "text-slate-800 pointer-events-none opacity-20"
-                      )}
-                    >
-                      <span>{ac.icon}</span>
-                      <span className="tabular-nums opacity-60">{ac.count}</span>
-                    </button>
-                  ))}
+                {[
+                  { id: 'crypto' as const, icon: '₿', count: assetClassCounts.crypto },
+                  { id: 'forex' as const, icon: '💱', count: assetClassCounts.forex },
+                  { id: 'metals' as const, icon: '🥇', count: assetClassCounts.metals },
+                  { id: 'stocks' as const, icon: '📈', count: assetClassCounts.stocks },
+                ].map((ac) => (
+                  <button
+                    key={ac.id}
+                    onClick={() => setActiveAssetClass(ac.id)}
+                    className={cn(
+                      "relative px-2 py-1 text-[7px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5",
+                      activeAssetClass === ac.id
+                        ? "bg-white/10 text-white shadow-sm"
+                        : ac.count > 0 ? "text-slate-500 hover:text-slate-300" : "text-slate-800 pointer-events-none opacity-20"
+                    )}
+                  >
+                    <span>{ac.icon}</span>
+                    <span className="tabular-nums opacity-60">{ac.count}</span>
+                  </button>
+                ))}
               </div>
 
               <div className="flex-1 flex items-center bg-black/40 border border-white/5 rounded-2xl px-4 gap-6 h-full shadow-inner backdrop-blur-md">
@@ -3954,60 +3931,111 @@ export default function ScreenerDashboard() {
 
             {/* ─── MOBILE COMMAND CENTER (Enterprise Architecture) ─── */}
             <div className="lg:hidden flex flex-col gap-2 relative z-10 w-full">
-              {/* COMPACT COMMAND BAR (Mobile Row 1) */}
-              <div className="flex items-center justify-between gap-3 h-10 items-center">
-                <Link href="/" className="flex items-center gap-2 active:scale-95 transition-all">
-                  <div className="relative w-28 h-6">
+              {/* COMPACT COMMAND BAR (Mobile Row 1: Identity & Connectivity) */}
+              <div className="flex items-center justify-between gap-3 h-10 px-1">
+                <Link href="/" className="flex items-center active:scale-95 transition-all">
+                  <div className="relative w-28 h-6 -ml-1">
                     <Image src="/logo/rsiq-mindscapeanalytics.png" alt="RSIQ Pro" fill className="object-contain" />
                   </div>
                 </Link>
 
                 <div className="flex items-center gap-1.5 h-full">
                   <div className="flex items-center bg-black/40 border border-white/5 rounded-xl px-2.5 h-full shadow-inner">
-                    <motion.div 
-                      animate={{ 
+                    <motion.div
+                      animate={{
                         opacity: (isConnected && !derivativesStale) ? [0.4, 1, 0.4] : 1,
                         scale: (isConnected && !derivativesStale) ? [0.9, 1.1, 0.9] : 1
-                      }} 
-                      transition={{ duration: 1.5, repeat: Infinity }} 
+                      }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
                       className={cn(
-                        "w-1.5 h-1.5 rounded-full transition-all duration-300", 
-                        !isConnected ? "bg-slate-700" : 
-                        (isAudioSuspended && soundEnabled) ? "bg-amber-400" :
-                        (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]")
-                      )} 
+                        "w-1.5 h-1.5 rounded-full transition-all duration-300",
+                        !isConnected ? "bg-slate-700" :
+                          (isAudioSuspended && soundEnabled) ? "bg-amber-400" :
+                            (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" : "bg-[#39FF14] shadow-[0_0_8px_rgba(57,255,20,0.5)]")
+                      )}
                     />
                     <span className={cn(
-                      "text-[7.5px] font-black tabular-nums uppercase tracking-widest ml-1.5 transition-colors",
+                      "text-[7px] font-black tabular-nums uppercase tracking-widest ml-1.5 transition-colors",
                       (isAudioSuspended && soundEnabled && isConnected) ? "text-amber-400" : "text-slate-500"
                     )}>
-                      {!isConnected ? "Off" : (isAudioSuspended && soundEnabled) ? "Mute" : (derivativesStale ? "Sync" : "Live")}
+                      {(!isConnected || derivativesStale) ? "SYNC" : "LIVE"}
                     </span>
                   </div>
-                  
-                  <button 
-                    onClick={() => setShowMobileMenu(true)} 
-                    className="w-10 h-full flex items-center justify-center rounded-xl bg-[#39FF14]/10 border border-[#39FF14]/20 text-[#39FF14] active:scale-90 transition-all shadow-[0_0_15px_rgba(57,255,20,0.1)]"
+
+                  <button
+                    onClick={() => setShowMobileMenu(true)}
+                    className="w-10 h-full flex items-center justify-center rounded-xl bg-white/5 border border-white/10 text-slate-400 active:scale-90 transition-all"
                   >
                     <Menu size={16} />
                   </button>
                 </div>
               </div>
 
-              {/* SLIM SEARCH (Visible by Default, High Priority) */}
+              {/* TACTICAL SEARCH (Mobile Row 2) */}
               <div className="relative h-9">
                 <input
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="SEARCH INSTRUMENTS..."
-                  className="w-full h-full pl-9 pr-4 text-[10px] font-black uppercase tracking-[0.1em] bg-black/60 border border-white/10 rounded-xl text-white placeholder:text-slate-800 transition-all focus:border-[#39FF14]/30"
+                  placeholder="TACTICAL SEARCH (SYM, ASSET)..."
+                  className="w-full h-full pl-9 pr-4 text-[9px] font-black uppercase tracking-[0.1em] bg-black/60 border border-white/10 rounded-xl text-[#39FF14] placeholder:text-slate-800 transition-all focus:border-[#39FF14]/30 shadow-inner"
                 />
-                <Search size={12} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700" />
+                <Search size={12} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-700 font-black" />
+              </div>
+
+              {/* INTEL RIBBON (Mobile Row 3: Live Stats - Horizontally Scrollable) */}
+              <div className="flex items-center gap-4 bg-black/20 border-t border-white/5 -mx-3 px-4 py-2 mt-0.5 overflow-x-auto no-scrollbar shadow-inner">
+                {/* Liq Flux */}
+                <div className="flex items-center gap-2 shrink-0 border-r border-white/5 pr-4">
+                  <Flame size={12} className="text-orange-500" />
+                  <div className="flex flex-col">
+                    <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Liq Flux</span>
+                    <div className="flex items-center gap-2 text-[8px] font-mono font-black tabular-nums leading-none mt-0.5">
+                      <span className="text-red-500">-${Math.round((liquidations.filter((l: LiquidationEvent) => (Date.now() - l.timestamp) < 300000).reduce((acc: number, l: LiquidationEvent) => acc + (l.side === 'Sell' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                      <span className="text-emerald-500">+${Math.round((liquidations.filter((l: LiquidationEvent) => (Date.now() - l.timestamp) < 300000).reduce((acc: number, l: LiquidationEvent) => acc + (l.side === 'Buy' ? l.valueUsd : 0), 0)) / 1000)}K</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pressure */}
+                <div className="flex flex-col shrink-0 min-w-[70px] border-r border-white/5 pr-4">
+                  <div className="flex items-center justify-between mb-0.5">
+                    <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Pressure</span>
+                    <span className="text-[7px] font-black tabular-nums text-slate-400 leading-none">84%</span>
+                  </div>
+                  <div className="w-full h-0.5 bg-slate-900 rounded-full overflow-hidden flex">
+                    <div className="h-full bg-red-500/70" style={{ width: '22%' }} />
+                    <div className="h-full bg-slate-800" style={{ width: '40%' }} />
+                    <div className="h-full bg-[#39FF14]/70" style={{ width: '38%' }} />
+                  </div>
+                </div>
+
+                {/* Bias */}
+                <div className="flex flex-col items-center shrink-0 border-r border-white/5 pr-4">
+                  <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Bias</span>
+                  <span className={cn("text-[9px] font-black tabular-nums font-mono leading-none mt-0.5", stats.bias >= 0 ? "text-[#39FF14]" : "text-rose-500")}>
+                    {stats.bias > 0 ? '+' : ''}{stats.bias}%
+                  </span>
+                </div>
+
+                {/* Sentiment */}
+                <div className="flex flex-col items-center shrink-0 border-r border-white/5 pr-4">
+                  <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Sentiment</span>
+                  <div className="flex items-center gap-1 leading-none mt-0.5">
+                    <Gauge size={10} className={fearGreedColor} />
+                    <span className={cn("text-[9px] font-black tabular-nums font-mono", fearGreedColor)}>{fearGreedScore}</span>
+                  </div>
+                </div>
+
+                {/* Vol */}
+                <div className="flex flex-col items-center shrink-0 pr-1">
+                  <span className="text-[5px] font-black text-slate-600 uppercase tracking-widest leading-none">Vol</span>
+                  <span className="text-[8px] font-black tabular-nums text-[#39FF14] leading-none mt-0.5 animate-pulse">HIGH</span>
+                </div>
               </div>
             </div>
 
-            
+
           </div>
         </header>
       )}
@@ -4145,7 +4173,7 @@ export default function ScreenerDashboard() {
                     <span>Instrument</span>
                   </span>
                 </div>
-                
+
                 <div className="flex-1 flex items-center gap-4 px-3 mx-2 overflow-hidden">
                   {OPTIONAL_COLUMNS.filter(c => visibleCols?.has(c.id)).map(col => (
                     <div key={col.id} className="shrink-0 min-w-[32px] text-center">
@@ -4252,17 +4280,17 @@ export default function ScreenerDashboard() {
                     <td colSpan={colCount} className="px-6 py-32 text-center">
                       <div className="flex flex-col items-center gap-6">
                         <div className="w-24 h-24 rounded-full bg-slate-900 border border-white/5 flex items-center justify-center shadow-2xl">
-                           <LayoutGrid size={48} className="text-slate-800" />
+                          <LayoutGrid size={48} className="text-slate-800" />
                         </div>
                         <div className="space-y-2">
                           <p className="text-white font-black uppercase tracking-[0.3em] text-base">Analytical Deadzone</p>
                           <p className="text-slate-500 font-bold uppercase tracking-[0.2em] text-[10px] max-w-sm mx-auto leading-relaxed">
-                            {showWatchlistOnly 
+                            {showWatchlistOnly
                               ? "Your high-priority intelligence feed is currently empty. Star assets in the 'Global' universe to initiate dedicated tracking."
                               : "No assets match your current matrix constraints. Adjust filters or search parameters."}
                           </p>
                           {showWatchlistOnly && (
-                            <button 
+                            <button
                               onClick={() => setShowWatchlistOnly(false)}
                               className="mt-4 px-6 py-2 bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#39FF14]/20 transition-all active:scale-95"
                             >
@@ -4344,7 +4372,7 @@ export default function ScreenerDashboard() {
                   <span className="text-[7px] font-black uppercase tracking-[0.2em] text-slate-600 leading-none mb-1">Engine Status</span>
                   <div className="flex items-center gap-1.5 leading-none">
                     <div className={cn(
-                      "w-1.5 h-1.5 rounded-full", 
+                      "w-1.5 h-1.5 rounded-full",
                       !isConnected ? "bg-slate-700" : (derivativesStale ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-[#39FF14] animate-pulse shadow-[0_0_8px_rgba(57,255,20,0.5)]")
                     )} />
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-tight">
@@ -4506,116 +4534,163 @@ export default function ScreenerDashboard() {
         )}
       </AnimatePresence>
 
-{/* MOBILE COMMAND CENTER SIDEBAR */}
-            <AnimatePresence>
-              {showMobileMenu && (
-                <div className="fixed inset-0 z-[600] lg:hidden">
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    onClick={() => setShowMobileMenu(false)}
-                    className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
-                  />
-                  <motion.div 
-                    initial={{ x: '100%' }}
-                    animate={{ x: 0 }}
-                    exit={{ x: '100%' }}
-                    transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                    className="absolute top-0 right-0 bottom-0 w-[280px] sm:w-[320px] bg-[#05080F]/95 backdrop-blur-2xl border-l border-white/10 p-6 flex flex-col gap-6 shadow-[0_0_80px_rgba(0,0,0,0.8)]"
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between pb-4 border-b border-white/5">
-                      <div>
-                        <h3 className="text-white font-black uppercase tracking-widest text-xs flex items-center gap-2">
-                          <BrainCircuit size={16} className="text-[#39FF14]" />
-                          Command
-                        </h3>
-                        <p className="text-[8px] text-slate-500 font-black uppercase tracking-[0.2em] mt-1">Tactical Matrix</p>
-                      </div>
-                      <button onClick={() => setShowMobileMenu(false)} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 active:scale-90">
-                        <X size={18} />
-                      </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto no-scrollbar space-y-8">
-                      {/* Section: Asset Universe */}
-                      <div className="space-y-4">
-                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-[#39FF14]">Asset Universe</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {['crypto', 'forex', 'metals', 'stocks'].map((ac) => (
-                            <button
-                              key={ac}
-                              onClick={() => { setActiveAssetClass(ac as any); setShowMobileMenu(false); }}
-                              className={cn(
-                                "py-3 rounded-xl flex items-center gap-3 px-4 transition-all border",
-                                activeAssetClass === ac ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/5 text-slate-500 hover:text-slate-300"
-                              )}
-                            >
-                              <span className="text-sm">{ac === 'crypto' ? '₿' : ac === 'forex' ? '💱' : ac === 'metals' ? '🥇' : '📈'}</span>
-                              <span className="text-[8px] font-black uppercase tracking-[0.1em]">{ac}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Section: Matrix Signal Filter */}
-                      <div className="space-y-4">
-                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Signal Confluence</span>
-                        <div className="grid grid-cols-2 gap-2">
-                          {[
-                            { label: "ALL ASSETS", id: 'all' },
-                            { label: "OVERSOLD", id: 'oversold' },
-                            { label: "STRONG BUY", id: 'strong-buy' },
-                            { label: "BUY", id: 'buy' },
-                            { label: "NEUTRAL", id: 'neutral' },
-                            { label: "SELL", id: 'sell' },
-                            { label: "STRONG SELL", id: 'strong-sell' },
-                            { label: "OVERBOUGHT", id: 'overbought' },
-                          ].map((s) => (
-                            <button
-                              key={s.id}
-                              onClick={() => { setSignalFilter(s.id as any); setShowMobileMenu(false); }}
-                              className={cn(
-                                "py-3 rounded-xl text-[8px] font-black transition-all border uppercase px-2",
-                                signalFilter === s.id 
-                                  ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" 
-                                  : "bg-white/5 border-white/5 text-slate-500"
-                              )}
-                            >
-                              {s.label}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Section: Operations */}
-                      <div className="space-y-4">
-                        <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">Terminal Ops</span>
-                        <div className="flex flex-col gap-2">
-                           <button onClick={() => { setShowGlobalSettings(true); setShowMobileMenu(false); }} className="w-full flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 active:bg-[#39FF14]/10 transition-all">
-                            <LayoutGrid size={18} className="text-[#39FF14]" />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Edit Columns</span>
-                          </button>
-                          <button onClick={() => { setAlertsEnabled(!alertsEnabled); setShowMobileMenu(false); }} className="w-full flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 active:bg-[#39FF14]/10 transition-all">
-                            {alertsEnabled ? <Bell size={18} className="text-amber-500" /> : <BellOff size={18} className="text-slate-600" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">Live Alerts</span>
-                          </button>
-                          <button onClick={() => { fetchData(true); setShowMobileMenu(false); }} className="w-full flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 active:bg-[#39FF14]/10 transition-all">
-                            <RefreshCcw size={18} className={cn("text-blue-400", refreshing && "animate-spin")} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">Hard Refresh</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-6 border-t border-white/5">
-                        <span className="text-[7px] font-black uppercase tracking-[0.4em] text-slate-700">RSIQ PRO Institutional v4.0.2</span>
-                    </div>
-                  </motion.div>
+      {/* MOBILE COMMAND CENTER SIDEBAR */}
+      <AnimatePresence>
+        {showMobileMenu && (
+          <div className="fixed inset-0 z-[600] lg:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileMenu(false)}
+              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="absolute top-0 right-0 bottom-0 w-[270px] bg-[#05080F]/95 backdrop-blur-3xl border-l border-white/10 p-4 flex flex-col gap-4 shadow-[0_0_100px_rgba(0,0,0,0.9)]"
+            >
+              {/* Slim Strategic Header */}
+              <div className="flex items-center justify-between py-1 border-b border-white/5">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] shadow-[0_0_8px_#39FF14]" />
+                  <span className="text-white font-black uppercase tracking-[0.2em] text-[10px]">Institutional Hub</span>
                 </div>
-              )}
-            </AnimatePresence>
+                <button onClick={() => setShowMobileMenu(false)} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 active:scale-90 active:text-white transition-all">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pt-2">
+                {/* Section: Asset Universe */}
+                <div className="space-y-3">
+                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-[#39FF14]/70">Asset Universe</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {['crypto', 'forex', 'metals', 'stocks'].map((ac) => (
+                      <button
+                        key={ac}
+                        onClick={() => { setActiveAssetClass(ac as any); setShowMobileMenu(false); }}
+                        className={cn(
+                          "py-2.5 rounded-lg flex items-center gap-2.5 px-3 transition-all border",
+                          activeAssetClass === ac ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/5 text-slate-500 hover:text-slate-300"
+                        )}
+                      >
+                        <span className="text-sm">{ac === 'crypto' ? '₿' : ac === 'forex' ? '💱' : ac === 'metals' ? '🥇' : '📈'}</span>
+                        <span className="text-[8px] font-black uppercase tracking-[0.1em]">{ac}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section: Matrix Signal Filter */}
+                <div className="space-y-3">
+                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-600">Confluence Filters</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {[
+                      { label: "ALL ASSETS", id: 'all' },
+                      { label: "OVERSOLD", id: 'oversold' },
+                      { label: "STRONG BUY", id: 'strong-buy' },
+                      { label: "BUY", id: 'buy' },
+                      { label: "NEUTRAL", id: 'neutral' },
+                      { label: "SELL", id: 'sell' },
+                      { label: "STRONG SELL", id: 'strong-sell' },
+                      { label: "OVERBOUGHT", id: 'overbought' },
+                    ].map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => { setSignalFilter(s.id as any); setShowMobileMenu(false); }}
+                        className={cn(
+                          "py-2.5 rounded-lg text-[7.5px] font-black transition-all border uppercase px-1.5",
+                          signalFilter === s.id
+                            ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]"
+                            : "bg-white/5 border-white/5 text-slate-500"
+                        )}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Section: Strategic Operations */}
+                <div className="space-y-3">
+                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-600">Strategic Stack</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button 
+                      onClick={() => { setShowWatchlistOnly(!showWatchlistOnly); setShowMobileMenu(false); }} 
+                      className={cn(
+                        "py-3 rounded-lg flex flex-col items-center gap-1 transition-all border",
+                        showWatchlistOnly ? "bg-yellow-500/10 border-yellow-500/30 text-yellow-400" : "bg-white/5 border-white/5 text-slate-300"
+                      )}
+                    >
+                      <Star size={18} fill={showWatchlistOnly ? "currentColor" : "none"} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Watchlist</span>
+                    </button>
+                    <button 
+                      onClick={() => { setShowCorrelation(true); setShowMobileMenu(false); }} 
+                      className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-violet-500/10 active:text-violet-400 transition-all"
+                    >
+                      <LinkIcon size={18} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Correlation</span>
+                    </button>
+                    <button 
+                      onClick={() => { setShowPortfolio(true); setShowMobileMenu(false); }} 
+                      className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-cyan-500/10 active:text-cyan-400 transition-all"
+                    >
+                      <Shield size={18} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Risk Scan</span>
+                    </button>
+                    <button 
+                      onClick={() => { handleExportCsv(); setShowMobileMenu(false); }} 
+                      className="py-3 rounded-lg flex flex-col items-center gap-1 bg-white/5 border border-white/5 text-slate-300 active:bg-blue-500/10 active:text-blue-400 transition-all"
+                    >
+                      <Download size={18} />
+                      <span className="text-[8px] font-black uppercase tracking-widest">Export CSV</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section: System Configuration */}
+                <div className="space-y-3 pb-2">
+                  <span className="text-[8px] font-black uppercase tracking-[0.3em] text-slate-600">System Parameters</span>
+                  <div className="flex flex-col gap-1.5">
+                    <button onClick={() => { setShowGlobalSettings(true); setShowMobileMenu(false); }} className="w-full flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 text-slate-300 active:bg-[#39FF14]/10 transition-all group">
+                      <div className="flex items-center gap-4">
+                        <LayoutGrid size={18} className="group-hover:text-[#39FF14] transition-colors" />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Interface Settings</span>
+                      </div>
+                      <span className="text-[8px] opacity-40 font-mono">COLUMNS</span>
+                    </button>
+                    <button onClick={() => { setAlertsEnabled(!alertsEnabled); setShowMobileMenu(false); }} className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 text-slate-300 active:bg-[#39FF14]/10 transition-all group">
+                      <div className="flex items-center gap-4">
+                        {alertsEnabled ? <Bell size={18} className="text-amber-500" /> : <BellOff size={18} className="text-slate-600" />}
+                        <span className="text-[10px] font-black uppercase tracking-widest">Terminal Notifications</span>
+                      </div>
+                      <span className={cn("text-[8px] font-black px-1.5 py-0.5 rounded", alertsEnabled ? "bg-[#39FF14]/10 text-[#39FF14]" : "bg-slate-800 text-slate-500")}>
+                        {alertsEnabled ? "ON" : "OFF"}
+                      </span>
+                    </button>
+                    <button onClick={() => { fetchData(true); setShowMobileMenu(false); }} className="w-full flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 text-slate-300 active:bg-blue-500/10 transition-all group">
+                      <div className="flex items-center gap-4">
+                        <RefreshCcw size={18} className={cn("text-blue-400", refreshing && "animate-spin")} />
+                        <span className="text-[10px] font-black uppercase tracking-widest">Re-Sync Intelligence</span>
+                      </div>
+                      <span className="text-[8px] opacity-40 font-mono">{countdown}S</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="py-2 flex items-center justify-between border-t border-white/5">
+                <span className="text-[6px] font-black uppercase tracking-[0.4em] text-slate-800">RSIQ PRO INSTITUTIONAL</span>
+                <span className="text-[6px] font-black text-slate-800 tabular-nums uppercase">v4.0.2</span>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Mobile-only Bottom Navigation Dock */}
       <BottomDock
@@ -5094,9 +5169,9 @@ function CoinSettingsModal({
             {loading ? 'SAVING...' : 'APPLY CONFIGURATION'}
           </button>
         </div>
-      
-      
-</motion.div>
+
+
+      </motion.div>
     </motion.div>
   );
 }

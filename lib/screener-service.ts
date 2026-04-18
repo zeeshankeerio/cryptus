@@ -14,6 +14,12 @@ import { getSymbolAlias } from './symbol-utils';
 import { validateKline } from './data-validator';
 import { metricsCollector } from './metrics-collector';
 import { createInstanceCacheKey } from './instance-id';
+import { 
+  FOREX_SYMBOLS, 
+  METALS_SYMBOLS, 
+  STOCKS_SYMBOLS 
+} from './asset-classes';
+import { getMarketType } from './market-utils';
 
 interface ScreenerOptions {
   smartMode?: boolean;
@@ -113,20 +119,17 @@ const YAHOO_MARKET_MAP: Record<string, string> = {
   'FTSE': '^FTSE',
   'DAX': '^GDAXI',
   'NKY': '^N225',    // Nikkei 225
+  'BTC': 'BTC-USD',  // Yahoo Fallback for BTC
+  'ETH': 'ETH-USD',
 };
+
+// Auto-populate Yahoo map from definitive registries
+STOCKS_SYMBOLS.forEach(s => { YAHOO_MARKET_MAP[s.yahoo] = s.yahoo; });
+FOREX_SYMBOLS.forEach(s => { YAHOO_MARKET_MAP[s.yahoo] = s.yahoo; });
+METALS_SYMBOLS.forEach(s => { if (s.yahoo) YAHOO_MARKET_MAP[s.yahoo] = s.yahoo; });
+
 const YAHOO_SYMBOLS = Object.keys(YAHOO_MARKET_MAP);
 
-function getMarketType(symbol: string): ScreenerEntry['market'] {
-  const s = symbol.toUpperCase();
-  // Metals
-  if (['PAXGUSDT', 'XAUTUSDT', 'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD'].includes(s)) return 'Metal';
-  // Indices (Stocks tab)
-  if (['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'TSLA', 'AAPL', 'NVDA', 'MSFT', 'GOOG'].includes(s)) return 'Index';
-  // Forex
-  if (['EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD', 'USDJPY'].includes(s)) return 'Forex';
-  // Default to Crypto
-  return 'Crypto';
-}
 
 
 // ── Ticker cache for price + change data ──
@@ -225,7 +228,7 @@ export function invalidateSymbolCache(symbol: string) {
 
   // 2. Clear aggregate result cache so the next master fetch computes fresh
   resultCache.clear();
-  
+
   debugLog(`[screener] Cache invalidated for ${symbol}`);
 }
 
@@ -287,11 +290,11 @@ function withTickerOverlay(entry: ScreenerEntry, ticker: BinanceTicker | undefin
 function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number): ScreenerEntry {
   // Fallback estimates for baselines when cache is cold (common on Vercel cold starts)
   const cachedBaseline = getBaseline(sym);
-  
+
   // Volume fallback: 24h quote volume divided by 1440 minutes
   const volume24h = toNum(ticker.quoteVolume, 0);
   const fallbackVolume1m = volume24h > 0 ? (volume24h / 1440) : null;
-  
+
   // Bar size fallback: heuristic (Daily High - Daily Low) / 250
   // Volatile assets typically have 1m candles around 1/200th-1/300th of their daily range.
   const high24h = toNum(ticker.highPrice, 0);
@@ -487,7 +490,7 @@ async function fetchBybitApiWithRetry<T>(
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
-      
+
       // Bybit specific rate limit headers
       const ratelimitRemain = res.headers.get('X-Bapi-Limit-Status');
       if (ratelimitRemain && parseInt(ratelimitRemain, 10) < 10) {
@@ -636,16 +639,16 @@ export async function getTopSymbols(count: number, exchange: string = 'binance')
       .filter((t) => {
         // ALWAYS include High-Liquidity Institutional Assets (Metal, Forex)
         if (exchange === 'binance' && BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return true;
-        
+
         // Ensure symbol ends with USDT (Institutional standard for this screener)
         if (!t.symbol.endsWith('USDT')) return false;
 
         const base = t.symbol.slice(0, -4);
-        
+
         // AGGRESSIVE JUNK FILTER: Exclude Stablecoins, Fiat-wraps, and Peaked tokens
         // This ensures the top 100 are strictly tradable market assets.
         if (/^(USDC|BUSD|TUSD|DAI|FDUSD|USDP|USDD|PYUSD|USD1|WBTC|WBETH|BFUSD|EUR|GBP|AUD|BRL|TRY|BIDR|IDRT|UAH|NGN|PLN|RON|ARS|CZK|RUB|ZAR|TRY|VAI|USDE)$/.test(base)) {
-           if (exchange !== 'binance' || !BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return false;
+          if (exchange !== 'binance' || !BINANCE_NATIVE_SPECIAL.includes(t.symbol)) return false;
         }
 
         // Exclude Leveraged Tokens (UP/DOWN/BEAR/BULL) to maintain institutional purity
@@ -667,15 +670,15 @@ export async function getTopSymbols(count: number, exchange: string = 'binance')
     const sortedBinance = usdtPairs.map((t) => t.symbol);
 
     // Final merge: Yahoo symbols + Binance Specials first (Binance only), then the rest of sortedBinance
-    const finalSymbols = exchange === 'binance' 
+    const finalSymbols = exchange === 'binance'
       ? [...new Set([...YAHOO_SYMBOLS, ...BINANCE_NATIVE_SPECIAL, ...sortedBinance])]
       : sortedBinance;
-    
+
     symbolCache.set(exchange, { data: finalSymbols, ts: Date.now() });
     return finalSymbols.slice(0, count);
   } catch {
-    const list = exchange === 'binance' 
-      ? FALLBACK_SYMBOLS 
+    const list = exchange === 'binance'
+      ? FALLBACK_SYMBOLS
       : FALLBACK_SYMBOLS.filter(s => !YAHOO_SYMBOLS.includes(s) && !BINANCE_NATIVE_SPECIAL.includes(s));
     return list.slice(0, count);
   }
@@ -719,7 +722,7 @@ async function fetchWithRetry(
         debugWarn(`[kline] ${label}: HTTP 451 geo-restricted from ${base}, failing fast`);
         throw new Error(`${label}: HTTP 451 from ${base}`);
       }
-      
+
       const weightHeader = res.headers.get('x-mbx-used-weight-1m');
       if (weightHeader) {
         const hWeight = parseInt(weightHeader, 10);
@@ -790,6 +793,54 @@ async function fetchYahooKlines(symbol: string, interval: string = '1m'): Promis
     debugWarn(`[yahoo] fetch failed for ${symbol}:`, err);
     return [];
   }
+}
+
+/**
+ * Fetch professional-grade quotes (v7) for Yahoo symbols.
+ * Provides: regularMarketPrice, regularMarketChangePercent, marketState, regularMarketVolume
+ */
+async function fetchYahooTickers(symbols: string[]): Promise<Map<string, BinanceTicker>> {
+  const tickerMap = new Map<string, BinanceTicker>();
+  if (symbols.length === 0) return tickerMap;
+
+  const batches: string[][] = [];
+  for (let i = 0; i < symbols.length; i += 50) {
+    batches.push(symbols.slice(i, i + 50));
+  }
+
+  const results = await Promise.all(batches.map(async (batch) => {
+    const yahooBatch = batch.map(s => YAHOO_MARKET_MAP[s] || s);
+    const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${encodeURIComponent(yahooBatch.join(','))}&fields=regularMarketPrice,regularMarketChangePercent,regularMarketVolume,regularMarketDayHigh,regularMarketDayLow,marketState`;
+    try {
+      const res = await fetch(url, { headers: FETCH_HEADERS, signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`Yahoo Ticker HTTP ${res.status}`);
+      const json = await res.json();
+      return json?.quoteResponse?.result || [];
+    } catch (err) {
+      debugWarn(`[yahoo-ticker] batch fetch failed:`, err);
+      return [];
+    }
+  }));
+
+  const flatResults = results.flat();
+  const reverseMap = new Map<string, string>();
+  for (const [sym, yahoo] of Object.entries(YAHOO_MARKET_MAP)) {
+    reverseMap.set(yahoo, sym);
+  }
+
+  flatResults.forEach((q: any) => {
+    const internalSym = reverseMap.get(q.symbol) || q.symbol;
+    tickerMap.set(internalSym, {
+      symbol: internalSym,
+      lastPrice: (q.regularMarketPrice || 0).toString(),
+      priceChangePercent: (q.regularMarketChangePercent || 0).toString(),
+      highPrice: (q.regularMarketDayHigh || 0).toString(),
+      lowPrice: (q.regularMarketDayLow || 0).toString(),
+      quoteVolume: (q.regularMarketVolume || 0).toString(),
+    });
+  });
+
+  return tickerMap;
 }
 
 interface BybitKlineResponse {
@@ -932,7 +983,7 @@ function aggregateKlines(
   const result = [...buckets.entries()]
     .sort(([a], [b]) => a - b)
     .map(([, v]) => v);
-  
+
   if (cache) cache.set(minutes, result);
   return result;
 }
@@ -1007,13 +1058,13 @@ function buildEntry(
     const ema9Val = latestEma(closes15m, 9);
     const ema21Val = latestEma(closes15m, 21);
     const emaCross = detectEmaCross(closes15m, 9, 21);
-    
+
     // MACD states (12, 26, 9)
     const ema12Arr = calculateEma(closes15m, 12);
     const ema26Arr = calculateEma(closes15m, 26);
     const ema12 = ema12Arr.length > 0 ? ema12Arr[ema12Arr.length - 1] : null;
     const ema26 = ema26Arr.length > 0 ? ema26Arr[ema26Arr.length - 1] : null;
-    
+
     let macdLineVal: number | null = null;
     let macdSignalVal: number | null = null;
     let macdHistogramVal: number | null = null;
@@ -1048,7 +1099,7 @@ function buildEntry(
         break;
       }
     }
-    
+
     // Stability Guard: If the day just started (less than 10 mins of data), 
     // fallback to a rolling 4-hour VWAP to ensure the indicator shows data immediately.
     if (validKlines.length - vwapStart < 10 && validKlines.length >= 240) {
@@ -1072,7 +1123,7 @@ function buildEntry(
       : null;
 
     const volumeSpike = detectVolumeSpike(volumes1m);
-    
+
     // Signals use custom thresholds if provided, else standard 70/30
     const signal = deriveSignal(rsi15m ?? rsi1m, config?.overboughtThreshold, config?.oversoldThreshold);
     const stdRsiDivergence = detectRsiDivergence(closes15m, r15mP, 40);
@@ -1099,7 +1150,7 @@ function buildEntry(
 
     const rsiSeries15m = calculateRsiSeries(closes15m, r15mP);
     const rsiCrossover = detectRsiCrossover(rsiSeries15m);
-    
+
     const strategy = computeStrategyScore({
       rsi1m,
       rsi5m,
@@ -1179,7 +1230,7 @@ function buildEntry(
       curCandleSize: null,
       curCandleVol: null,
       candleDirection: null,
-      marketState: 'OPEN',
+      marketState: 'OPEN', // Default to OPEN, frontend handles Yahoo specifics
       rsiState1m,
       rsiState5m,
       rsiState15m,
@@ -1225,16 +1276,20 @@ function runRefresh(
     debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}, exchange=${exchange}) starting...`);
 
     // 1. Get top symbols + ticker data + custom configs in parallel
-    const [topSymbols, searchMatches, tickers, coinConfigs] = await Promise.all([
+    const [topSymbols, searchMatches, tickers, yahooTickers, coinConfigs] = await Promise.all([
       getTopSymbols(symbolCount, exchange),
       search ? searchSymbols(search, exchange) : Promise.resolve([]),
       fetchTickers(exchange),
+      fetchYahooTickers(YAHOO_SYMBOLS),
       getAllCoinConfigs(),
     ]);
 
-    // Merge: search matches first, then top symbols (uniquely)
-    const symbols = [...new Set([...searchMatches, ...topSymbols])];
-    
+    // Merge Yahoo tickers into main ticker map
+    yahooTickers.forEach((v, k) => tickers.set(k, v));
+
+    // Merge: search matches first, then top symbols, then ALL Yahoo symbols to ensure no gaps
+    const symbols = [...new Set([...searchMatches, ...topSymbols, ...YAHOO_SYMBOLS])];
+
     // ⚡ 2. RANK-BASED PRIORITY (Ensure Top 100 are ALWAYS refreshed)
     const symbolRanks = new Map<string, number>();
     symbols.forEach((s, i) => symbolRanks.set(s, i));
@@ -1317,7 +1372,7 @@ function runRefresh(
         const aCached = indicatorCache.has(getCacheKey(a));
         const bCached = indicatorCache.has(getCacheKey(b));
         if (aCached !== bCached) return aCached ? 1 : -1;
-        
+
         const ta = indicatorCache.get(getCacheKey(a))?.ts ?? 0;
         const tb = indicatorCache.get(getCacheKey(b))?.ts ?? 0;
         return ta - tb; // oldest first
@@ -1382,25 +1437,12 @@ function runRefresh(
       const res1m = klineResultBySymbol1m.get(sym);
       const res1h = klineResultBySymbol1h.get(sym);
 
-      // Simulation for Yahoo symbols (they don't have a Binance ticker)
-      if (!ticker && YAHOO_SYMBOLS.includes(sym) && res1m?.status === 'fulfilled') {
-        const lastKline = res1m.value[res1m.value.length - 1];
-        if (lastKline) {
-          ticker = {
-            symbol: sym,
-            lastPrice: lastKline[4],
-            priceChangePercent: "0", // Could compute from first kline, but 0 is safe
-            highPrice: lastKline[2],
-            lowPrice: lastKline[3],
-            quoteVolume: lastKline[5]
-          };
-        }
-      }
+      // Ticker is already merged from fetchYahooTickers in Phase 1
 
       if (res1m?.status === 'fulfilled') {
         const klines1m = res1m.value;
         const klines1h = res1h?.status === 'fulfilled' ? res1h.value : null;
-        
+
         if (!klines1m || klines1m.length === 0) {
           debugWarn(`[screener] ${sym}: kline fetch returned empty`);
         } else {

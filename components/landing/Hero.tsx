@@ -36,7 +36,7 @@ export function Hero({ session }: HeroProps) {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#39FF14] opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-[#39FF14]"></span>
             </span>
-            <span className="text-[8px] sm:text-[11px] font-black uppercase tracking-[0.1em] sm:tracking-[0.25em] text-[#39FF14] text-center px-1">Enterprise Engine Active — 500+ Live Symbols (Crypto, Forex, Gold & Silver)</span>
+            <span className="text-[8px] sm:text-[11px] font-black uppercase tracking-[0.1em] sm:tracking-[0.25em] text-[#39FF14] text-center px-1">Enterprise Engine Active - 500+ Live Symbols (Crypto, Forex, Metals, Stocks)</span>
           </motion.div>
 
           <div className="flex flex-col items-center">

@@ -13,6 +13,8 @@ export interface NotificationOptions {
   priority: AlertPriority;
   type: string; // 'rsi' | 'whale' | 'liquidation'
   icon?: string;
+  value?: number;
+  price?: number;
 }
 
 /**
@@ -180,7 +182,8 @@ class NotificationEngine {
           symbol: options.symbol,
           exchange: options.exchange || 'binance',
           timeframe: options.type === 'rsi' ? '15m' : 'event',
-          value: 0, // Event alerts don't have a single RSI value
+          value: options.value || 0,
+          price: options.price || 0,
           type: options.type.toUpperCase(),
           priority: options.priority
         })

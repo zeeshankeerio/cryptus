@@ -140,7 +140,9 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
               symbol: liq.symbol,
               exchange: liq.exchange,
               priority: liq.valueUsd >= 500000 ? 'critical' : 'high',
-              type: 'liquidation'
+              type: 'liquidation',
+              price: liq.price,
+              value: liq.valueUsd
             });
           }
           break;
@@ -166,7 +168,9 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
               symbol: whale.symbol,
               exchange: whale.exchange,
               priority: whale.valueUsd >= 1000000 ? 'critical' : 'high',
-              type: 'whale'
+              type: 'whale',
+              price: whale.price,
+              value: whale.valueUsd
             });
           }
           break;
