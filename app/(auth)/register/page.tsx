@@ -8,7 +8,7 @@ import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, ArrowRight, ShieldCheck, Eye, EyeOff } from "lucide-react";
-import { signIn, signUp } from "@/lib/auth-client";
+import { signIn, signUp, sendVerificationEmail } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 import { Suspense } from "react";
 
@@ -52,9 +52,27 @@ function RegisterForm() {
           callbackURL: `${window.location.origin}/verify-success`,
         },
         {
-          onError: (ctx) => {
+          onError: async (ctx) => {
+            // 🚨 Handle Collision Logic
+            if (ctx.error.status === 422 || ctx.error.message?.includes("already exists") || ctx.error.message?.includes("Existing")) {
+              console.log("[register] Collision detected. Attempting verification resend...");
+              
+              const { error: resendError } = await sendVerificationEmail({
+                email: values.email,
+                callbackURL: `${window.location.origin}/verify-success`,
+              });
+
+              if (resendError) {
+                // If resend fails, it's likely because the user is ALREADY verified
+                setError("Account already exists and is verified. Please sign in.");
+              } else {
+                // Success! Email resent.
+                setSuccess("Account already registered but not verified. We've sent a new verification link!");
+              }
+            } else {
+              setError(ctx.error.message || "Failed to create account. Please try again.");
+            }
             signUpFailed = true;
-            setError(ctx.error.message || "Failed to create account. Please try again.");
           },
         }
       );
