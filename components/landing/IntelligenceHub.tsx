@@ -58,12 +58,12 @@ export function IntelligenceHub() {
           <IntelligenceCard
             icon={<ShieldCheck className="text-emerald-400" />}
             subtitle="Smart Money"
-            title="Whale Surveillance"
+            title="Institutional Whale Logic"
             delay={0.2}
           >
             <div className="space-y-3 mt-4">
               <p className="text-sm text-slate-400 leading-relaxed mb-6">
-                Intercept the footprints of institutional capital. Track big wallet movements and margin exhaustion levels instantly.
+                Intercept the footprints of institutional capital. Track <span className="text-[#39FF14]">Whale cluster movements</span> and <span className="text-red-500">Cross-Exchange Liquidations</span> instantly to find high-probability reversal zones.
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-4 rounded-2xl bg-[#39FF14]/5 border border-[#39FF14]/10 flex flex-col items-center">

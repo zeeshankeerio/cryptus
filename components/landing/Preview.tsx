@@ -24,6 +24,48 @@ export function TerminalPreview() {
               height={1440}
               className="w-full h-auto rounded-[26px] object-cover opacity-90 group-hover:opacity-100 transition-all duration-700 group-hover:scale-[1.02]"
             />
+
+            {/* Floating Alert HUD Tags */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, x: 30 }}
+              whileInView={{ opacity: 1, scale: 1, x: 0 }}
+              animate={{ y: [0, -10, 0] }}
+              viewport={{ once: true }}
+              transition={{ 
+                y: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                delay: 0.4
+              }}
+              className="absolute -top-4 -right-4 sm:-top-8 sm:-right-8 z-30 w-32 sm:w-48 md:w-56 drop-shadow-[0_20px_40px_rgba(57,255,20,0.4)]"
+            >
+              <Image 
+                src="/images/system_images/liqudition_alert.png" 
+                alt="Liquidation Alert" 
+                width={500} 
+                height={150} 
+                className="w-full h-auto border border-white/10 rounded-xl"
+              />
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, x: -30 }}
+              whileInView={{ opacity: 1, scale: 1, x: 0 }}
+              animate={{ y: [0, 8, 0] }}
+              viewport={{ once: true }}
+              transition={{ 
+                y: { duration: 5, repeat: Infinity, ease: "easeInOut" },
+                delay: 0.6
+              }}
+              className="absolute bottom-12 sm:bottom-20 -left-2 sm:-left-8 z-30 w-32 sm:w-48 md:w-56 drop-shadow-[0_20px_40px_rgba(0,0,0,0.6)]"
+            >
+              <Image 
+                src="/images/system_images/whale_alerts.png" 
+                alt="Whale Alert" 
+                width={500} 
+                height={150} 
+                className="w-full h-auto border border-white/10 rounded-xl"
+              />
+            </motion.div>
+
             <div className="absolute inset-0 bg-gradient-to-t from-[#0A0E17]/80 via-transparent to-transparent pointer-events-none" />
             <div className="absolute bottom-8 left-8 right-8 flex items-center justify-between pointer-events-none">
               <div className="flex items-center gap-4 bg-black/60 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/10">

@@ -26,8 +26,8 @@ export function FeaturesGrid() {
           />
           <FeatureCard
             icon={<Bell />}
-            title="Real-Time Alerts"
-            desc="Get instant push notifications and desktop sound alerts the second a setup aligns with your exact custom parameters."
+            title="Institutional Alerts"
+            desc="Intercept high-alpha moves with Whale Footprint alerts and Cross-Exchange Liquidation Flux monitoring. Native push notifications delivered in milliseconds."
           />
           <FeatureCard
             icon={<Cpu />}
