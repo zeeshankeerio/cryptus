@@ -61,7 +61,8 @@ function formatRsi(rsi: number | null): string {
 }
 
 function formatNum(n: number | null, decimals = 2): string {
-  if (n === null) return '-';
+  if (n === null || n === undefined) return '-';
+  if (n === 0) return (0).toFixed(decimals);
   return n.toFixed(decimals);
 }
 
@@ -176,7 +177,8 @@ const IndicatorCell = memo(function IndicatorCell({
   colorClass = "text-slate-300",
   widthClass,
   align = 'right',
-  title
+  title,
+  intensity = false
 }: {
   value: number | null;
   formatted: string;
@@ -184,18 +186,28 @@ const IndicatorCell = memo(function IndicatorCell({
   widthClass: string;
   align?: 'left' | 'right' | 'center';
   title?: string;
+  intensity?: boolean;
 }) {
+  // Logic for subtle intensity background
+  const hasIntensity = intensity && value !== null && Math.abs(value) > 2;
+
   return (
     <td
       title={title}
       className={cn(
-        "px-3 py-3 tabular-nums font-bold font-mono text-[11px] border-white/[0.01]",
+        "px-3 py-3 tabular-nums font-bold font-mono text-[11px] border-white/[0.01] transition-colors duration-200",
         colorClass,
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
-        widthClass
+        widthClass,
+        hasIntensity && (value > 0 ? "bg-[#39FF14]/[0.03]" : "bg-[#FF4B5C]/[0.03]")
       )}
     >
-      {formatted}
+      <span className={cn(
+        "relative",
+        hasIntensity && "drop-shadow-[0_0_8px_currentColor]"
+      )}>
+        {formatted}
+      </span>
     </td>
   );
 });
@@ -748,10 +760,10 @@ const ScreenerRow = memo(function ScreenerRow({
           <div className="flex items-center justify-end gap-1.5 flex-wrap max-w-[120px] ml-auto">
             {globalUseRsi && entry.rsiPeriodAtCreation === rsiPeriod && display.rsiCustom !== null && display.rsi15m !== null && (
               <>
-                {display.rsiCustom <= 30 && display.rsi15m > 30 && (
+                {display.rsiCustom <= globalOversold && display.rsi15m > globalOversold && (
                   <span className="text-[7px] px-1 bg-[#39FF14]/30 text-[#39FF14] rounded-full animate-pulse border border-[#39FF14]/30" title="Early Oversold">EARLY BUY</span>
                 )}
-                {display.rsiCustom >= 70 && display.rsi15m < 70 && (
+                {display.rsiCustom >= globalOverbought && display.rsi15m < globalOverbought && (
                   <span className="text-[7px] px-1 bg-[#722f37]/30 text-[#FF4B5C] rounded-full animate-pulse border border-[#FF4B5C]/30" title="Early Overbought">EARLY SELL</span>
                 )}
               </>
@@ -774,8 +786,8 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('emaCross') && (
         <IndicatorCell 
           value={null} 
-          formatted={globalUseEma ? (display.emaCross === 'bullish' ? 'BULL' : display.emaCross === 'bearish' ? 'BEAR' : 'NEUTRAL') : '-'}
-          colorClass={globalUseEma ? (display.emaCross === 'bullish' ? "text-[#39FF14]" : display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-500") : "text-slate-700/40"}
+          formatted={display.emaCross === 'bullish' ? 'BULL' : display.emaCross === 'bearish' ? 'BEAR' : 'NEUTRAL'}
+          colorClass={display.emaCross === 'bullish' ? "text-[#39FF14]" : display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-500"}
           widthClass={COL_WIDTHS.trend}
           align="right"
         />
@@ -784,9 +796,10 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('macdHistogram') && (
         <IndicatorCell 
           value={display.macdHistogram} 
-          formatted={globalUseMacd && display.macdHistogram !== null ? formatNum(display.macdHistogram, 4) : '-'}
-          colorClass={globalUseMacd ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
+          formatted={display.macdHistogram !== null ? formatNum(display.macdHistogram, 4) : '-'}
+          colorClass={display.macdHistogram !== null ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
           widthClass={COL_WIDTHS.macd}
+          intensity={true}
         />
       )}
 
@@ -842,8 +855,8 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('divergence') && (
         <td className="px-3 py-4 text-right text-[10px] font-black uppercase whitespace-nowrap">
-          {display.rsiDivergence === 'bullish' ? <span className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)] animate-pulse">Bull Div</span> :
-            display.rsiDivergence === 'bearish' ? <span className="text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)] animate-pulse">Bear Div</span> :
+          {(entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bullish' ? <span className="text-[#39FF14] drop-shadow-[0_0_8px_rgba(57,255,20,0.3)] animate-pulse">Bull Div</span> :
+            (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bearish' ? <span className="text-[#FF4B5C] drop-shadow-[0_0_8px_rgba(255,75,92,0.3)] animate-pulse">Bear Div</span> :
               <span className="text-slate-800">-</span>}
         </td>
       )}
@@ -854,13 +867,14 @@ const ScreenerRow = memo(function ScreenerRow({
           formatted={globalUseVwap && display.vwapDiff !== null ? formatPct(display.vwapDiff) : '-'} 
           colorClass={globalUseVwap ? (display.vwapDiff! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.vwap} 
+          intensity={true}
         />
       )}
 
       {visibleCols.has('longCandle') && (
         <IndicatorCell 
           value={null} 
-          formatted={globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m != null && (display.curCandleSize / display.avgBarSize1m) >= globalLongCandleThreshold ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '-'} 
+          formatted={globalVolatilityEnabled && display.curCandleSize != null && display.avgBarSize1m && display.avgBarSize1m > 0 && (display.curCandleSize / display.avgBarSize1m) >= globalLongCandleThreshold ? `${(display.curCandleSize / display.avgBarSize1m).toFixed(1)}x` : '-'} 
           colorClass="text-amber-400" 
           widthClass={COL_WIDTHS.signal} 
         />
@@ -869,7 +883,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('volumeSpike') && (
         <IndicatorCell 
           value={null} 
-          formatted={globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m != null && (display.curCandleVol / display.avgVolume1m) >= globalVolumeSpikeThreshold ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '-'} 
+          formatted={globalVolatilityEnabled && display.curCandleVol != null && display.avgVolume1m && display.avgVolume1m > 0 && (display.curCandleVol / display.avgVolume1m) >= globalVolumeSpikeThreshold ? `${(display.curCandleVol / display.avgVolume1m).toFixed(1)}x` : '-'} 
           colorClass="text-[#39FF14]" 
           widthClass={COL_WIDTHS.signal} 
         />
@@ -881,6 +895,7 @@ const ScreenerRow = memo(function ScreenerRow({
           formatted={globalUseMomentum && display.momentum !== null ? formatPct(display.momentum) : '-'} 
           colorClass={globalUseMomentum ? (display.momentum! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.momentum} 
+          intensity={true}
         />
       )}
 
@@ -899,6 +914,7 @@ const ScreenerRow = memo(function ScreenerRow({
           formatted={display.adx !== null ? display.adx.toFixed(1) : '-'} 
           colorClass={display.adx && display.adx >= 25 ? "text-[#39FF14]" : "text-slate-600"} 
           widthClass={COL_WIDTHS.adx} 
+          intensity={true}
         />
       )}
 
@@ -908,6 +924,7 @@ const ScreenerRow = memo(function ScreenerRow({
           formatted={fundingRate ? `${(fundingRate.rate * 100).toFixed(4)}%` : '-'} 
           colorClass={fundingRate ? (fundingRate.rate > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700"} 
           widthClass={COL_WIDTHS.funding} 
+          intensity={true}
           title={fundingRate ? `Annualized: ${fundingRate.annualized.toFixed(0)}% APR` : undefined}
         />
       )}
@@ -934,6 +951,7 @@ const ScreenerRow = memo(function ScreenerRow({
           formatted={smartMoneyScore ? (smartMoneyScore.score > 0 ? `+${smartMoneyScore.score}` : `${smartMoneyScore.score}`) : '-'}
           colorClass={smartMoneyScore ? (smartMoneyScore.score >= 30 ? "text-[#39FF14]" : smartMoneyScore.score <= -30 ? "text-[#FF4B5C]" : "text-slate-500") : "text-slate-800"}
           widthClass={COL_WIDTHS.smart}
+          intensity={true}
         />
       )}
 
@@ -1597,8 +1615,8 @@ const ScreenerCard = memo(function ScreenerCard({
                 ) : col.id === 'strategy' ? (
                   <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} />
                 ) : col.id === 'divergence' ? (
-                  <span className={cn("text-[8px] font-black uppercase", display.rsiDivergence === 'bullish' ? "text-[#39FF14]" : display.rsiDivergence === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
-                    {display.rsiDivergence === 'bullish' ? 'DIV+' : display.rsiDivergence === 'bearish' ? 'DIV-' : '-'}
+                  <span className={cn("text-[8px] font-black uppercase", (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bullish' ? "text-[#39FF14]" : (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
+                    {(entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bullish' ? 'DIV+' : (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bearish' ? 'DIV-' : '-'}
                   </span>
                 ) : col.id === 'vwapDiff' ? (
                   <span className={cn("text-[10px] font-black tabular-nums font-mono", globalUseVwap && (val as number) > 0 ? "text-[#39FF14]" : globalUseVwap && (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
@@ -4396,7 +4414,10 @@ export default function ScreenerDashboard() {
                     stickyOffset={visibleCols.has('rank') ? 268 : 220}
                   />
                   
-                  <SortHeader label="24h Change" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.change} />
+                  <SortHeader 
+                    label="24h Chg" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" 
+                    widthClass={COL_WIDTHS.change} 
+                  />
                   <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.volume} />
 
                   {visibleCols.has('rsi1m') && <SortHeader label="RSI 1m" sortKey="rsi1m" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.rsi} />}
