@@ -11,16 +11,14 @@ export function Roadmap() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-[#39FF14]/5 rounded-full blur-[120px] pointer-events-none" />
       
       <div className="max-w-7xl mx-auto relative z-10">
-        <div className="text-center mb-12 sm:mb-20 space-y-3 sm:space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-[#39FF14]/10 border border-[#39FF14]/20 rounded-full mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
-            <span className="text-[9px] font-black tracking-widest uppercase text-[#39FF14]">Project 2026</span>
-          </div>
-          <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.4em] sm:tracking-[0.5em] text-slate-500">The Ultimate Paradigm</h2>
-          <p className="text-3xl sm:text-4xl md:text-5xl font-black text-white tracking-tighter">
-            We are building the <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">Autonomous Edge.</span>
+        <div className="text-center mb-16 sm:mb-24 space-y-4">
+          <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.6em] text-[#39FF14]">
+            Project 2026
+          </h2>
+          <p className="text-4xl sm:text-5xl md:text-6xl font-black text-white tracking-tighter leading-[0.95]">
+            The Autonomous <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Edge.</span>
           </p>
-          <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-4 font-medium">
+          <p className="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mt-6 font-medium leading-relaxed">
             RSIQ Pro is evolving from a descriptive terminal into an agentic decision engine. Here is a glimpse into the classified intelligence dropping in our upcoming cycle.
           </p>
         </div>
