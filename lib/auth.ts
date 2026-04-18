@@ -140,7 +140,7 @@ export const auth = betterAuth({
   },
 
   email: {
-    async sendEmail({ to, subject, body }) {
+    async sendEmail({ to, subject, body }: { to: string; subject: string; body: string }) {
       if (!process.env.RESEND_API_KEY) {
         console.warn("[auth] RESEND_API_KEY is missing. Skipping email delivery.");
         return;
@@ -174,17 +174,36 @@ export const auth = betterAuth({
     updateAge: 60 * 60 * 24,      // refresh daily
   },
 
-  user: {
-    additionalFields: {
-      role: {
-        type: "string",
-        defaultValue: "user",
-        input: false,
-      },
-    },
-  },
-
-  plugins: authPlugins,
+  // ── 2026 Production Readiness Guard ────────────────────────
+  plugins: [
+    ...authPlugins,
+    {
+      id: "prod-guard",
+      hooks: {
+        before: async () => {
+          if (process.env.NODE_ENV === "production") {
+            const MISSING = [];
+            if (!process.env.BETTER_AUTH_SECRET) MISSING.push("BETTER_AUTH_SECRET");
+            if (!process.env.STRIPE_SECRET_KEY) MISSING.push("STRIPE_SECRET_KEY");
+            if (!process.env.RESEND_API_KEY) MISSING.push("RESEND_API_KEY");
+            
+            if (MISSING.length > 0) {
+              console.error(`
+┌──────────────────────────────────────────────────────────────────┐
+│  ⚠️  SYSTEM INCOMPLETE (PRODUCTION MODE)                          │
+├──────────────────────────────────────────────────────────────────┤
+│ Missing Critical Secrets: ${MISSING.join(", ")}
+│ The institutional terminal may experience failures.              │
+└──────────────────────────────────────────────────────────────────┘
+              `);
+            } else {
+              console.log("── RSIQ Pro: Institutional Auth System READY ──");
+            }
+          }
+        }
+      }
+    }
+  ],
 
   trustedOrigins,
   databaseHooks: {

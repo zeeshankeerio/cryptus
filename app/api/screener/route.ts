@@ -67,14 +67,22 @@ export async function GET(request: Request) {
     let fetchTask = pendingFetches.get(fetchKey);
 
     if (!fetchTask) {
-      fetchTask = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange })
+      const screenerPromise = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange });
+      
+      // ── Institutional Timeout Safety — 30s max per upstream fetch ──
+      fetchTask = Promise.race([
+        screenerPromise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('UPSTREAM_TIMEOUT')), 30_000))
+      ])
         .finally(() => {
           pendingFetches.delete(fetchKey);
         })
         .catch(err => {
-          console.error('[screener-api] Fetch task failed:', err instanceof Error ? err.message : err);
+          const errMsg = err instanceof Error ? err.message : String(err);
+          console.error(`[screener-api] Fetch task failed (${exchange}):`, errMsg);
           return { data: [], meta: { total: 0, fetchedAt: Date.now() } as any };
         });
+        
       pendingFetches.set(fetchKey, fetchTask);
     }
 

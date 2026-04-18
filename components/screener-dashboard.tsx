@@ -3012,6 +3012,14 @@ export default function ScreenerDashboard() {
 
       // 503 with data means partial result - still usable
       if (!res.ok && !(res.status === 503 && json.data?.length > 0)) {
+        if (res.status === 503) {
+          toast.info('Upstream Sync In Progress', {
+            description: 'The institutional feed is currently calibrating with exchange nodes. System will refresh automatically.',
+            duration: 5000,
+          });
+          // Non-fatal, just wait for next poll
+          return;
+        }
         throw new Error(`API error ${res.status}`);
       }
 
