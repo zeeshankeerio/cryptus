@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Search, UserRound, Crown, Calendar, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Search, UserRound, Crown, Calendar, FileText, Settings, ChevronDown, ChevronUp } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { AUTH_CONFIG } from "@/lib/config";
 
@@ -12,6 +12,20 @@ type FeatureFlags = {
   allowTrialAlerts: boolean;
   allowTrialAdvancedIndicators: boolean;
   allowTrialCustomSettings: boolean;
+};
+
+type UserFeatureFlag = {
+  flagName: string;
+  flagValue: boolean | number;
+  updatedAt: string;
+};
+
+type EffectiveFlags = {
+  allowAdvancedIndicators: { value: boolean; source: "global" | "user" };
+  allowAlerts: { value: boolean; source: "global" | "user" };
+  allowCustomSettings: { value: boolean; source: "global" | "user" };
+  maxRecords: { value: number; source: "global" | "user" };
+  maxSymbols: { value: number; source: "global" | "user" };
 };
 
 type AdminUser = {
@@ -48,6 +62,18 @@ export default function AdminPage() {
   const [flags, setFlags] = useState<FeatureFlags | null>(null);
   const [flagsLoading, setFlagsLoading] = useState(false);
 
+  // Per-user feature flags state
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
+  const [userFlags, setUserFlags] = useState<Record<string, { flags: UserFeatureFlag[]; effective: EffectiveFlags }>>({});
+  const [userFlagsLoading, setUserFlagsLoading] = useState<Record<string, boolean>>({});
+
+  // Analytics state
+  const [analytics, setAnalytics] = useState<{
+    users: { total: number; trial: number; subscribed: number; suspended: number; expired: number };
+    revenue: { mrr: number; arr: number };
+    growth: { newUsersThisMonth: number; newSubscriptionsThisMonth: number; churnRate: number };
+  } | null>(null);
+
   const isOwner =
     session.data?.user?.email === AUTH_CONFIG.SUPER_ADMIN_EMAIL ||
     (session.data?.user as { role?: string | null } | undefined)?.role === "owner";
@@ -74,6 +100,17 @@ export default function AdminPage() {
     }
   };
 
+  const loadAnalytics = async () => {
+    try {
+      const res = await fetch("/api/admin/analytics", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (error) {
+      console.error("Failed to load analytics:", error);
+    }
+  };
+
   useEffect(() => {
     if (!session.data || !isOwner) {
       setLoading(false);
@@ -82,7 +119,7 @@ export default function AdminPage() {
 
     const init = async () => {
       try {
-        await Promise.all([loadUsers(), loadFeatureFlags()]);
+        await Promise.all([loadUsers(), loadFeatureFlags(), loadAnalytics()]);
       } finally {
         setLoading(false);
       }
@@ -181,6 +218,77 @@ export default function AdminPage() {
     setFlags(data.flags);
   };
 
+  const loadUserFlags = async (userId: string) => {
+    setUserFlagsLoading((prev) => ({ ...prev, [userId]: true }));
+    try {
+      const res = await fetch(`/api/admin/user-flags/${userId}`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      setUserFlags((prev) => ({
+        ...prev,
+        [userId]: {
+          flags: data.flags || [],
+          effective: data.effectiveFlags || {},
+        },
+      }));
+    } finally {
+      setUserFlagsLoading((prev) => ({ ...prev, [userId]: false }));
+    }
+  };
+
+  const toggleUserExpanded = async (userId: string) => {
+    if (expandedUserId === userId) {
+      setExpandedUserId(null);
+    } else {
+      setExpandedUserId(userId);
+      if (!userFlags[userId]) {
+        await loadUserFlags(userId);
+      }
+    }
+  };
+
+  const setUserFlag = async (userId: string, flagName: string, flagValue: boolean | number) => {
+    try {
+      const res = await fetch("/api/admin/user-flags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, flagName, flagValue }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to set user flag.");
+        return;
+      }
+
+      // Reload user flags
+      await loadUserFlags(userId);
+    } catch (error) {
+      console.error("Error setting user flag:", error);
+      alert("Failed to set user flag.");
+    }
+  };
+
+  const deleteUserFlag = async (userId: string, flagName: string) => {
+    try {
+      const res = await fetch(`/api/admin/user-flags/${userId}/${flagName}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Failed to delete user flag.");
+        return;
+      }
+
+      // Reload user flags
+      await loadUserFlags(userId);
+    } catch (error) {
+      console.error("Error deleting user flag:", error);
+      alert("Failed to delete user flag.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#05080F] flex items-center justify-center">
@@ -218,6 +326,44 @@ export default function AdminPage() {
           </div>
         </div>
 
+        {/* Analytics Dashboard */}
+        {analytics && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">Total Users</div>
+              <div className="text-2xl font-black text-white">{analytics.users.total}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">Trial Users</div>
+              <div className="text-2xl font-black text-amber-300">{analytics.users.trial}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">Subscribed</div>
+              <div className="text-2xl font-black text-emerald-300">{analytics.users.subscribed}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">Suspended</div>
+              <div className="text-2xl font-black text-rose-300">{analytics.users.suspended}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">MRR</div>
+              <div className="text-2xl font-black text-[#39FF14]">${analytics.revenue.mrr}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">ARR</div>
+              <div className="text-2xl font-black text-[#39FF14]">${analytics.revenue.arr}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">New Users</div>
+              <div className="text-2xl font-black text-white">{analytics.growth.newUsersThisMonth}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-[#0a0f1a] p-4">
+              <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 mb-2">Churn Rate</div>
+              <div className="text-2xl font-black text-white">{analytics.growth.churnRate}%</div>
+            </div>
+          </div>
+        )}
+
         <div className="grid lg:grid-cols-[2fr_1fr] gap-8">
           <div className="rounded-2xl border border-white/10 bg-[#0a0f1a] overflow-hidden">
             <div className="p-4 border-b border-white/10">
@@ -232,41 +378,167 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="divide-y divide-white/5">
-              {filtered.map((user) => (
-                <div key={user.id} className="p-4 flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-white font-bold">
-                      <UserRound className="h-4 w-4 text-[#39FF14]" />
-                      {user.name}
+              {filtered.map((user) => {
+                const isExpanded = expandedUserId === user.id;
+                const userData = userFlags[user.id];
+                const isLoadingFlags = userFlagsLoading[user.id];
+                const hasCustomFlags = userData?.flags && userData.flags.length > 0;
+
+                return (
+                  <div key={user.id} className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 text-white font-bold">
+                          <UserRound className="h-4 w-4 text-[#39FF14]" />
+                          {user.name}
+                          {hasCustomFlags && (
+                            <span className="text-[9px] uppercase tracking-[0.15em] bg-[#39FF14]/20 text-[#39FF14] px-2 py-0.5 rounded">
+                              Custom Flags
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-1">{user.email}</p>
+                        <p className="text-[10px] text-slate-500 uppercase tracking-[0.15em] mt-2">Role: {user.role || "user"}</p>
+                        {user.banned ? (
+                          <p className="text-[10px] text-rose-300 uppercase tracking-[0.1em] mt-1">
+                            Suspended{user.banReason ? `: ${user.banReason}` : ""}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="text-right">
+                        <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md ${user.subscription?.status === "active" ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700 text-slate-200"}`}>
+                          {user.subscription?.status || "no-sub"}
+                        </span>
+                        <p className="text-[10px] text-slate-500 mt-2">{user.subscription?.plan || "-"}</p>
+                        <p className="text-[10px] text-slate-500 mt-1 flex items-center justify-end gap-1"><Calendar className="h-3 w-3" /> {user.subscription?.periodEnd ? new Date(user.subscription.periodEnd).toLocaleDateString() : "-"}</p>
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => toggleUserStatus(user.id, !!user.banned)}
+                            disabled={statusLoadingUserId === user.id}
+                            className={`h-8 rounded-lg px-3 text-[10px] font-black uppercase tracking-[0.15em] ${user.banned ? "bg-emerald-500/20 text-emerald-200" : "bg-rose-500/20 text-rose-200"} disabled:opacity-50`}
+                          >
+                            {statusLoadingUserId === user.id
+                              ? "..."
+                              : user.banned
+                                ? "Reactivate"
+                                : "Suspend"}
+                          </button>
+                          <button
+                            onClick={() => toggleUserExpanded(user.id)}
+                            className="h-8 w-8 rounded-lg bg-slate-700/50 hover:bg-slate-700 flex items-center justify-center"
+                            title="Manage feature flags"
+                          >
+                            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <Settings className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-slate-400 mt-1">{user.email}</p>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-[0.15em] mt-2">Role: {user.role || "user"}</p>
-                    {user.banned ? (
-                      <p className="text-[10px] text-rose-300 uppercase tracking-[0.1em] mt-1">
-                        Suspended{user.banReason ? `: ${user.banReason}` : ""}
-                      </p>
-                    ) : null}
+
+                    {isExpanded && (
+                      <div className="mt-4 pt-4 border-t border-white/10">
+                        <h3 className="text-sm font-black text-white mb-3 flex items-center gap-2">
+                          <Settings className="h-4 w-4 text-[#39FF14]" />
+                          Per-User Feature Flags
+                        </h3>
+
+                        {isLoadingFlags ? (
+                          <div className="text-xs text-slate-500 py-4">Loading flags...</div>
+                        ) : userData ? (
+                          <div className="space-y-3">
+                            {/* Boolean Flags */}
+                            {[
+                              { key: "allowAdvancedIndicators", label: "Advanced Indicators" },
+                              { key: "allowAlerts", label: "Alerts" },
+                              { key: "allowCustomSettings", label: "Custom Settings" },
+                            ].map((flag) => {
+                              const effective = userData.effective[flag.key as keyof EffectiveFlags];
+                              const isUserOverride = effective?.source === "user";
+                              return (
+                                <div key={flag.key} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[#05080F] border border-white/10">
+                                  <div className="flex-1">
+                                    <div className="text-xs font-bold text-white">{flag.label}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">
+                                      {isUserOverride ? (
+                                        <span className="text-[#39FF14]">User Override</span>
+                                      ) : (
+                                        <span>Global Default</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={() => setUserFlag(user.id, flag.key, !effective.value)}
+                                      className={`h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-[0.15em] ${effective.value ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700 text-slate-400"}`}
+                                    >
+                                      {effective.value ? "Enabled" : "Disabled"}
+                                    </button>
+                                    {isUserOverride && (
+                                      <button
+                                        onClick={() => deleteUserFlag(user.id, flag.key)}
+                                        className="h-8 px-2 rounded-lg bg-rose-500/20 text-rose-300 text-[10px] font-black uppercase tracking-[0.15em]"
+                                        title="Reset to global"
+                                      >
+                                        Reset
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Numeric Flags */}
+                            {[
+                              { key: "maxRecords", label: "Max Records", min: 0, max: 1000 },
+                              { key: "maxSymbols", label: "Max Symbols", min: 0, max: 2000 },
+                            ].map((flag) => {
+                              const effective = userData.effective[flag.key as keyof EffectiveFlags];
+                              const isUserOverride = effective?.source === "user";
+                              return (
+                                <div key={flag.key} className="flex items-center justify-between gap-4 p-3 rounded-lg bg-[#05080F] border border-white/10">
+                                  <div className="flex-1">
+                                    <div className="text-xs font-bold text-white">{flag.label}</div>
+                                    <div className="text-[10px] text-slate-500 mt-1">
+                                      {isUserOverride ? (
+                                        <span className="text-[#39FF14]">User Override: {effective.value}</span>
+                                      ) : (
+                                        <span>Global Default: {effective.value}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      min={flag.min}
+                                      max={flag.max}
+                                      defaultValue={Number(effective.value)}
+                                      onBlur={(e) => {
+                                        const val = Number(e.target.value);
+                                        if (val !== effective.value) {
+                                          setUserFlag(user.id, flag.key, val);
+                                        }
+                                      }}
+                                      className="w-24 h-8 bg-[#05080F] border border-white/10 rounded-lg px-2 text-xs text-white"
+                                    />
+                                    {isUserOverride && (
+                                      <button
+                                        onClick={() => deleteUserFlag(user.id, flag.key)}
+                                        className="h-8 px-2 rounded-lg bg-rose-500/20 text-rose-300 text-[10px] font-black uppercase tracking-[0.15em]"
+                                        title="Reset to global"
+                                      >
+                                        Reset
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right">
-                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] px-2 py-1 rounded-md ${user.subscription?.status === "active" ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-700 text-slate-200"}`}>
-                      {user.subscription?.status || "no-sub"}
-                    </span>
-                    <p className="text-[10px] text-slate-500 mt-2">{user.subscription?.plan || "-"}</p>
-                    <p className="text-[10px] text-slate-500 mt-1 flex items-center justify-end gap-1"><Calendar className="h-3 w-3" /> {user.subscription?.periodEnd ? new Date(user.subscription.periodEnd).toLocaleDateString() : "-"}</p>
-                    <button
-                      onClick={() => toggleUserStatus(user.id, !!user.banned)}
-                      disabled={statusLoadingUserId === user.id}
-                      className={`mt-3 h-8 rounded-lg px-3 text-[10px] font-black uppercase tracking-[0.15em] ${user.banned ? "bg-emerald-500/20 text-emerald-200" : "bg-rose-500/20 text-rose-200"} disabled:opacity-50`}
-                    >
-                      {statusLoadingUserId === user.id
-                        ? "Updating..."
-                        : user.banned
-                          ? "Reactivate"
-                          : "Suspend"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <div className="p-10 text-center text-sm text-slate-500">No users found.</div>
               )}

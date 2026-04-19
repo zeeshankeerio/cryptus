@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { 
-  LayoutGrid, CreditCard, Settings, Shield, Lock, LogOut, ChevronDown 
+  LayoutGrid, CreditCard, Settings, Shield, Lock, LogOut, ChevronDown, User 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -34,6 +34,11 @@ export function UserProfileDropdown({
       icon: LayoutGrid, 
       onClick: () => { router.push('/terminal'); onClose(); }, 
       active: true 
+    },
+    { 
+      label: 'Account', 
+      icon: User, 
+      onClick: () => { router.push('/account'); onClose(); } 
     },
     { 
       label: 'Subscription', 

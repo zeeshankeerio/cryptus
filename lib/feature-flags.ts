@@ -12,7 +12,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   maxTrialRecords: 100,
   maxSubscribedRecords: 500,
   allowTrialAlerts: false,
-  allowTrialAdvancedIndicators: false,
+  allowTrialAdvancedIndicators: true, // Requirement 1.2: Enable by default for trial users
   allowTrialCustomSettings: false,
 };
 
@@ -27,7 +27,7 @@ async function ensureFeatureFlagsTable(): Promise<void> {
       "maxTrialRecords" INTEGER NOT NULL DEFAULT 100,
       "maxSubscribedRecords" INTEGER NOT NULL DEFAULT 500,
       "allowTrialAlerts" BOOLEAN NOT NULL DEFAULT false,
-      "allowTrialAdvancedIndicators" BOOLEAN NOT NULL DEFAULT false,
+      "allowTrialAdvancedIndicators" BOOLEAN NOT NULL DEFAULT true,
       "allowTrialCustomSettings" BOOLEAN NOT NULL DEFAULT false,
       "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
       "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()

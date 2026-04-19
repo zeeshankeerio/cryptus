@@ -1,6 +1,8 @@
 import { AUTH_CONFIG } from "@/lib/config";
 import { getFeatureFlags, type FeatureFlags } from "@/lib/feature-flags";
 import { prisma } from "@/lib/prisma";
+import { getUserFeatureFlags, type UserFeatureFlagName } from "@/lib/user-feature-flags";
+import { entitlementsCache } from "@/lib/entitlements-cache";
 
 const RECORD_OPTIONS = [100, 200, 300, 500] as const;
 
@@ -29,6 +31,7 @@ export interface ResolvedEntitlements {
   coins: number;
   maxSymbols: number;
   flags: FeatureFlags;
+  userFlags?: Partial<Record<UserFeatureFlagName, boolean | number>>;
 }
 
 type SubscriptionLite = {
@@ -64,6 +67,14 @@ function deriveOptions(maxRecords: number): number[] {
 }
 
 export async function resolveEntitlementsForUser(user: EntitlementUser | null): Promise<ResolvedEntitlements> {
+  // Check cache first
+  if (user) {
+    const cached = entitlementsCache.get(user.id);
+    if (cached) {
+      return cached;
+    }
+  }
+
   let flags: FeatureFlags;
   try {
     flags = await getFeatureFlags();
@@ -81,7 +92,7 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
 
   if (!user) {
     const maxRecords = Math.min(flags.maxTrialRecords, 100);
-    return {
+    const entitlements: ResolvedEntitlements = {
       tier: "anonymous",
       isOwner: false,
       hasPaidAccess: false,
@@ -97,11 +108,12 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
       maxSymbols: 10, // Minimal for anonymous
       flags,
     };
+    return entitlements;
   }
 
   if (isOwnerUser(user)) {
     const maxRecords = Math.max(flags.maxSubscribedRecords, 500);
-    return {
+    const entitlements: ResolvedEntitlements = {
       tier: "owner",
       isOwner: true,
       hasPaidAccess: true,
@@ -117,6 +129,9 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
       maxSymbols: 1000,
       flags,
     };
+    // Cache and return
+    entitlementsCache.set(user.id, entitlements);
+    return entitlements;
   }
 
   let subscriptions: SubscriptionLite[] = [];
@@ -171,35 +186,64 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
     isTrialing = now < user.createdAt.getTime() + trialMs;
   }
 
+  // NEW: Check for user-specific feature flags
+  let userFlags: Partial<Record<UserFeatureFlagName, boolean | number>> = {};
+  try {
+    userFlags = await getUserFeatureFlags(user.id);
+  } catch (error) {
+    console.error("[entitlements] Failed to fetch user feature flags:", error);
+    userFlags = {};
+  }
+
   // Tier classification: Priority: Paid > Trial (Active) > Free/Expired
   const tier: EntitlementTier = hasPaidAccess ? "subscribed" : isTrialing ? "trial" : "free";
   
-  // Enrollment Capping (Strict SaaS Rules)
-  // TRIAL: Max 100 symbols. AFTER 14 DAYS: restricted access to force upgrade.
-  const maxRecords = hasPaidAccess
+  // Apply user-specific overrides for maxRecords
+  const baseMaxRecords = hasPaidAccess
     ? Math.max(flags.maxSubscribedRecords, 500)
     : isTrialing 
       ? Math.min(flags.maxTrialRecords, 100)
       : 0; // Hard cut-off for expired trials to guarantee upgrade conversion
 
-  const trialFeaturesEnabled = isTrialing || tier === "free";
+  const maxRecords = userFlags.maxRecords !== undefined 
+    ? Number(userFlags.maxRecords) 
+    : baseMaxRecords;
 
-  return {
+  // Apply user-specific overrides for maxSymbols
+  const baseMaxSymbols = hasPaidAccess ? 1000 : 100;
+  const maxSymbols = userFlags.maxSymbols !== undefined
+    ? Number(userFlags.maxSymbols)
+    : baseMaxSymbols;
+
+  // Apply user-specific overrides for features
+  const features = {
+    enableAlerts: userFlags.allowAlerts !== undefined
+      ? Boolean(userFlags.allowAlerts)
+      : (hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAlerts)),
+    enableAdvancedIndicators: userFlags.allowAdvancedIndicators !== undefined
+      ? Boolean(userFlags.allowAdvancedIndicators)
+      : (hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAdvancedIndicators)),
+    enableCustomSettings: userFlags.allowCustomSettings !== undefined
+      ? Boolean(userFlags.allowCustomSettings)
+      : (hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialCustomSettings)),
+  };
+
+  const entitlements: ResolvedEntitlements = {
     tier,
     isOwner: false,
     hasPaidAccess,
     isTrialing,
     maxRecords,
     availableRecordOptions: deriveOptions(maxRecords),
-    features: {
-      enableAlerts: hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAlerts),
-      enableAdvancedIndicators:
-        hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialAdvancedIndicators),
-      enableCustomSettings:
-        hasPaidAccess || isTrialing || (tier === "free" && flags.allowTrialCustomSettings),
-    },
+    features,
     coins: user.coins ?? 0,
-    maxSymbols: hasPaidAccess ? 1000 : 100, // 100 symbols for trial/free
+    maxSymbols,
     flags,
+    userFlags,
   };
+
+  // Store computed entitlements in cache before returning
+  entitlementsCache.set(user.id, entitlements);
+
+  return entitlements;
 }
