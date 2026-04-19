@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import { redisService } from './redis-service'
 
 // ── AlertRecord interface ──────────────────────────────────────────────────────
 
@@ -14,9 +15,6 @@ export interface AlertRecord {
 // ── AlertCoordinator class ────────────────────────────────────────────────────
 
 class AlertCoordinator {
-  /** In-memory cooldown cache: key → last trigger timestamp (ms) */
-  private cooldownCache: Map<string, number> = new Map()
-
   // ── Cooldown key ────────────────────────────────────────────────────────────
 
   /**
@@ -33,36 +31,37 @@ class AlertCoordinator {
     return `${symbol}:${exchange}:${timeframe}:${conditionType}`
   }
 
-  // ── In-memory cooldown cache ────────────────────────────────────────────────
+  // ── Redis-backed cooldown cache ────────────────────────────────────────────────
 
   /**
    * Returns true if the key is still within its cooldown window.
    */
-  isInCooldown(key: string, cooldownMs: number): boolean {
-    const lastTrigger = this.cooldownCache.get(key)
-    if (lastTrigger === undefined) return false
-    return Date.now() - lastTrigger < cooldownMs
+  async isInCooldown(key: string, cooldownMs: number): Promise<boolean> {
+    const lastTrigger = await redisService.getJson<number>(`alert:cool:${key}`);
+    if (lastTrigger === null) return false;
+    return Date.now() - lastTrigger < cooldownMs;
   }
 
   /**
    * Records the current timestamp for the given key.
    */
-  setCooldown(key: string): void {
-    this.cooldownCache.set(key, Date.now())
+  async setCooldown(key: string, cooldownMs: number = 180000): Promise<void> {
+    await redisService.setJson(`alert:cool:${key}`, Date.now(), Math.ceil(cooldownMs / 1000));
   }
 
   /**
    * Removes the cooldown entry for the given key.
    */
-  clearCooldown(key: string): void {
-    this.cooldownCache.delete(key)
+  async clearCooldown(key: string): Promise<void> {
+    await redisService.del(`alert:cool:${key}`);
   }
 
   /**
    * Clears all in-memory cooldown entries.
+   * (Note: Namespaced clear in Redis is complex, but for this scale we just trust TTLs)
    */
-  clearAllCooldowns(): void {
-    this.cooldownCache.clear()
+  async clearAllCooldowns(): Promise<void> {
+    // In distributed scale, individual TTLs handle the cleanup.
   }
 
   // ── Database-backed alert recording ────────────────────────────────────────

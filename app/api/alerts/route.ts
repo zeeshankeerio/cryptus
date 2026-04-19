@@ -3,6 +3,7 @@ import { createAlertLog, getRecentAlerts, clearAlertLogs } from '@/lib/alert-log
 import { auth } from '@/lib/auth';
 import { resolveEntitlementsForUser } from '@/lib/entitlements';
 import { prisma } from '@/lib/prisma';
+import { alertCoordinator } from '@/lib/alert-coordinator';
 
 export async function GET(request: Request) {
   try {
@@ -57,19 +58,11 @@ export async function POST(request: Request) {
     }
 
     // ── Institutional De-duplication: Prevent Multi-Tab Alert Storms ──
-    const COOLDOWN_WINDOW = 60000; // 60s
-    const cutoff = new Date(Date.now() - COOLDOWN_WINDOW);
-    const existing = await prisma.alertLog.findFirst({
-      where: {
-        userId: session.user.id,
-        symbol: body.symbol,
-        timeframe: body.timeframe,
-        type: body.type,
-        createdAt: { gte: cutoff }
-      }
-    });
-
-    if (existing) {
+    // Uses high-speed Redis-backed state for near-instant response
+    const COOLDOWN_MS = 60000; // 60s
+    const coordKey = alertCoordinator.getCooldownKey(body.symbol, body.exchange || 'binance', body.timeframe, body.type);
+    
+    if (await alertCoordinator.isInCooldown(coordKey, COOLDOWN_MS)) {
       return NextResponse.json({ success: true, skipped: true, reason: 'cooldown' });
     }
 
@@ -82,6 +75,10 @@ export async function POST(request: Request) {
       price: body.price,
       type: body.type,
     });
+
+    // Commit cooldown to Redis after successful DB write
+    await alertCoordinator.setCooldown(coordKey, COOLDOWN_MS);
+
     return NextResponse.json(alert, {
       headers: {
         'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',

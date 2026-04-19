@@ -20,6 +20,7 @@ import {
   STOCKS_SYMBOLS 
 } from './asset-classes';
 import { getMarketType } from './market-utils';
+import { redisService } from './redis-service';
 
 interface ScreenerOptions {
   smartMode?: boolean;
@@ -1323,6 +1324,24 @@ function runRefresh(
     const nowTs = Date.now();
     debugLog(`[screener] runRefresh(${symbolCount}, smart=${smartMode}, exchange=${exchange}) starting...`);
 
+    // ── Distributed Locking Layer ──
+    // Prevent multiple server instances from hitting Binance simultaneously for the same configuration
+    const lockKey = `refresh:${symbolCount}:${smartMode}:${rsiPeriod}:${exchange}`;
+    const hasLock = await redisService.acquireLock(lockKey, 20); // 20s lock
+    if (!hasLock) {
+      debugLog(`[screener] Lock held by another instance for ${lockKey}. Hydrating from L2 to ensure liveness.`);
+      // Even without the lock, try to hydrate from Redis to get the state from the locking instance
+      const symbolsToPreWarm = [...new Set([...(search ? await searchSymbols(search, exchange) : []), ...await getTopSymbols(symbolCount, exchange), ...YAHOO_SYMBOLS])];
+      const redisResults = await Promise.all(symbolsToPreWarm.slice(0, 100).map(s => redisService.getJson<any>(`cache:ind:${getCacheKey(s)}`)));
+      redisResults.forEach((val, idx) => {
+        if (val && val.entry && val.ts) {
+          indicatorCache.set(getCacheKey(symbolsToPreWarm[idx]), val);
+        }
+      });
+      const cachedResult = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
+      if (cachedResult) return cachedResult;
+    }
+
     // 1. Get top symbols + ticker data + custom configs in parallel
     const [topSymbols, searchMatches, tickers, yahooTickers, coinConfigs] = await Promise.all([
       getTopSymbols(symbolCount, exchange),
@@ -1337,6 +1356,24 @@ function runRefresh(
 
     // Merge: search matches first, then top symbols, then ALL Yahoo symbols to ensure no gaps
     const symbols = [...new Set([...searchMatches, ...topSymbols, ...YAHOO_SYMBOLS])];
+
+    // ── Redis L2 Hybrid Hydration ──
+    // Before checking what needs refresh, pull missing data from Redis L2
+    const symbolsMissingLocal = symbols.filter(s => !indicatorCache.has(getCacheKey(s)));
+    if (symbolsMissingLocal.length > 0) {
+      debugLog(`[screener] L1 cache miss for ${symbolsMissingLocal.length} symbols, checking Redis L2...`);
+      // We fetch in small batches to avoid huge Redis payloads
+      const batchSize = 100;
+      for (let i = 0; i < symbolsMissingLocal.length; i += batchSize) {
+        const batch = symbolsMissingLocal.slice(i, i + batchSize);
+        const redisResults = await Promise.all(batch.map(s => redisService.getJson<any>(`cache:ind:${getCacheKey(s)}`)));
+        redisResults.forEach((val, idx) => {
+          if (val && val.entry && val.ts) {
+            indicatorCache.set(getCacheKey(batch[idx]), val);
+          }
+        });
+      }
+    }
 
     // ⚡ 2. RANK-BASED PRIORITY (Ensure Top 100 are ALWAYS refreshed)
     const symbolRanks = new Map<string, number>();
@@ -1514,7 +1551,10 @@ function runRefresh(
           );
           if (entry) {
             entries.push(entry);
-            indicatorCache.set(getCacheKey(sym), { entry: entry, ts: nowTs });
+            const cacheObj = { entry: entry, ts: nowTs };
+            indicatorCache.set(getCacheKey(sym), cacheObj);
+            // Async background push to Redis L2
+            void redisService.setJson(`cache:ind:${getCacheKey(sym)}`, cacheObj, 60); // 1 min shared TTL
             continue;
           }
         }
