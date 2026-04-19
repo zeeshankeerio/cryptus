@@ -294,26 +294,84 @@ const PriceCell = memo(function PriceCell({
 });
 
 function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
-  const styles: Record<string, string> = {
-    oversold: 'bg-[#39FF14]/15 text-[#39FF14] border-[#39FF14]/50 shadow-[0_0_15px_rgba(57,255,20,0.2)] animate-pulse',
-    overbought: 'bg-[#722f37]/30 text-[#FF4B5C] border-[#722f37]/60 shadow-[0_0_15px_rgba(255,75,92,0.2)] animate-pulse',
-    neutral: 'bg-slate-800/20 text-slate-700 border-white/5 opacity-40',
+  const config: Record<string, { bg: string; text: string; border: string; shadow: string; label: string; icon: string }> = {
+    oversold: {
+      bg: 'bg-[#39FF14]/20',
+      text: 'text-[#39FF14]',
+      border: 'border-[#39FF14]/60',
+      shadow: 'shadow-[0_0_15px_rgba(57,255,20,0.3)]',
+      label: 'OVERSOLD',
+      icon: '🟢'
+    },
+    overbought: {
+      bg: 'bg-[#FF4B5C]/20',
+      text: 'text-[#FF4B5C]',
+      border: 'border-[#FF4B5C]/60',
+      shadow: 'shadow-[0_0_15px_rgba(255,75,92,0.3)]',
+      label: 'OVERBOUGHT',
+      icon: '🔴'
+    },
+    neutral: {
+      bg: 'bg-slate-800/30',
+      text: 'text-slate-500',
+      border: 'border-slate-700/40',
+      shadow: '',
+      label: 'NEUTRAL',
+      icon: '⚪'
+    },
   };
+
+  const style = config[signal];
+  
   return (
-    <span className={cn("inline-flex items-center px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.15em] rounded-full border shadow-sm transition-all duration-300", styles[signal])}>
-      {signal}
+    <span className={cn(
+      "inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-w-[90px]",
+      "text-[9px] font-black uppercase tracking-[0.12em] leading-none",
+      "rounded-lg border-2 transition-all duration-300",
+      style.bg, style.text, style.border, style.shadow,
+      signal !== 'neutral' && "animate-pulse"
+    )}>
+      <span className="text-[10px]">{style.icon}</span>
+      <span>{style.label}</span>
     </span>
   );
 }
 
 function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry }) {
-  const styles: Record<string, string> = {
-    'strong-buy': 'bg-[#39FF14]/20 text-[#39FF14] border-[#39FF14]/40',
-    'buy': 'bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/20',
-    'neutral': 'bg-slate-500/15 text-slate-400 border-slate-500/30',
-    'sell': 'bg-[#722f37]/10 text-[#FF4B5C]/80 border-[#722f37]/20',
-    'strong-sell': 'bg-[#722f37]/20 text-[#FF4B5C] border-[#722f37]/40',
+  const config: Record<string, { bg: string; text: string; border: string; icon: string }> = {
+    'strong-buy': {
+      bg: 'bg-[#39FF14]/25',
+      text: 'text-[#39FF14]',
+      border: 'border-[#39FF14]/50',
+      icon: '🚀'
+    },
+    'buy': {
+      bg: 'bg-[#39FF14]/15',
+      text: 'text-[#39FF14]/90',
+      border: 'border-[#39FF14]/30',
+      icon: '📈'
+    },
+    'neutral': {
+      bg: 'bg-slate-700/20',
+      text: 'text-slate-400',
+      border: 'border-slate-600/30',
+      icon: '➖'
+    },
+    'sell': {
+      bg: 'bg-[#FF4B5C]/15',
+      text: 'text-[#FF4B5C]/90',
+      border: 'border-[#FF4B5C]/30',
+      icon: '📉'
+    },
+    'strong-sell': {
+      bg: 'bg-[#FF4B5C]/25',
+      text: 'text-[#FF4B5C]',
+      border: 'border-[#FF4B5C]/50',
+      icon: '⚠️'
+    },
   };
+
+  const style = config[signal];
 
   // Signal Narration Engine™ - generate rich explanations for non-neutral signals
   const narration = useMemo(() => {
@@ -339,12 +397,19 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
 
   return (
     <span
-      className={cn("inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black uppercase tracking-wider rounded border shadow-[0_0_10px_rgba(0,0,0,0.2)] transition-all", styles[signal], (narration || reasons?.length) ? 'cursor-help' : '')}
+      className={cn(
+        "inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-w-[100px]",
+        "text-[9px] font-black uppercase tracking-[0.12em] leading-none",
+        "rounded-lg border-2 transition-all duration-300",
+        style.bg, style.text, style.border,
+        (narration || reasons?.length) && 'cursor-help hover:scale-105'
+      )}
       title={title}
       onClick={narration ? handleCopySignal : undefined}
     >
-      {label}
-      {narration && <LinkIcon size={8} className="opacity-50 ml-0.5" />}
+      <span className="text-[10px]">{style.icon}</span>
+      <span>{label}</span>
+      {narration && <LinkIcon size={9} className="opacity-60" />}
     </span>
   );
 }
@@ -1910,6 +1975,7 @@ export default function ScreenerDashboard() {
   const smartModeDefault = process.env.NEXT_PUBLIC_SMART_MODE_DEFAULT !== '0';
   // ── Asset Class State ──
   const [activeAssetClass, setActiveAssetClass] = useState<AssetClass>('crypto');
+  const [showAssetClassDropdown, setShowAssetClassDropdown] = useState(false);
   // ── State ──
   const [data, setData] = useState<ScreenerEntry[]>([]);
   const isMobile = useIsMobile();
@@ -4239,28 +4305,71 @@ export default function ScreenerDashboard() {
 
             {/* ROW 2: STRATEGIC PULSE & INTEL RIBBON */}
             <div className="hidden lg:flex items-center gap-3 h-10 mb-1.5">
-              {/* Asset Class Dock Integrated */}
-              <div className="flex items-center gap-1.5 bg-black/40 border border-white/5 rounded-2xl p-1 px-3 shadow-inner h-full shrink-0">
-                {[
-                  { id: 'crypto' as const, icon: '₿', count: assetClassCounts.crypto },
-                  { id: 'forex' as const, icon: '💱', count: assetClassCounts.forex },
-                  { id: 'metals' as const, icon: '🥇', count: assetClassCounts.metals },
-                  { id: 'stocks' as const, icon: '📈', count: assetClassCounts.stocks },
-                ].map((ac) => (
-                  <button
-                    key={ac.id}
-                    onClick={() => setActiveAssetClass(ac.id)}
-                    className={cn(
-                      "relative px-2 py-1 text-[7px] font-black uppercase rounded-lg transition-all flex items-center gap-1.5",
-                      activeAssetClass === ac.id
-                        ? "bg-white/10 text-white shadow-sm"
-                        : ac.count > 0 ? "text-slate-500 hover:text-slate-300" : "text-slate-800 pointer-events-none opacity-20"
-                    )}
-                  >
-                    <span>{ac.icon}</span>
-                    <span className="tabular-nums opacity-60">{ac.count}</span>
-                  </button>
-                ))}
+              {/* Enhanced Asset Class Dropdown with Icons & Names */}
+              <div className="relative shrink-0">
+                <button
+                  onClick={() => setShowAssetClassDropdown(!showAssetClassDropdown)}
+                  className="flex items-center gap-2 bg-black/40 border border-white/5 rounded-2xl px-4 py-2 shadow-inner h-full hover:bg-white/5 transition-all group"
+                >
+                  <span className="text-base">
+                    {activeAssetClass === 'crypto' ? '₿' : activeAssetClass === 'forex' ? '💱' : activeAssetClass === 'metals' ? '🥇' : '📈'}
+                  </span>
+                  <span className="text-[10px] font-black text-white uppercase tracking-widest">
+                    {activeAssetClass === 'crypto' ? 'Crypto' : activeAssetClass === 'forex' ? 'Forex' : activeAssetClass === 'metals' ? 'Metals' : 'Stocks'}
+                  </span>
+                  <span className="text-[8px] font-mono text-slate-500 tabular-nums">
+                    {assetClassCounts[activeAssetClass]}
+                  </span>
+                  <ChevronDown size={12} className={cn("text-slate-500 transition-transform", showAssetClassDropdown && "rotate-180")} />
+                </button>
+
+                <AnimatePresence>
+                  {showAssetClassDropdown && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      className="absolute top-full mt-2 left-0 z-[100] min-w-[220px] bg-slate-900/95 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl p-2"
+                    >
+                      {[
+                        { id: 'crypto' as const, icon: '₿', label: 'Crypto', desc: 'Digital Assets', count: assetClassCounts.crypto },
+                        { id: 'forex' as const, icon: '💱', label: 'Forex', desc: 'Currency Pairs', count: assetClassCounts.forex },
+                        { id: 'metals' as const, icon: '🥇', label: 'Metals', desc: 'Precious & Industrial', count: assetClassCounts.metals },
+                        { id: 'stocks' as const, icon: '📈', label: 'Stocks', desc: 'Equities & Indices', count: assetClassCounts.stocks },
+                      ].map((ac) => (
+                        <button
+                          key={ac.id}
+                          onClick={() => { setActiveAssetClass(ac.id); setShowAssetClassDropdown(false); }}
+                          disabled={ac.count === 0}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group",
+                            activeAssetClass === ac.id
+                              ? "bg-[#39FF14]/10 text-[#39FF14]"
+                              : ac.count > 0
+                                ? "text-slate-300 hover:bg-white/5 hover:text-white"
+                                : "text-slate-700 opacity-40 cursor-not-allowed"
+                          )}
+                        >
+                          <span className="text-xl">{ac.icon}</span>
+                          <div className="flex-1">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[11px] font-black uppercase tracking-wider">{ac.label}</span>
+                              <span className={cn(
+                                "text-[9px] font-mono tabular-nums px-1.5 py-0.5 rounded-md",
+                                activeAssetClass === ac.id
+                                  ? "bg-[#39FF14]/20 text-[#39FF14]"
+                                  : "bg-white/5 text-slate-500"
+                              )}>
+                                {ac.count}
+                              </span>
+                            </div>
+                            <span className="text-[8px] text-slate-500 font-medium">{ac.desc}</span>
+                          </div>
+                        </button>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <div className="flex-1 flex items-center bg-black/40 border border-white/5 rounded-2xl px-4 gap-6 h-full shadow-inner backdrop-blur-md">
