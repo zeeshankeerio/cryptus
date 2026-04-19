@@ -1,4 +1,4 @@
-import { redisService } from './lib/redis-service';
+import { redisService } from '../lib/redis-service';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
