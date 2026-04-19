@@ -604,6 +604,15 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition = range > 0 ? (curC - state.bbLower) / range : 0.5;
     }
 
+    // Live relative price indicators
+    const vwapDiff = (state.vwapPriceBaseline && state.vwapPriceBaseline > 0)
+      ? ((curC - state.vwapPriceBaseline) / state.vwapPriceBaseline) * 100
+      : state.vwapDiff;
+    
+    const momentum = (state.momentumPriceBaseline && state.momentumPriceBaseline > 0)
+      ? ((curC - state.momentumPriceBaseline) / state.momentumPriceBaseline) * 100
+      : state.momentum;
+
     // Asset-Aware Market Detection (Local to Worker for Performance)
     const sSym = t.s.toUpperCase();
     const isMetal = ['PAXGUSDT', 'XAUTUSDT', 'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD', 'GC=F', 'SI=F', 'PL=F', 'PA=F', 'HG=F'].some(s => sSym.includes(s));
@@ -627,12 +636,12 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition,
       stochK: state.stochK,
       stochD: state.stochD,
-      vwapDiff: state.vwapDiff,
+      vwapDiff: vwapDiff,
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       emaCross,
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
-      momentum: state.momentum,
+      momentum: momentum,
       rsiCrossover: state.rsiCrossover,
       market,
       obThreshold: (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought,
@@ -655,8 +664,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       stochK: state.stochK,
       stochD: state.stochD,
       vwap: state.vwap,
-      vwapDiff: state.vwapDiff,
-      momentum: state.momentum,
+      vwapDiff: vwapDiff,
+      momentum: momentum,
       rsiDivergence: state.rsiDivergence,
       rsiDivergenceCustom: state.rsiDivergenceCustom,
       rsiCrossover: state.rsiCrossover,

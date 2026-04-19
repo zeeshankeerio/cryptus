@@ -39,6 +39,12 @@ export function latestEma(data: number[], period: number): number | null {
   return ema.length > 0 ? round(ema[ema.length - 1]) : null;
 }
 
+/** Get latest EMA value AND state for live shadowing. */
+export function latestEmaWithState(data: number[], period: number): { ema: number } | null {
+  const ema = calculateEma(data, period);
+  return ema.length > 0 ? { ema: round(ema[ema.length - 1]) } : null;
+}
+
 // ── EMA Cross detection ─────────────────────────────────────────
 
 export function detectEmaCross(
@@ -101,16 +107,47 @@ export function calculateMacd(
   }
 
   // Signal line = EMA of MACD line
-  const signal = calculateEma(macdLine, signalPeriod);
-  if (signal.length === 0) return null;
-
-  const latestMacd = macdLine[macdLine.length - 1];
-  const latestSignal = signal[signal.length - 1];
+  const signalLine = calculateEma(macdLine, signalPeriod);
+  if (signalLine.length === 0) return null;
 
   return {
-    macdLine: round(latestMacd),
-    signalLine: round(latestSignal),
-    histogram: round(latestMacd - latestSignal),
+    macdLine: round(macdLine[macdLine.length - 1]),
+    signalLine: round(signalLine[signalLine.length - 1]),
+    histogram: round(macdLine[macdLine.length - 1] - signalLine[signalLine.length - 1]),
+  };
+}
+
+/** MACD with full state seeds for worker real-time shadowing. */
+export function calculateMacdWithState(
+  closes: number[],
+  fastPeriod = 12,
+  slowPeriod = 26,
+  signalPeriod = 9,
+): { fastState: { ema: number }; slowState: { ema: number }; signalState: { ema: number }; histogram: number } | null {
+  if (closes.length < slowPeriod + signalPeriod) return null;
+
+  const emaFast = calculateEma(closes, fastPeriod);
+  const emaSlow = calculateEma(closes, slowPeriod);
+
+  if (emaSlow.length < signalPeriod) return null;
+
+  const offset = emaFast.length - emaSlow.length;
+  const macdLine: number[] = [];
+  for (let i = 0; i < emaSlow.length; i++) {
+    macdLine.push(emaFast[i + offset] - emaSlow[i]);
+  }
+
+  const signalLine = calculateEma(macdLine, signalPeriod);
+  if (signalLine.length === 0) return null;
+
+  const lastMacdLine = macdLine[macdLine.length-1];
+  const lastSignalLine = signalLine[signalLine.length-1];
+
+  return {
+    fastState: { ema: round(emaFast[emaFast.length - 1]) },
+    slowState: { ema: round(emaSlow[emaSlow.length - 1]) },
+    signalState: { ema: round(lastSignalLine) },
+    histogram: round(lastMacdLine - lastSignalLine)
   };
 }
 
@@ -151,6 +188,16 @@ export function calculateBollinger(
     lower: round(lower),
     position: round(pos),
   };
+}
+
+/** Bollinger Bands with state for worker shadowing. */
+export function calculateBollingerWithState(
+  data: number[],
+  period = 20,
+  stdDev = 2,
+): { upper: number; lower: number; middle: number; position: number } | null {
+  const res = calculateBollinger(data, period, stdDev);
+  return res ? { upper: res.upper, lower: res.lower, middle: res.middle, position: res.position } : null;
 }
 
 // ── RSI (Relative Strength Index) ───────────────────────────────
