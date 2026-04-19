@@ -749,11 +749,17 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
           : (tf.rsi < obT - hysteresis ? 'NEUTRAL' : 'OVERBOUGHT');
       } else {
         if (isInverted) {
-          if (tf.rsi >= osT - NEAR_BUFFER) zone = 'OVERSOLD';
-          else if (tf.rsi <= obT + NEAR_BUFFER) zone = 'OVERBOUGHT';
+          // If already OVERSOLD, stay OVERSOLD until RSI drops below (osT - hysteresis)
+          if (previousZone === 'OVERSOLD' && tf.rsi >= osT - hysteresis) zone = 'OVERSOLD';
+          else if (previousZone === 'OVERBOUGHT' && tf.rsi <= obT + hysteresis) zone = 'OVERBOUGHT';
+          else if (tf.rsi >= osT) zone = 'OVERSOLD';
+          else if (tf.rsi <= obT) zone = 'OVERBOUGHT';
         } else {
-          if (tf.rsi <= osT + NEAR_BUFFER) zone = 'OVERSOLD';
-          else if (tf.rsi >= obT - NEAR_BUFFER) zone = 'OVERBOUGHT';
+          // If already OVERSOLD, stay OVERSOLD until RSI rises above (osT + hysteresis)
+          if (previousZone === 'OVERSOLD' && tf.rsi <= osT + hysteresis) zone = 'OVERSOLD';
+          else if (previousZone === 'OVERBOUGHT' && tf.rsi >= obT - hysteresis) zone = 'OVERBOUGHT';
+          else if (tf.rsi <= osT) zone = 'OVERSOLD';
+          else if (tf.rsi >= obT) zone = 'OVERBOUGHT';
         }
       }
 
@@ -1436,8 +1442,13 @@ function computeWorkerStrategyScore(params) {
   }
 
   if (enabled.divergence !== false && params.rsiDivergence && params.rsiDivergence !== 'none') {
-    factors += 1.5;
-    score += (params.rsiDivergence === 'bullish' ? 70 : -70) * 1.5;
+    factors += 2.0;
+    score += (params.rsiDivergence === 'bullish' ? 80 : -80) * 2.0;
+  }
+
+  if (enabled.rsi !== false && params.rsiCrossover && params.rsiCrossover !== 'none') {
+    factors += 1.0;
+    score += (params.rsiCrossover === 'bullish_reversal' ? 60 : -60) * 1.0;
   }
 
   if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum) > 0.5) {
