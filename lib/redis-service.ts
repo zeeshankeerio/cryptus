@@ -57,14 +57,20 @@ export const redisService = {
    * Distributed Lock implementation
    * Returns true if lock acquired, false otherwise.
    */
-  async acquireLock(key: string, ttlSeconds: number = 10): Promise<boolean> {
+  async acquireLock(key: string, ttlSeconds: number = 30): Promise<boolean> {
     if (!redis) return true; // Fail open (allow operation) if Redis is down
     try {
       const lockKey = `lock:${key}`;
       const result = await redis.set(lockKey, 'locked', { ex: ttlSeconds, nx: true });
-      return result === 'OK';
+      const acquired = result === 'OK';
+      if (acquired) {
+        console.log(`[redis] 🛡️ Lock ACQUIRED: ${lockKey} (TTL ${ttlSeconds}s)`);
+      } else {
+        console.log(`[redis] 🛡️ Lock CONFLICT: ${lockKey} already held.`);
+      }
+      return acquired;
     } catch (err) {
-      console.error(`[redis] Lock failed for ${key}:`, err);
+      console.error(`[redis] ❌ Lock failed for ${key}:`, err);
       return true; // Fail open
     }
   },

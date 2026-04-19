@@ -103,6 +103,7 @@ export interface ScreenerResponse {
     fetchedAt: number;
     smartMode: boolean;
     refreshCap: number;
+    calibrating?: boolean;
     apiWeight?: number;
     syncMode?: 'LEADER' | 'SHARED';
     lastGlobalRefresh?: number;

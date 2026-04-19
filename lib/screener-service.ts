@@ -363,6 +363,7 @@ function buildMeta(
     total: entries.length,
     indicatorReady,
     indicatorCoveragePct,
+    calibrating: indicatorCoveragePct < 90, // Explicit calibration flag
     oversold: indicatorEntries.filter((e) => e.signal === 'oversold').length,
     overbought: indicatorEntries.filter((e) => e.signal === 'overbought').length,
     strongBuy: indicatorEntries.filter((e) => e.strategySignal === 'strong-buy').length,
@@ -1339,7 +1340,7 @@ function runRefresh(
       
       const fetchAndOverlay = async () => {
         const l3 = await redisService.getJson<ScreenerResponse>(`cache:${aggResultKey}`);
-        if (l3 && l3.data.length > 0) {
+        if (l3 && l3.data && l3.data.length > 0) {
           // Metadata Intelligence: Mark as shared and update compute latency to current
           l3.meta.syncMode = 'SHARED';
           l3.meta.computeTimeMs = Date.now() - start;
@@ -1355,13 +1356,15 @@ function runRefresh(
         return null;
       };
 
-      const sharedResult = await fetchAndOverlay();
-      if (sharedResult) return sharedResult;
-
-      // Lock held but no data yet? Wait 2.5s for leader to finish then retry.
-      await new Promise(r => setTimeout(r, 2500));
-      const retryResult = await fetchAndOverlay();
-      if (retryResult) return retryResult;
+      // ⚡ Institutional Retry Logic: Wait for leader with jittered polling
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const sharedResult = await fetchAndOverlay();
+        if (sharedResult) return sharedResult;
+        
+        const waitMs = 3000 + (attempt * 1500); // 3s, 4.5s, 6s...
+        debugLog(`[screener] L2/L3 missing, retry ${attempt + 1}/3 after ${waitMs}ms...`);
+        await new Promise(r => setTimeout(r, waitMs));
+      }
 
       // Absolute fallback: local memory cache (prevents 503 errors if Redis lags)
       const local = fromCachedResult(symbolCount, smartMode, rsiPeriod, exchange);
@@ -1413,7 +1416,10 @@ function runRefresh(
 
     // 2. Fetch klines only for symbols with stale/missing indicator cache
     // Alert-active symbols use a shorter TTL for more accurate RSI state refresh
-    const getCacheKey = (sym: string) => createInstanceCacheKey(`${sym}:${rsiPeriod}:${exchange}`);
+    // ── Shared L2 Keys (Removed Instance Isolation) ──
+    // Removing createInstanceCacheKey allows different server instances to reuse 
+    // each other's RSI results, massively reducing API cost and warm-up time.
+    const getCacheKey = (sym: string) => `${sym}:${rsiPeriod}:${exchange}`;
     const uncachedSymbols = symbols.filter((sym) => !indicatorCache.has(getCacheKey(sym)));
     let symbolsToRefresh = symbols.filter((sym) => {
       const cached = indicatorCache.get(getCacheKey(sym));

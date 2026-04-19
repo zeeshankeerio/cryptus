@@ -141,8 +141,11 @@ export async function GET(request: Request) {
       result.data = result.data.slice(0, count);
     }
 
+    // ── Partial Data Awareness ──
+    // Instead of failing with 503, we return what we have (even if ticker-only).
+    // The UI should display a "warming up" status based on indicatorCoveragePct.
     if (result.data.length === 0) {
-      return NextResponse.json({ error: 'Upstream timeout', data: [], meta: result.meta }, { status: 503 });
+      console.warn(`[screener-api] Returning empty set for ${exchange} (Upstream Unavailable)`);
     }
 
     // ── Bandwidth & Heatmap Optimization ──

@@ -1,94 +1,98 @@
-Deep dive project goal and architecture
+Optimizing tool selection...
 
-Searched codebase for "project purpose, main features, and architecture", no results
+Created 6 todos
 
-Searched codebase for "project purpose, main features, and architecture", 22 results
+Searched codebase for "screener API response structure partial data calibration status", 25 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/app/)
+Searched codebase for "hydration batch size adaptive prioritization", 29 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/lib/)
+Searched codebase for "indicator cache persistent redis indexeddb cold start", 16 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/components/)
+Searched codebase for "screener dashboard UI progress partial data warming up", 27 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/hooks/)
+Searched codebase for "prisma coin_config alert_log index slow query", 24 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/prisma/)
+Searched codebase for "metrics hydration calibration logging alert", 29 results
 
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/plan.md#1-1), lines 1 to 40
-
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/research.md#1-1), lines 1 to 40
-
-Read [](file:///c%3A/Users/zaliz/Downloads/CryptoRSI/README_DATABASE.md#1-1), lines 1 to 40
-
-## Plan: Deep Dive on Project Goal & Architecture
-
-**TL;DR:**  
-CryptoRSI is a modular, production-grade crypto screener platform focused on real-time RSI analytics, with a scalable backend, modern frontend, and extensibility for future indicators and alerting. The architecture is strong, but there are gaps in cache/API integration, feature completeness (alerts, batch ops), and documentation of data flows and extensibility.
+Here is a best-practices, actionable plan to fix all data feed gaps and roadblocks for a robust, intelligent, real-time system:
 
 ---
 
-**Steps**
-
-1. **Summarize Project Purpose & Features**
-   - Review README, design docs, and code to clarify the main goal: real-time RSI-based crypto screener with admin, alerting, and extensibility.
-   - List core features: real-time data, multi-timeframe RSI, admin, feature flags, alerting, web dashboard.
-
-2. **Map Core Architecture**
-   - Document the backend pipeline: WebSocket → Aggregator → Indicator Engine → Cache → API → UI.
-   - Note tech stack: Node.js, TypeScript, Next.js, Prisma, Redis, React.
-   - Outline folder structure and key modules (lib/, app/api/, components/, hooks/).
-
-3. **Identify Strengths**
-   - Modular, scalable, clean separation of concerns.
-   - Modern best practices: typed interfaces, error handling, health checks.
-   - Extensible for new indicators and alerting.
-
-4. **Analyze Gaps & Unclear Flows**
-   - Cache/API integration: Redis usage and real-time data serving need clarification.
-   - WebSocket reconnection and batch processing: robustness and completeness.
-   - Feature completeness: conditional alerts, bulk ops, alert history, template management.
-   - User data flow: end-to-end mapping from UI to backend to notification.
-   - Admin/API documentation: endpoint security and formal API spec.
-   - Strategy abstraction: ease of adding new indicators/strategies.
-   - Observability: depth of logging and metrics.
-
-5. **Recommend Improvements**
-   - Document and implement missing/incomplete features.
-   - Map and clarify data flows, especially for user actions and alerting.
-   - Expand documentation (API spec, admin endpoints, migration/versioning).
-   - Ensure observability and error handling are production-grade.
-   - Make strategy abstraction explicit for future extensibility.
+## 1. **API: Always Serve Partial Data + Calibration Status**
+- Refactor `/api/screener` to always return available data, even if some symbols are still “warming up.”
+- Add a `meta` field with:
+  - `indicatorCoveragePct`
+  - `missingSymbols` (list of symbols not yet ready)
+  - `calibrating: boolean`
+- UI should display available data and a “warming up” badge for incomplete symbols.
 
 ---
 
-**Relevant files**
-- plan.md, README_DATABASE.md, research.md — project goals, design, and research
-- rsi.ts, screener-service.ts, alert-coordinator.ts — core logic
-- api, screener-dashboard.tsx — API and UI
-- schema.prisma — database schema
+## 2. **Hydration: Adaptive, Prioritized, and Persistent**
+- **Adaptive Batching:**  
+  - Start with large batches (e.g., 100) on cold start, then reduce as system warms up.
+  - Prioritize user-visible, alert-active, and top-100 symbols.
+- **Persistent Cache:**  
+  - Use Redis (with longer TTL) and IndexedDB/localStorage for client-side warm starts.
+  - On startup, hydrate from persistent cache before fetching from exchanges.
 
 ---
 
-**Verification**
-1. Review and update documentation to reflect clarified data flows and architecture.
-2. Audit code for feature completeness (alerts, batch ops, reconnection).
-3. Validate cache/API integration and real-time data serving.
-4. Ensure observability (logs, metrics) is implemented and tested.
-5. Confirm extensibility by prototyping a new indicator or alert type.
+## 3. **UI/UX: Progress, Partial Results, and Feedback**
+- Show a progress bar or “warming up” list of symbols.
+- Display which symbols are ready and which are still loading.
+- Show real-time health status (feeds, cache, API, etc.).
+- Use localStorage/IndexedDB to show last-known data instantly while live data loads.
 
 ---
 
-**Decisions**
-- Focus is on RSI for now, but architecture should support future indicators.
-- Prioritize documentation and feature completeness before expanding scope.
+## 4. **DB: Optimize Queries and Indexes**
+- Ensure all config and alert tables have proper indexes (especially on `userId`, `symbol`, `createdAt`).
+- Use pagination and only fetch what’s needed for the current view.
+- Use upsert/bulk operations for config changes.
 
 ---
 
-**Further Considerations**
-1. Should the cache layer be the single source of truth for the UI, or should the UI also support fallback to direct API/database queries?
-2. What is the priority order for incomplete features (alerts, batch ops, history)?
-3. Is there a need for a public API, or is everything internal/admin-facing?
+## 5. **Observability: Metrics, Logging, and Alerts**
+- Add metrics for:
+  - Hydration/calibration time
+  - Cache hit/miss rates
+  - API latency
+  - Feed health (active/stale feeds)
+- Expose these via `/api/health` and admin dashboard.
+- Alert if calibration takes too long or if feeds are degraded.
 
 ---
 
-Would you like to prioritize any specific area (e.g., alerting, cache integration, extensibility) for the next phase of planning or implementation?
+## 6. **Worker/Feed Robustness**
+- Ensure all workers have:
+  - Zombie watchdogs (auto-reconnect if no data for 60s)
+  - Batch processing (50+ updates per batch)
+  - REST fallback for stale or missing WS data
+- Use IndexedDB for instant-start and config mirroring.
+
+---
+
+## 7. **Schema & Migration Hygiene**
+- Keep DB schema in sync with Prisma (run `prisma db push` and `prisma generate` after changes).
+- Use migration scripts for all schema changes.
+- Document all new fields and tables.
+
+---
+
+## 8. **Testing & Verification**
+- Add property-based and integration tests for:
+  - LRU cache eviction
+  - Zone state cleanup
+  - Alert de-duplication
+  - Data hydration and fallback logic
+
+---
+
+## 9. **Documentation**
+- Document all API changes, cache key formats, and health metrics.
+- Update onboarding docs for DB sync and migration.
+
+---
+
+**Would you like to start with the API/data hydration refactor, UI improvements, or DB/index optimization? I can provide code-level changes for any of these next.**
