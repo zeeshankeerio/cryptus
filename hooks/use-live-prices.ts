@@ -306,7 +306,15 @@ class PriceTickEngine extends EventTarget {
             avgBarSize1m: entry.avgBarSize1m,
             avgVolume1m: entry.avgVolume1m,
             open1m: entry.open1m,
-            volStart1m: entry.volStart1m
+            volStart1m: entry.volStart1m,
+            bbUpper: entry.bbUpper,
+            bbLower: entry.bbLower,
+            vwapPriceBaseline: entry.vwapPriceBaseline,
+            momentumPriceBaseline: entry.momentumPriceBaseline,
+            stochK: entry.stochK,
+            stochD: entry.stochD,
+            confluence: entry.confluence,
+            rsiDivergence: entry.rsiDivergence,
           };
         }
       });

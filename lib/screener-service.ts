@@ -477,12 +477,17 @@ async function fetchBybitApiWithRetry<T>(
   url: string,
   label: string,
   retries = FETCH_RETRY_COUNT,
+  signal?: AbortSignal,
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
+      const fetchSignal = signal 
+        ? (AbortSignal as any).any([signal, AbortSignal.timeout(KLINE_TIMEOUT_MS)])
+        : AbortSignal.timeout(KLINE_TIMEOUT_MS);
+
       const res = await fetch(url, {
-        signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
+        signal: fetchSignal,
         headers: FETCH_HEADERS,
         cache: 'no-store' as RequestCache,
       });
@@ -701,6 +706,7 @@ async function fetchWithRetry(
   path: string,
   label: string,
   retries = FETCH_RETRY_COUNT,
+  signal?: AbortSignal,
 ): Promise<BinanceKline[]> {
   let lastError: unknown;
   // Randomize starting endpoint so parallel fetches spread across all APIs
@@ -708,8 +714,12 @@ async function fetchWithRetry(
   for (let attempt = 0; attempt <= retries; attempt++) {
     const base = BINANCE_APIS[(startIdx + attempt) % BINANCE_APIS.length];
     try {
+      const fetchSignal = signal 
+        ? (AbortSignal as any).any([signal, AbortSignal.timeout(KLINE_TIMEOUT_MS)])
+        : AbortSignal.timeout(KLINE_TIMEOUT_MS);
+
       const res = await fetch(`${base}${path}`, {
-        signal: AbortSignal.timeout(KLINE_TIMEOUT_MS),
+        signal: fetchSignal,
         headers: FETCH_HEADERS,
         cache: 'no-store' as RequestCache,
       });
@@ -861,13 +871,13 @@ interface BybitKlineResponse {
   };
 }
 
-async function fetchBybitKlines(symbol: string, interval: string, exchange: string): Promise<BinanceKline[]> {
+async function fetchBybitKlines(symbol: string, interval: string, exchange: string, signal?: AbortSignal): Promise<BinanceKline[]> {
   try {
     const limit = interval === '60' ? KLINE_LIMIT_1H : KLINE_LIMIT;
     // 'bybit' = spot, 'bybit-linear' = linear (perpetual)
     const category = exchange === 'bybit-linear' ? 'linear' : 'spot';
     const url = `https://api.bybit.com/v5/market/kline?category=${category}&symbol=${symbol}&interval=${interval}&limit=${limit}`;
-    const payload = await fetchBybitApiWithRetry<BybitKlineResponse>(url, `klines for ${symbol}`);
+    const payload = await fetchBybitApiWithRetry<BybitKlineResponse>(url, `klines for ${symbol}`, FETCH_RETRY_COUNT, signal);
     const rows = payload.result?.list ?? [];
 
     // Bybit returns newest first, reverse to match Binance (oldest first)
@@ -896,20 +906,20 @@ async function fetchBybitKlines(symbol: string, interval: string, exchange: stri
 /**
  * Fetch 1m klines for a single symbol.
  */
-async function fetchKlines(symbol: string, exchange: string = 'binance'): Promise<BinanceKline[]> {
+async function fetchKlines(symbol: string, exchange: string = 'binance', signal?: AbortSignal): Promise<BinanceKline[]> {
   if (YAHOO_SYMBOLS.includes(symbol)) {
     return fetchYahooKlines(symbol, '1m');
   }
   if (exchange.startsWith('bybit')) {
-    return fetchBybitKlines(symbol, '1', exchange);
+    return fetchBybitKlines(symbol, '1', exchange, signal);
   }
-  return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1m&limit=${KLINE_LIMIT}`, `1m candle for ${symbol}`);
+  return fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1m&limit=${KLINE_LIMIT}`, `1m candle for ${symbol}`, FETCH_RETRY_COUNT, signal);
 }
 
 /**
  * Fetch 1h klines for a single symbol.
  */
-async function fetchKlines1h(symbol: string, exchange: string = 'binance'): Promise<BinanceKline[]> {
+async function fetchKlines1h(symbol: string, exchange: string = 'binance', signal?: AbortSignal): Promise<BinanceKline[]> {
   const cacheKey = `${exchange}:${symbol}`;
   const cached = kline1hCache.get(cacheKey);
   if (cached && Date.now() - cached.ts < KLINE_1H_CACHE_TTL) {
@@ -920,9 +930,9 @@ async function fetchKlines1h(symbol: string, exchange: string = 'binance'): Prom
   if (YAHOO_SYMBOLS.includes(symbol)) {
     res = await fetchYahooKlines(symbol, '1h');
   } else if (exchange.startsWith('bybit')) {
-    res = await fetchBybitKlines(symbol, '60', exchange);
+    res = await fetchBybitKlines(symbol, '60', exchange, signal);
   } else {
-    res = await fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_LIMIT_1H}`, `1h candle for ${symbol}`);
+    res = await fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1h&limit=${KLINE_LIMIT_1H}`, `1h candle for ${symbol}`, FETCH_RETRY_COUNT, signal);
   }
 
   if (res && res.length > 0) {
@@ -937,8 +947,10 @@ async function fetchKlines1h(symbol: string, exchange: string = 'binance'): Prom
  */
 async function fetchAllKlinesBatched(
   symbols: string[],
-  exchange: string = 'binance'
+  exchange: string = 'binance',
+  signal?: AbortSignal
 ): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
+  if (signal?.aborted) return [];
   const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
   // Greatly reduced concurrency for stability on Vercel/Cloud functions to avoid 429 Too Many Requests
   const concurrency = Math.min(15, Math.max(4, Math.floor(symbols.length / 10)));
@@ -952,8 +964,8 @@ async function fetchAllKlinesBatched(
 
       // Fetch both in parallel for this symbol
       const [res1m, res1h] = await Promise.allSettled([
-        fetchKlines(sym, exchange),
-        fetchKlines1h(sym, exchange)
+        fetchKlines(sym, exchange, signal),
+        fetchKlines1h(sym, exchange, signal)
       ]);
 
       // 🔥 Institutional Stagger Logic: Top 100 assets execute with zero-intentional lag
@@ -1035,7 +1047,16 @@ function buildEntry(
       }
       return true;
     });
-    if (validKlines.length < rsiPeriod + 1) return null;
+    // ── Data Sufficiency Guard ──
+    // Lowered to 50 klines to allow partial 1m/5m indicators while 15m/1h indicators warm up.
+    // This reduces the duration of "ticker-only" dots/dashes on cold start.
+    const klineCountThreshold = 50; 
+    if (validKlines.length < klineCountThreshold) {
+      if (validKlines.length > 0 && ticker) {
+        return buildTickerOnlyEntry(sym, ticker, nowTs);
+      }
+      return null;
+    }
 
     const closes1m = validKlines.map((k) => parseFloat(k[4]));
     const highs1m = validKlines.map((k) => parseFloat(k[2]));
@@ -1143,7 +1164,7 @@ function buildEntry(
     const price = toNum(ticker?.lastPrice, priceFromKline);
     const vwapDiff = vwap !== null && vwap > 0
       ? Math.round(((price - vwap) / vwap) * 10000) / 100
-      : null;
+      : (price > 0 ? 0 : null); // Baseline 0 for consistency in UI instead of null dash
 
     const volumeSpike = detectVolumeSpike(volumes1m);
 
@@ -1273,6 +1294,8 @@ function buildEntry(
       volStart1m,
       longCandle: false,
       historicalCloses: closes15m,
+      vwapPriceBaseline: vwap,
+      momentumPriceBaseline: (closes15m.length >= 11) ? closes15m[closes15m.length - 11] : null,
     };
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
@@ -1288,7 +1311,8 @@ function runRefresh(
   rsiPeriod: number = 14,
   search?: string,
   prioritySymbols: string[] = [],
-  exchange: string = 'binance'
+  exchange: string = 'binance',
+  signal?: AbortSignal
 ): Promise<ScreenerResponse> {
   const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange)}:${search || ''}:${prioritySymbols.join(',')}`;
   const existing = refreshInFlight.get(inflightKey);
@@ -1333,11 +1357,14 @@ function runRefresh(
 
     // Force-inclusion logic for Priority Symbols (Search & Watchlist)
     // These assets bypass the refreshCap to ensure instant user feedback.
+    // Force-inclusion logic for Priority Symbols (Search & Watchlist)
+    // These assets bypass the refreshCap to ensure instant user feedback.
     const mustRefresh = new Set<string>();
     symbolsToRefresh.forEach(s => {
       const isPriority = prioritySymbols.includes(s);
       const isSearchMatch = search && s.toUpperCase().includes(search.toUpperCase());
-      if (isPriority || isSearchMatch) {
+      const isTop100 = (symbolRanks.get(s) ?? 999) < 100;
+      if (isPriority || isSearchMatch || isTop100) {
         mustRefresh.add(s);
       }
     });
@@ -1350,13 +1377,17 @@ function runRefresh(
       lastComputeMs: 0,
     };
 
+    // ── Tiered Fetching Logic — 100/200/500 symbol prioritization ──
+    const isInitialLoad = uncachedSymbols.length > (symbolCount * 0.5);
     const baseBootstrapCap = symbolCount;
-    const baseRollingCap = symbolCount >= 800 ? 600 : symbolCount >= 500 ? 400 : symbolCount >= 400 ? 300 : 150;
+    // For 500+ symbols, we rolling-refresh in batches of 300 to keep the event loop responsive
+    const baseRollingCap = symbolCount >= 500 ? 300 : symbolCount; 
+    
     let refreshCap = smartMode
-      ? (uncachedSymbols.length > 0
-        ? Math.max(symbolCount, tuning.dynamicCap) // Fill gaps aggressively
+      ? (isInitialLoad
+        ? Math.max(symbolCount, tuning.dynamicCap) // Fill gaps aggressively on first load
         : Math.min(symbolCount, Math.max(baseRollingCap, tuning.dynamicCap)))
-      : (uncachedSymbols.length > 0 ? symbolCount : baseRollingCap);
+      : (isInitialLoad ? symbolCount : baseRollingCap);
 
     const weightRemaining = getWeightRemaining();
     if (weightRemaining < 200 && symbolsToRefresh.length > 50) {
@@ -1575,7 +1606,11 @@ function runRefresh(
 let geoBlockedExchanges = new Set<string>();
 let preferredExchange: string | null = null;
 
-export async function getScreenerData(symbolCount = 500, options: ScreenerOptions = {}): Promise<ScreenerResponse> {
+export async function getScreenerData(
+  symbolCount = 500,
+  options: ScreenerOptions = {},
+  signal?: AbortSignal
+): Promise<ScreenerResponse> {
   const smartMode = options.smartMode ?? getSmartModeDefault();
   const rsiPeriod = options.rsiPeriod ?? 14;
   // Use the preferred (non-blocked) exchange if we've detected a geo-block before
@@ -1605,7 +1640,7 @@ export async function getScreenerData(symbolCount = 500, options: ScreenerOption
     }
 
     try {
-      const result = await runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, tryExchange);
+      const result = await runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, tryExchange, signal);
 
       if (result.data.length > 0) {
         // This exchange works - remember it for future requests

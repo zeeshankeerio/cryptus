@@ -29,7 +29,7 @@ import { DerivativesPanel, OrderFlowBar } from '@/components/derivatives-panel';
 import { CorrelationHeatmap } from '@/components/correlation-heatmap';
 import { PortfolioScannerPanel } from '@/components/portfolio-scanner-panel';
 import { approximateRsi, approximateEma, calculateRsiWithState } from '@/lib/rsi';
-import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState } from '@/lib/indicators';
+import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState, calculateATR, calculateADX } from '@/lib/indicators';
 import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
 import { generateSignalNarration } from '@/lib/signal-narration';
 import type { AssetClass } from '@/lib/asset-classes';
@@ -197,7 +197,8 @@ const IndicatorCell = memo(function IndicatorCell({
   widthClass,
   align = 'right',
   title,
-  intensity = false
+  intensity = false,
+  isSyncing = false
 }: {
   value: number | null;
   formatted: string;
@@ -206,9 +207,10 @@ const IndicatorCell = memo(function IndicatorCell({
   align?: 'left' | 'right' | 'center';
   title?: string;
   intensity?: boolean;
+  isSyncing?: boolean;
 }) {
-  // Logic for subtle intensity background
   const hasIntensity = intensity && value !== null && Math.abs(value) > 2;
+  const showSyncing = isSyncing && value === null;
 
   return (
     <td
@@ -218,14 +220,16 @@ const IndicatorCell = memo(function IndicatorCell({
         colorClass,
         align === 'right' ? 'text-right' : align === 'center' ? 'text-center' : 'text-left',
         widthClass,
-        hasIntensity && (value > 0 ? "bg-[#39FF14]/[0.03]" : "bg-[#FF4B5C]/[0.03]")
+        hasIntensity && (value > 0 ? "bg-[#39FF14]/[0.03]" : "bg-[#FF4B5C]/[0.03]"),
+        showSyncing && "animate-pulse"
       )}
     >
       <span className={cn(
         "relative",
-        hasIntensity && "drop-shadow-[0_0_8px_currentColor]"
+        hasIntensity && "drop-shadow-[0_0_8px_currentColor]",
+        showSyncing && "text-slate-700 font-normal italic"
       )}>
-        {formatted}
+        {showSyncing ? '...' : formatted}
       </span>
     </td>
   );
@@ -627,6 +631,10 @@ const ScreenerRow = memo(function ScreenerRow({
     candleDirection: entry.candleDirection,
     isLiveRsi: entry.isLiveRsi
   };
+  // Task: Syncing State Detection
+  // If indicators are missing but price info exists, it's a "warming up" state (ticker-only fallback).
+  const isSyncing = display.rsi15m === null && (display.price || 0) > 0;
+
   // Intelligence: Signal Pulse state
   const [isFlash, setIsFlash] = useState(false);
   const prevSignal = useRef(display.strategySignal);
@@ -717,6 +725,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          isSyncing={isSyncing}
           className={COL_WIDTHS.rsi}
         />
       )}
@@ -728,6 +737,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          isSyncing={isSyncing}
           className={COL_WIDTHS.rsi}
         />
       )}
@@ -739,6 +749,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          isSyncing={isSyncing}
           className={COL_WIDTHS.rsi}
         />
       )}
@@ -750,6 +761,7 @@ const ScreenerRow = memo(function ScreenerRow({
           currentConfig={coinConfigs[entry.symbol]}
           onSave={onSaveConfig}
           disabled={!globalUseRsi}
+          isSyncing={isSyncing}
           className={COL_WIDTHS.rsi}
         />
       )}
@@ -757,17 +769,19 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('ema9') && (
         <IndicatorCell 
           value={display.ema9} 
-          formatted={globalUseEma && display.ema9 ? `$${formatPrice(display.ema9, entry.market)}` : '-'} 
+          formatted={(globalUseEma && display.ema9 != null) ? `$${formatPrice(display.ema9, entry.market)}` : '-'} 
           colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.ema} 
+          isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('ema21') && (
         <IndicatorCell 
           value={display.ema21} 
-          formatted={globalUseEma && display.ema21 ? `$${formatPrice(display.ema21, entry.market)}` : '-'} 
+          formatted={(globalUseEma && display.ema21 != null) ? `$${formatPrice(display.ema21, entry.market)}` : '-'} 
           colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.ema} 
+          isSyncing={isSyncing}
         />
       )}
 
@@ -784,35 +798,39 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('macdHistogram') && (
         <IndicatorCell 
           value={display.macdHistogram} 
-          formatted={display.macdHistogram !== null ? formatNum(display.macdHistogram, 4) : '-'}
-          colorClass={display.macdHistogram !== null ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
+          formatted={display.macdHistogram != null ? formatNum(display.macdHistogram, 4) : '-'}
+          colorClass={display.macdHistogram != null ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
           widthClass={COL_WIDTHS.macd}
           intensity={true}
+          isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('bbUpper') && (
         <IndicatorCell 
           value={display.bbUpper} 
-          formatted={globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper, entry.market)}` : '-'} 
+          formatted={(globalUseBb && display.bbUpper != null) ? `$${formatPrice(display.bbUpper, entry.market)}` : '-'} 
           colorClass={globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.bb} 
+          isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('bbLower') && (
         <IndicatorCell 
           value={display.bbLower} 
-          formatted={globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower, entry.market)}` : '-'} 
+          formatted={(globalUseBb && display.bbLower != null) ? `$${formatPrice(display.bbLower, entry.market)}` : '-'} 
           colorClass={globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.bb} 
+          isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('bbPosition') && (
         <IndicatorCell 
           value={display.bbPosition} 
-          formatted={globalUseBb ? formatNum(display.bbPosition) : '-'} 
+          formatted={(globalUseBb && display.bbPosition != null) ? formatNum(display.bbPosition) : '-'} 
           colorClass={globalUseBb ? (display.bbPosition! < 0.2 ? "text-[#39FF14]" : display.bbPosition! > 0.8 ? "text-[#FF4B5C]" : "text-slate-400") : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.bb} 
+          isSyncing={isSyncing}
         />
       )}
 
@@ -856,6 +874,7 @@ const ScreenerRow = memo(function ScreenerRow({
           colorClass={globalUseVwap ? (display.vwapDiff! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.vwap} 
           intensity={true}
+          isSyncing={isSyncing}
         />
       )}
 
@@ -896,29 +915,32 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('momentum') && (
         <IndicatorCell 
           value={display.momentum} 
-          formatted={globalUseMomentum && display.momentum !== null ? formatPct(display.momentum) : '-'} 
+          formatted={globalUseMomentum && display.momentum != null ? formatPct(display.momentum) : '-'} 
           colorClass={globalUseMomentum ? (display.momentum! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.momentum} 
           intensity={true}
+          isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('atr') && (
         <IndicatorCell 
           value={display.atr} 
-          formatted={display.atr !== null ? formatPrice(display.atr) : '-'} 
+          formatted={display.atr != null ? formatPrice(display.atr, entry.market) : '-'} 
           colorClass="text-slate-500" 
           widthClass={COL_WIDTHS.atr} 
+          isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('adx') && (
         <IndicatorCell 
           value={display.adx} 
-          formatted={display.adx !== null ? display.adx.toFixed(1) : '-'} 
+          formatted={display.adx != null ? display.adx.toFixed(1) : '-'} 
           colorClass={display.adx && display.adx >= 25 ? "text-[#39FF14]" : "text-slate-600"} 
           widthClass={COL_WIDTHS.adx} 
           intensity={true}
+          isSyncing={isSyncing}
         />
       )}
 
@@ -992,6 +1014,7 @@ function EditableRsiCell({
   currentConfig,
   onSave,
   disabled,
+  isSyncing,
   className
 }: {
   symbol: string;
@@ -1000,6 +1023,7 @@ function EditableRsiCell({
   currentConfig?: any;
   onSave: (symbol: string, config: any) => Promise<void>;
   disabled?: boolean;
+  isSyncing?: boolean;
   className?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -1052,11 +1076,14 @@ function EditableRsiCell({
         "px-3 py-3 text-right text-sm tabular-nums font-bold font-mono cursor-pointer group/cell relative transition-all",
         className,
         currentPeriod !== 14 ? "bg-[#39FF14]/[0.03]" : "hover:bg-white/[0.03]",
-        getRsiColor(rsi)
+        getRsiColor(rsi),
+        isSyncing && rsi === null && "animate-pulse"
       )}
     >
       <div className="flex flex-col items-end leading-none">
-        <span>{formatRsi(rsi)}</span>
+        <span className={cn(isSyncing && rsi === null && "text-slate-800 font-normal italic")}>
+          {isSyncing && rsi === null ? "..." : formatRsi(rsi)}
+        </span>
         <span className="text-[7px] text-slate-600 font-black opacity-0 group-hover/cell:opacity-100 transition-opacity">P:{currentPeriod}</span>
       </div>
       {currentPeriod !== 14 && (
@@ -2448,8 +2475,8 @@ export default function ScreenerDashboard() {
           momentum: roc10,
           vwap: vwapPriceBaseline,
           vwapDiff,
-          atr: avgBarSize * 1.5, // High-fidelity baseline ATR fallback
-          adx: 25, // Neutral baseline trend strength
+          atr: calculateATR(closes, closes, closes, 14),
+          adx: calculateADX(closes, closes, closes, 14),
           market: resolvedMarket,
           marketState: md.marketState || 'REGULAR',
           curCandleSize: 0,
@@ -2518,7 +2545,15 @@ export default function ScreenerDashboard() {
           ema21: live.ema21 ?? entry.ema21,
           emaCross: (live.emaCross ?? entry.emaCross) as any,
           macdHistogram: live.macdHistogram ?? entry.macdHistogram,
+          bbUpper: live.bbUpper ?? entry.bbUpper,
+          bbLower: live.bbLower ?? entry.bbLower,
           bbPosition: live.bbPosition ?? entry.bbPosition,
+          stochK: live.stochK ?? entry.stochK,
+          stochD: live.stochD ?? entry.stochD,
+          vwapDiff: live.vwapDiff ?? entry.vwapDiff,
+          momentum: live.momentum ?? entry.momentum,
+          atr: live.atr ?? entry.atr,
+          adx: live.adx ?? entry.adx,
           strategyScore: live.strategyScore ?? entry.strategyScore,
           strategySignal: (live.strategySignal ?? entry.strategySignal) as any,
           curCandleSize: mergedCandleSize,
@@ -2686,6 +2721,8 @@ export default function ScreenerDashboard() {
           rsiDivergence: entry.rsiDivergence,
           momentum: entry.momentum,
           confluence: entry.confluence,
+          atr: entry.atr,
+          adx: entry.adx,
           open1m: entry.open1m,
           volStart1m: entry.volStart1m
         };

@@ -19,6 +19,9 @@ const ZOMBIE_THRESHOLD_MS = 60000;  // force reconnect if no data for 60s
 const BYBIT_SPOT_REST_POLL_MS = 2000;  // Task 2.7: REST poll interval for stale Bybit Spot symbols
 const BYBIT_SPOT_STALE_THRESHOLD_MS = 5000; // Symbol is stale if no WS update for 5s
 
+// Institutional Precision Helper (1e8)
+const round8 = (n) => Math.round(n * 1e8) / 1e8;
+
 // Internal buffer to minimize postMessage frequency
 let tickerBuffer = new Map();
 let flushInterval = null;
@@ -572,45 +575,42 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     // GAP-C2 FIX: Use per-coin custom RSI period from config, fallback to global
     const rCP = config.rsiCustomPeriod || globalRsiPeriod;
 
-    const obT = config.overboughtThreshold != null ? config.overboughtThreshold : 70;
-    const osT = config.oversoldThreshold != null ? config.oversoldThreshold : 30;
-    const hysteresis = computeHysteresis(obT, osT);
-
     const rsi1m = approximateRsi(state.rsiState1m, curC, r1mP);
     const rsi5m = approximateRsi(state.rsiState5m, curC, r5mP);
     const rsi15m = approximateRsi(state.rsiState15m, curC, r15mP);
     const rsi1h = approximateRsi(state.rsiState1h, curC, r1hP);
     const rsiCustom = approximateRsi(state.rsiStateCustom, curC, rCP);
 
-    const ema9 = approximateEma(state.ema9State, curC, 9);
-    const ema21 = approximateEma(state.ema21State, curC, 21);
-    const emaCross = (ema9 && ema21) ? (ema9 > ema21 ? 'bullish' : 'bearish') : null;
+    const ema9 = approximateEma(state.ema9State || { ema: state.ema9 }, curC, 9);
+    const ema21 = approximateEma(state.ema21State || { ema: state.ema21 }, curC, 21);
+    const emaCross = (ema9 && ema21) ? (ema9 > ema21 ? 'bullish' : 'bearish') : (state.emaCross || null);
 
-    let macdHistogram = null;
+    let macdHistogram = state.macdHistogram;
     if (state.macdFastState && state.macdSlowState && state.macdSignalState) {
       const ema12 = approximateEma(state.macdFastState, curC, 12);
       const ema26 = approximateEma(state.macdSlowState, curC, 26);
       if (ema12 && ema26) {
         const macdLine = ema12 - ema26;
         const macdSignal = approximateEma(state.macdSignalState, macdLine, 9);
-        // Precision parity with main thread lib/indicators.ts
-        macdHistogram = Math.round((macdLine - macdSignal) * 1e8) / 1e8;
+        macdHistogram = round8(macdLine - macdSignal);
       }
     }
 
-    let bbPosition = null;
-    if (state.bbUpper && state.bbLower) {
-      const range = state.bbUpper - state.bbLower;
-      bbPosition = range > 0 ? (curC - state.bbLower) / range : 0.5;
+    let bbPosition = state.bbPosition;
+    const bbUpper = state.bbUpper;
+    const bbLower = state.bbLower;
+    if (bbUpper != null && bbLower != null) {
+      const range = bbUpper - bbLower;
+      bbPosition = range > 0 ? (curC - bbLower) / range : 0.5;
     }
 
     // Live relative price indicators
     const vwapDiff = (state.vwapPriceBaseline && state.vwapPriceBaseline > 0)
-      ? ((curC - state.vwapPriceBaseline) / state.vwapPriceBaseline) * 100
+      ? round8(((curC - state.vwapPriceBaseline) / state.vwapPriceBaseline) * 100)
       : state.vwapDiff;
     
     const momentum = (state.momentumPriceBaseline && state.momentumPriceBaseline > 0)
-      ? ((curC - state.momentumPriceBaseline) / state.momentumPriceBaseline) * 100
+      ? round8(((curC - state.momentumPriceBaseline) / state.momentumPriceBaseline) * 100)
       : state.momentum;
 
     // Asset-Aware Market Detection (Local to Worker for Performance)
@@ -636,12 +636,12 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition,
       stochK: state.stochK,
       stochD: state.stochD,
-      vwapDiff: vwapDiff,
+      vwapDiff,
+      momentum,
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       emaCross,
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
-      momentum: momentum,
       rsiCrossover: state.rsiCrossover,
       market,
       obThreshold: (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought,
@@ -663,7 +663,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbMiddle: state.bbMiddle,
       stochK: state.stochK,
       stochD: state.stochD,
-      vwap: state.vwap,
+      vwap: state.vwap || state.vwapPriceBaseline,
       vwapDiff: vwapDiff,
       momentum: momentum,
       rsiDivergence: state.rsiDivergence,
@@ -746,6 +746,10 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
         }
       }
     }
+
+    const obT = (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought;
+    const osT = (config.oversoldThreshold != null && config.oversoldThreshold > 0) ? config.oversoldThreshold : globalOversold;
+    const hysteresis = computeHysteresis(obT, osT);
 
     // ── Alert Evaluation ──
     // NOTE: Zone state keys use exchange:symbol for isolation per-exchange.
@@ -1372,8 +1376,13 @@ if (isSharedWorker) {
 // ── Utility Helpers ────────────────────────────────────────────
 
 function approximateRsi(state, livePrice, period = 14) {
-  if (!state || state.avgGain == null || state.avgLoss == null) return null;
-  const change = livePrice - (state.lastClose || 0);
+  if (!state || (state.avgGain == null && state.rsi == null)) return null;
+  
+  // If we only have the RSI number but no gain/loss states, we fallback to the number itself
+  // until a fresh SYNC_STATES arrives with the true accumulators.
+  if (state.avgGain == null) return state.rsi;
+
+  const change = livePrice - (state.lastClose || livePrice);
   let avgGain, avgLoss;
 
   if (change > 0) {
@@ -1386,13 +1395,16 @@ function approximateRsi(state, livePrice, period = 14) {
 
   if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
   const rs = avgGain / avgLoss;
-  return 100 - 100 / (1 + rs);
+  return round8(100 - 100 / (1 + rs));
 }
 
 function approximateEma(state, livePrice, period = 9) {
-  if (!state || state.ema === undefined) return null;
+  // Signature flexibility: state can be { ema: number } OR just a raw number seed
+  const prevEma = (state && typeof state === 'object') ? state.ema : state;
+  if (prevEma == null || isNaN(prevEma)) return null;
+
   const alpha = 2 / (period + 1);
-  return livePrice * alpha + state.ema * (1 - alpha);
+  return round8(livePrice * alpha + prevEma * (1 - alpha));
 }
 
 function computeHysteresis(obT, osT) {

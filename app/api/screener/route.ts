@@ -67,13 +67,14 @@ export async function GET(request: Request) {
     let fetchTask = pendingFetches.get(fetchKey);
 
     if (!fetchTask) {
-      const screenerPromise = getScreenerData(rawCount, { smartMode, rsiPeriod, search, prioritySymbols, exchange });
+      // ── Institutional Life-Cycle Hardening ──
+      // Pass the request signal directly to the service. If the user disconnects or 
+      // the request times out, all upstream kline fetches are immediately aborted.
+      const screenerPromise = getScreenerData(rawCount, { 
+        smartMode, rsiPeriod, search, prioritySymbols, exchange 
+      }, request.signal);
       
-      // ── Institutional Timeout Safety — 30s max per upstream fetch ──
-      fetchTask = Promise.race([
-        screenerPromise,
-        new Promise((_, reject) => setTimeout(() => reject(new Error('UPSTREAM_TIMEOUT')), 30_000))
-      ])
+      fetchTask = screenerPromise
         .finally(() => {
           pendingFetches.delete(fetchKey);
         })
