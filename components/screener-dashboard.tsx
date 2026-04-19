@@ -523,10 +523,12 @@ const ScreenerRow = memo(function ScreenerRow({
       rsiDivergence: tick.rsiDivergence ?? entry.rsiDivergence,
       macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
       confluence: tick.confluence ?? entry.confluence,
-      rsiDivergenceCustom: entry.rsiDivergenceCustom,
+      confluenceLabel: tick.confluenceLabel ?? entry.confluenceLabel,
+      rsiDivergenceCustom: tick.rsiDivergenceCustom ?? entry.rsiDivergenceCustom,
+      rsiCrossover: tick.rsiCrossover ?? entry.rsiCrossover,
       momentum: tick.momentum ?? entry.momentum,
-      atr: entry.atr,
-      adx: entry.adx,
+      atr: tick.atr ?? entry.atr,
+      adx: tick.adx ?? entry.adx,
       vwapDiff: tick.vwapDiff ?? entry.vwapDiff,
       volumeSpike: (tick.volumeSpike ?? liveVolumeSpike) || entry.volumeSpike,
       stochK: tick.stochK ?? entry.stochK,
@@ -537,7 +539,6 @@ const ScreenerRow = memo(function ScreenerRow({
       vwap: tick.vwap ?? entry.vwap,
       macdLine: entry.macdLine,
       macdSignal: entry.macdSignal,
-      confluenceLabel: entry.confluenceLabel,
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
       strategyLabel: tick.strategyScore !== undefined
@@ -1416,10 +1417,12 @@ const ScreenerCard = memo(function ScreenerCard({
       rsiDivergence: tick.rsiDivergence ?? entry.rsiDivergence,
       macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
       confluence: tick.confluence ?? entry.confluence,
-      rsiDivergenceCustom: entry.rsiDivergenceCustom,
+      confluenceLabel: tick.confluenceLabel ?? entry.confluenceLabel,
+      rsiDivergenceCustom: tick.rsiDivergenceCustom ?? entry.rsiDivergenceCustom,
+      rsiCrossover: tick.rsiCrossover ?? entry.rsiCrossover,
       momentum: tick.momentum ?? entry.momentum,
-      atr: entry.atr,
-      adx: entry.adx,
+      atr: tick.atr ?? entry.atr,
+      adx: tick.adx ?? entry.adx,
       vwapDiff: tick.vwapDiff ?? entry.vwapDiff,
       volumeSpike: (tick.volumeSpike ?? liveVolumeSpike) || entry.volumeSpike,
       stochK: tick.stochK ?? entry.stochK,
@@ -1430,7 +1433,6 @@ const ScreenerCard = memo(function ScreenerCard({
       vwap: tick.vwap ?? entry.vwap,
       macdLine: entry.macdLine,
       macdSignal: entry.macdSignal,
-      confluenceLabel: entry.confluenceLabel,
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
       strategyLabel: tick.strategyScore !== undefined
@@ -2336,7 +2338,7 @@ export default function ScreenerDashboard() {
         const resolvedMarket = getMarketType(md.symbol);
         const closes = md.closes || [];
 
-        // ── Full Institutional Technical Suite (Preserved Logic) ──
+        // ── Institutional 2026 Optimization: Real-Time Baseline Intelligence ──
         const rsi14 = calculateRsi(closes, 14);
         const rsi1m = closes.length >= 20 ? calculateRsi(closes.slice(-20), 14) : rsi14;
         const ema9 = latestEma(closes, 9);
@@ -2345,6 +2347,37 @@ export default function ScreenerDashboard() {
         const macdRes = calculateMacd(closes, 12, 26, 9);
         const bbRes = calculateBollinger(closes, 20, 2);
         const stochRes = calculateStochRsi(closes, 14, 14, 3, 3);
+        
+        // Calculate Volatility Context immediately
+        const recentCloses = closes.slice(-20);
+        const avgBarSize = recentCloses.length > 1 
+          ? recentCloses.reduce((acc, val, i) => i === 0 ? acc : acc + Math.abs(val - recentCloses[i-1]), 0) / (recentCloses.length - 1)
+          : 0.1;
+
+        // Correct VWAP Baseline
+        const vwapBaseline = md.price || (closes.length > 0 ? closes[closes.length - 1] : 0);
+        const vwapDiff = (vwapBaseline && md.price) ? ((md.price - vwapBaseline) / vwapBaseline) * 100 : 0;
+
+        // Immediate Strategy Scoring
+        const baselineStrategy = computeStrategyScore({
+          rsi1m: rsi1m,
+          rsi5m: null,
+          rsi15m: rsi14,
+          rsi1h: null,
+          emaCross,
+          macdHistogram: macdRes?.histogram ?? 0,
+          bbPosition: bbRes?.position ?? 0.5,
+          stochK: stochRes?.k ?? 50,
+          stochD: stochRes?.d ?? 50,
+          vwapDiff,
+          momentum: 0,
+          confluence: 0,
+          price: md.price || 0,
+          volumeSpike: false,
+          enabledIndicators: {
+            rsi: true, ema: true, macd: true, bb: true, stoch: true, vwap: true
+          }
+        });
 
         const entry: ScreenerEntry = {
           symbol: md.symbol,
@@ -2362,29 +2395,28 @@ export default function ScreenerDashboard() {
           bbPosition: bbRes?.position ?? (md.price && md.sma50 ? (md.price > md.sma50 ? 0.7 : 0.3) : 0.5),
           stochK: stochRes?.k ?? null,
           stochD: stochRes?.d ?? null,
-          strategyScore: 0,
-          strategySignal: 'neutral',
-          strategyLabel: 'Neutral',
-          strategyReasons: [],
-          signal: 'neutral',
+          strategyScore: baselineStrategy.score,
+          strategySignal: (baselineStrategy.signal as any) || 'neutral',
+          strategyLabel: baselineStrategy.label || 'Neutral',
+          strategyReasons: baselineStrategy.reasons || [],
+          signal: baselineStrategy.score >= 60 ? 'overbought' : baselineStrategy.score <= -60 ? 'oversold' : 'neutral',
+          confluence: 0,
+          momentum: 0,
+          vwap: vwapBaseline,
+          vwapDiff,
+          atr: 0,
+          adx: 0,
           market: resolvedMarket,
           marketState: md.marketState || 'REGULAR',
           curCandleSize: 0,
           curCandleVol: 0,
-          avgBarSize1m: 1,
-          avgVolume1m: 1,
+          avgBarSize1m: avgBarSize,
+          avgVolume1m: md.volume / 1440, // Rough 24h average fallback
           candleDirection: null,
           isLiveRsi: true,
           rsiDivergence: 'none',
-          momentum: 0,
-          atr: 0,
-          adx: 0,
-          vwapDiff: (ema9 && md.price) ? ((md.price - ema9) / ema9) * 100 : 0,
           volumeSpike: false,
           longCandle: false,
-          vwap: ema21 ?? 0,
-          confluence: 0,
-          confluenceLabel: 'Mixed',
           rsiPeriodAtCreation: rsiPeriod,
           rsiStateCustom: null,
           rsiDivergenceCustom: 'none',

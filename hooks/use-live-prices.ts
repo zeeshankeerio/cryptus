@@ -33,6 +33,11 @@ export interface LiveTick {
   momentum?: number;
   rsiDivergence?: 'bullish' | 'bearish' | 'none';
   confluence?: number;
+  confluenceLabel?: string;
+  rsiDivergenceCustom?: 'bullish' | 'bearish' | 'none';
+  rsiCrossover?: 'bullish_reversal' | 'bearish_reversal' | 'none';
+  atr?: number;
+  adx?: number;
   strategyScore?: number;
   strategySignal?: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell';
   volumeSpike?: boolean;

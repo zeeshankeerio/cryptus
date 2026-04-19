@@ -1198,7 +1198,7 @@ function buildEntry(
 
     let signalStartedAt = nowTs;
     if (prevEntry && prevEntry.strategySignal === strategy.signal) {
-      signalStartedAt = prevEntry.signalStartedAt || prevEntry.updatedAt;
+      signalStartedAt = prevEntry.signalStartedAt || prevEntry.updatedAt || nowTs;
     }
 
     const entry_partial = {

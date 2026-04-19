@@ -41,8 +41,8 @@ export interface ScreenerEntry {
   strategyReasons: string[];
   // ── Intelligence indicators ──
   confluence: number;
-  confluenceLabel: string;
-  rsiDivergence: 'bullish' | 'bearish' | 'none';
+  confluenceLabel?: string;
+  rsiDivergence?: 'bullish' | 'bearish' | 'none';
   momentum: number | null;
   // ── New: ATR & ADX ──
   atr: number | null;
@@ -56,8 +56,9 @@ export interface ScreenerEntry {
   // ── New: Dynamic/Custom RSI ──
   rsiCustom: number | null;
   rsiStateCustom: { avgGain: number; avgLoss: number; lastClose: number } | null;
-  rsiDivergenceCustom: 'bullish' | 'bearish' | 'none';
-  rsiPeriodAtCreation: number; // The period used for rsiCustom and rsiStateCustom
+  rsiDivergenceCustom?: 'bullish' | 'bearish' | 'none';
+  rsiCrossover?: 'bullish_reversal' | 'bearish_reversal' | 'none';
+  rsiPeriodAtCreation?: number; // The period used for rsiCustom and rsiStateCustom
   // ── Live RSI state (for client-side approximation) ──
   rsiState1m: { avgGain: number; avgLoss: number; lastClose: number } | null;
   rsiState5m: { avgGain: number; avgLoss: number; lastClose: number } | null;
@@ -70,9 +71,9 @@ export interface ScreenerEntry {
   macdSlowState: { ema: number } | null;
   macdSignalState: { ema: number } | null;
   isLiveRsi?: boolean;
-  signalStartedAt: number;
+  signalStartedAt?: number;
   lastPriceChange?: number;
-  updatedAt: number;
+  updatedAt?: number;
   market: 'Crypto' | 'Metal' | 'Forex' | 'Index' | 'Stocks';
   marketState: string | null;
   // ── High-Accuracy Real-time Initialization ──
