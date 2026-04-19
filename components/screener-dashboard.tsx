@@ -29,7 +29,7 @@ import { DerivativesPanel, OrderFlowBar } from '@/components/derivatives-panel';
 import { CorrelationHeatmap } from '@/components/correlation-heatmap';
 import { PortfolioScannerPanel } from '@/components/portfolio-scanner-panel';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
-import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi } from '@/lib/indicators';
+import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence } from '@/lib/indicators';
 import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
 import { generateSignalNarration } from '@/lib/signal-narration';
 import type { AssetClass } from '@/lib/asset-classes';
@@ -40,7 +40,16 @@ import { getMarketType } from '@/lib/market-utils';
 
 // ─── Formatting helpers ────────────────────────────────────────
 
-function formatPrice(p: number): string {
+function formatPrice(p: number, market?: string): string {
+  if (market === 'Forex') {
+    // Institutional Forex: 5 decimals for pipettes (e.g., 1.08456)
+    // JPY pairs are handled by the p >= 100 check below if needed, but here we force 3 or 5
+    if (p > 50) return p.toFixed(3); // USD/JPY
+    return p.toFixed(5);
+  }
+  if (market === 'Metal') return p.toFixed(2); // Gold/Silver
+  if (market === 'Stocks' || market === 'Index') return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   if (p >= 100) return p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (p >= 1) return p.toFixed(4);
   if (p >= 0.1) return p.toFixed(5);
@@ -58,6 +67,16 @@ function formatVolume(v: number): string {
 function formatRsi(rsi: number | null): string {
   if (rsi === null) return '-';
   return rsi.toFixed(1);
+}
+
+function formatIndicator(val: number | null, market?: string, precision = 4): string {
+  if (val === null || val === undefined) return '-';
+  if (market === 'Forex') {
+    // 0.0001 = 1 pip. For JPY (price > 50), 0.01 = 1 pip.
+    // For general display, we multiply by 10,000 and label as pips.
+    return `${(val * 10000).toFixed(1)} pips`;
+  }
+  return val.toFixed(precision);
 }
 
 function formatNum(n: number | null, decimals = 2): string {
@@ -252,9 +271,9 @@ const SymbolCell = memo(function SymbolCell({
 });
 
 const PriceCell = memo(function PriceCell({
-  price, lastChange, stickyOffset
+  price, lastChange, stickyOffset, market
 }: {
-  price: number; lastChange: number; stickyOffset: number;
+  price: number; lastChange: number; stickyOffset: number; market?: string;
 }) {
   return (
     <td
@@ -264,7 +283,7 @@ const PriceCell = memo(function PriceCell({
       <span className={cn(
         lastChange > 0 ? "text-[#39FF14]" : lastChange < 0 ? "text-[#FF4B5C]" : "text-slate-100"
       )}>
-        ${formatPrice(price)}
+        ${formatPrice(price, market)}
       </span>
     </td>
   );
@@ -673,6 +692,7 @@ const ScreenerRow = memo(function ScreenerRow({
         price={display.price} 
         lastChange={display.lastPriceChange} 
         stickyOffset={stickyOffsetPrice}
+        market={entry.market}
       />
 
       <IndicatorCell 
@@ -737,7 +757,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('ema9') && (
         <IndicatorCell 
           value={display.ema9} 
-          formatted={globalUseEma && display.ema9 ? `$${formatPrice(display.ema9)}` : '-'} 
+          formatted={globalUseEma && display.ema9 ? `$${formatPrice(display.ema9, entry.market)}` : '-'} 
           colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.ema} 
         />
@@ -745,13 +765,11 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('ema21') && (
         <IndicatorCell 
           value={display.ema21} 
-          formatted={globalUseEma && display.ema21 ? `$${formatPrice(display.ema21)}` : '-'} 
-          colorClass={globalUseEma ? "text-slate-400" : "text-slate-700/40"} 
+          formatted={globalUseEma && display.ema21 ? `$${formatPrice(display.ema21, entry.market)}` : '-'} 
+          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.ema} 
         />
       )}
-
-
 
       {visibleCols.has('emaCross') && (
         <IndicatorCell 
@@ -776,7 +794,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('bbUpper') && (
         <IndicatorCell 
           value={display.bbUpper} 
-          formatted={globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper)}` : '-'} 
+          formatted={globalUseBb && display.bbUpper ? `$${formatPrice(display.bbUpper, entry.market)}` : '-'} 
           colorClass={globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.bb} 
         />
@@ -784,7 +802,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('bbLower') && (
         <IndicatorCell 
           value={display.bbLower} 
-          formatted={globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower)}` : '-'} 
+          formatted={globalUseBb && display.bbLower ? `$${formatPrice(display.bbLower, entry.market)}` : '-'} 
           colorClass={globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"} 
           widthClass={COL_WIDTHS.bb} 
         />
@@ -1377,6 +1395,8 @@ const ScreenerCard = memo(function ScreenerCard({
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
+      rsiCrossover: entry.rsiCrossover,
+      market: entry.market,
       enabledIndicators: {
         rsi: globalUseRsi,
         macd: globalUseMacd,
@@ -1639,11 +1659,11 @@ const ScreenerCard = memo(function ScreenerCard({
                   </span>
                 ) : col.id === 'ema9' || col.id === 'ema21' ? (
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
-                    {globalUseEma && typeof val === 'number' ? `$${formatPrice(val)}` : '-'}
+                    {globalUseEma && typeof val === 'number' ? `$${formatPrice(val, entry.market)}` : '-'}
                   </span>
                 ) : col.id === 'bbUpper' || col.id === 'bbLower' ? (
                   <span className="text-[9px] font-bold text-slate-300 tabular-nums">
-                    {globalUseBb && typeof val === 'number' ? `$${formatPrice(val)}` : '-'}
+                    {globalUseBb && typeof val === 'number' ? `$${formatPrice(val, entry.market)}` : '-'}
                   </span>
                 ) : col.id === 'macdHistogram' ? (
                   <span className={cn("text-[9px] font-bold tabular-nums", (val as number) > 0 ? "text-[#39FF14]" : (val as number) < 0 ? "text-[#FF4B5C]" : "text-slate-700")}>
@@ -1667,7 +1687,7 @@ const ScreenerCard = memo(function ScreenerCard({
                   </span>
                 ) : col.id === 'atr' || col.id === 'adx' ? (
                   <span className="text-[10px] font-black tabular-nums font-mono text-slate-300">
-                    {globalVolatilityEnabled && typeof val === 'number' ? val.toFixed(col.id === 'atr' ? 4 : 1) : '-'}
+                    {globalVolatilityEnabled && typeof val === 'number' ? formatIndicator(val, entry.market, col.id === 'atr' ? 4 : 1) : '-'}
                   </span>
                 ) : col.id === 'fundingRate' ? (
                   <span className={cn("text-[9px] font-black tabular-nums",
@@ -2354,6 +2374,16 @@ export default function ScreenerDashboard() {
           ? recentCloses.reduce((acc, val, i) => i === 0 ? acc : acc + Math.abs(val - recentCloses[i-1]), 0) / (recentCloses.length - 1)
           : 0.1;
 
+        // Hardened Baseline Momentum & Confluence
+        const roc10 = calculateROC(closes, 10) || 0;
+        const baselineConfluence = calculateConfluence({
+          rsi1m, rsi5m: null, rsi15m: rsi14, rsi1h: null,
+          macdHistogram: macdRes?.histogram ?? 0,
+          emaCross,
+          stochK: stochRes?.k ?? 50,
+          bbPosition: bbRes?.position ?? 0.5
+        });
+
         // Correct VWAP Baseline
         const vwapBaseline = md.price || (closes.length > 0 ? closes[closes.length - 1] : 0);
         const vwapDiff = (vwapBaseline && md.price) ? ((md.price - vwapBaseline) / vwapBaseline) * 100 : 0;
@@ -2370,10 +2400,11 @@ export default function ScreenerDashboard() {
           stochK: stochRes?.k ?? 50,
           stochD: stochRes?.d ?? 50,
           vwapDiff,
-          momentum: 0,
-          confluence: 0,
+          momentum: roc10,
+          confluence: baselineConfluence.score,
           price: md.price || 0,
           volumeSpike: false,
+          market: resolvedMarket,
           enabledIndicators: {
             rsi: true, ema: true, macd: true, bb: true, stoch: true, vwap: true
           }
@@ -2400,12 +2431,12 @@ export default function ScreenerDashboard() {
           strategyLabel: baselineStrategy.label || 'Neutral',
           strategyReasons: baselineStrategy.reasons || [],
           signal: baselineStrategy.score >= 60 ? 'overbought' : baselineStrategy.score <= -60 ? 'oversold' : 'neutral',
-          confluence: 0,
-          momentum: 0,
+          confluence: baselineConfluence.score,
+          momentum: roc10,
           vwap: vwapBaseline,
           vwapDiff,
-          atr: 0,
-          adx: 0,
+          atr: avgBarSize * 1.5, // High-fidelity baseline ATR fallback
+          adx: 25, // Neutral baseline trend strength
           market: resolvedMarket,
           marketState: md.marketState || 'REGULAR',
           curCandleSize: 0,

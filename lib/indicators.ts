@@ -515,6 +515,7 @@ export function computeStrategyScore(params: {
   rsiDivergence?: 'bullish' | 'bearish' | 'none';
   momentum?: number | null;
   rsiCrossover?: 'bullish_reversal' | 'bearish_reversal' | 'none';
+  market?: 'Crypto' | 'Metal' | 'Forex' | 'Index' | 'Stocks';
   enabledIndicators?: {
     rsi?: boolean;
     macd?: boolean;
@@ -528,6 +529,14 @@ export function computeStrategyScore(params: {
   };
 }): StrategyResult {
   let score = 0;
+  
+  // ── Asset-Aware Volatility Calibration ──
+  // A 0.5% move in Forex is as significant as a 2.5% move in Crypto.
+  // We scale thresholds for low-volatility assets to ensure signals are actionable.
+  let volatilityMultiplier = 1.0;
+  if (params.market === 'Forex') volatilityMultiplier = 5.0;
+  else if (params.market === 'Index' || params.market === 'Stocks') volatilityMultiplier = 2.5;
+  else if (params.market === 'Metal') volatilityMultiplier = 1.5;
   let factors = 0;
   const reasons: string[] = [];
   const enabled = params.enabledIndicators || {
@@ -597,8 +606,9 @@ export function computeStrategyScore(params: {
   // VWAP
   if (params.vwapDiff !== null && enabled.vwap !== false) {
     factors += 0.5;
-    if (params.vwapDiff < -2) { score += 40 * 0.5; if (params.vwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff}%)`); }
-    else if (params.vwapDiff > 2) { score -= 40 * 0.5; if (params.vwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff}%)`); }
+    const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
+    if (scaledVwapDiff < -2) { score += 40 * 0.5; if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); }
+    else if (scaledVwapDiff > 2) { score -= 40 * 0.5; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
   }
 
   // Volume spike amplifies the signal
@@ -644,12 +654,13 @@ export function computeStrategyScore(params: {
   }
 
   // Momentum (ROC)
-  if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum) > 0.5 && enabled.momentum !== false) {
+  if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum * volatilityMultiplier) > 0.5 && enabled.momentum !== false) {
     factors += 0.5;
-    const mScore = Math.max(-60, Math.min(60, params.momentum * 15));
+    const scaledMomentum = params.momentum * volatilityMultiplier;
+    const mScore = Math.max(-60, Math.min(60, scaledMomentum * 15));
     score += mScore * 0.5;
-    if (params.momentum > 2) reasons.push('Strong upward momentum');
-    else if (params.momentum < -2) reasons.push('Strong downward momentum');
+    if (scaledMomentum > 2) reasons.push('Strong upward momentum');
+    else if (scaledMomentum < -2) reasons.push('Strong downward momentum');
   }
 
   // Final validation guard: if we have fewer than 3 significant factors, 

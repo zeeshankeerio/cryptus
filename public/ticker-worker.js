@@ -51,6 +51,8 @@ let globalVolumeSpikeThreshold = 5.0;
 let globalThresholdTimeframes = [];
 let globalSignalThresholdMode = 'standard';
 let globalVolatilityEnabled = true;
+let globalOverbought = 70;
+let globalOversold = 30;
 let globalEnabledIndicators = null;
 let portVisibility = new Map(); // Track visibility per port
 function isAnyTabVisible() {
@@ -602,6 +604,13 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       bbPosition = range > 0 ? (curC - state.bbLower) / range : 0.5;
     }
 
+    // Asset-Aware Market Detection (Local to Worker for Performance)
+    const sSym = t.s.toUpperCase();
+    const isMetal = ['PAXGUSDT', 'XAUTUSDT', 'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD', 'GC=F', 'SI=F', 'PL=F', 'PA=F', 'HG=F'].some(s => sSym.includes(s));
+    const isForex = ['EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD', 'USDJPY', 'EURJPY', 'GBPJPY', 'CADJPY', 'AUDJPY', '=X'].some(s => sSym.includes(s));
+    const isIndex = ['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'SPY', 'QQQ', 'DIA', 'VIX', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'].some(s => sSym.includes(s));
+    const market = isMetal ? 'Metal' : isForex ? 'Forex' : isIndex ? 'Index' : 'Crypto';
+
     const strategyVolMult =
       (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0)
         ? config.volumeSpikeThreshold
@@ -624,6 +633,10 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
       momentum: state.momentum,
+      rsiCrossover: state.rsiCrossover,
+      market,
+      obThreshold: (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought,
+      osThreshold: (config.oversoldThreshold != null && config.oversoldThreshold > 0) ? config.oversoldThreshold : globalOversold,
       globalLongCandleThreshold,
       globalVolumeSpikeThreshold,
       globalVolatilityEnabled,
@@ -1080,10 +1093,10 @@ function handleMessage(e, port = null) {
         globalThresholdsEnabled = payload.globalThresholdsEnabled;
       }
       if (payload.globalOverbought !== undefined) {
-        globalObT = payload.globalOverbought;
+        globalOverbought = payload.globalOverbought;
       }
       if (payload.globalOversold !== undefined) {
-        globalOsT = payload.globalOversold;
+        globalOversold = payload.globalOversold;
       }
       if (payload.globalThresholdTimeframes !== undefined) {
         globalThresholdTimeframes = payload.globalThresholdTimeframes;
@@ -1380,22 +1393,32 @@ function computeHysteresis(obT, osT) {
 
 function computeWorkerStrategyScore(params) {
   let score = 0;
+
+  // ── Asset-Aware Volatility Calibration ──
+  let volatilityMultiplier = 1.0;
+  if (params.market === 'Forex') volatilityMultiplier = 5.0;
+  else if (params.market === 'Index' || params.market === 'Stocks') volatilityMultiplier = 2.5;
+  else if (params.market === 'Metal') volatilityMultiplier = 1.5;
+
   let factors = 0;
   const enabled = params.enabledIndicators || {
     rsi: true, macd: true, bb: true, stoch: true, ema: true, 
     vwap: true, confluence: true, divergence: true, momentum: true
   };
 
+  const ob = params.obThreshold || 70;
+  const os = params.osThreshold || 30;
+
   const rsiScore = (val, weight) => {
     if (val === null || val === undefined || enabled.rsi === false) return;
     factors += weight;
-    if (val <= 20) score += 100 * weight;
-    else if (val <= 30) score += 70 * weight;
-    else if (val <= 40) score += 30 * weight;
-    else if (val <= 60) score += 0;
-    else if (val <= 70) score -= 30 * weight;
-    else if (val <= 80) score -= 70 * weight;
-    else score -= 100 * weight;
+    // Institutional Grade Dynamic Thresholding
+    if (val <= (os - 10)) score += 100 * weight;
+    else if (val <= os) score += 70 * weight;
+    else if (val <= (os + 10)) score += 30 * weight;
+    else if (val >= (ob + 10)) score -= 100 * weight;
+    else if (val >= ob) score -= 70 * weight;
+    else if (val >= (ob - 10)) score -= 30 * weight;
   };
 
   rsiScore(params.rsi1m, 0.5);
@@ -1437,8 +1460,9 @@ function computeWorkerStrategyScore(params) {
 
   if (enabled.vwap !== false && params.vwapDiff != null) {
     factors += 0.5;
-    if (params.vwapDiff < -2) score += 40 * 0.5;
-    else if (params.vwapDiff > 2) score -= 40 * 0.5;
+    const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
+    if (scaledVwapDiff < -2) score += 40 * 0.5;
+    else if (scaledVwapDiff > 2) score -= 40 * 0.5;
   }
 
   if (enabled.confluence !== false && typeof params.confluence === 'number' && Math.abs(params.confluence) >= 20) {
@@ -1456,9 +1480,10 @@ function computeWorkerStrategyScore(params) {
     score += (params.rsiCrossover === 'bullish_reversal' ? 60 : -60) * 1.0;
   }
 
-  if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum) > 0.5) {
+  if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum * volatilityMultiplier) > 0.5) {
     factors += 0.5;
-    const mScore = Math.max(-60, Math.min(60, params.momentum * 15));
+    const scaledMomentum = params.momentum * volatilityMultiplier;
+    const mScore = Math.max(-60, Math.min(60, scaledMomentum * 15));
     score += mScore * 0.5;
   }
 
