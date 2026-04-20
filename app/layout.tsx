@@ -41,29 +41,39 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: 'RSIQ Pro | Institutional Crypto Terminal & Market Scanner',
-    description: 'Monitor 500+ pairs with real-time institutional analytics, RSI, and Liquidation Flux. Engineered by Mindscape Analytics.',
+    description: 'Monitor 500+ pairs with real-time institutional analytics, RSI, MACD, Order Flow, and Liquidation Flux. Engineered by Mindscape Analytics.',
     url: 'https://rsiq.mindscapeanalytics.com',
     siteName: 'RSIQ Pro',
     images: [
       {
+        // Primary: static branded image (fast, always available, perfect for crawlers)
+        url: 'https://rsiq.mindscapeanalytics.com/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'RSIQ Pro — Institutional Crypto Terminal by Mindscape Analytics',
+        type: 'image/png',
+      },
+      {
+        // Secondary: dynamic live BTC signal card
         url: 'https://rsiq.mindscapeanalytics.com/api/og/BTC',
         width: 1200,
         height: 630,
-        alt: 'RSIQ Pro Institutional Terminal - Real-Time BTC Alpha',
+        alt: 'RSIQ Pro — Live BTC Institutional Signal',
       },
     ],
     locale: 'en_US',
     type: 'website',
   },
   verification: {
-    google: '', // Replace with actual token from Google Search Console once available
+    google: '', // Add token from Google Search Console
   },
   twitter: {
     card: 'summary_large_image',
     title: 'RSIQ Pro | Institutional Crypto Terminal',
-    description: 'Real-time multi-indicator market scanner with institutional density.',
-    images: ['https://rsiq.mindscapeanalytics.com/api/og/BTC'],
+    description: 'Real-time multi-indicator market scanner with institutional density. 500+ pairs, RSI, MACD, Order Flow, Liquidation Flux.',
+    images: ['https://rsiq.mindscapeanalytics.com/og-image.png'],
     creator: '@MindscapeAL',
+    site: '@MindscapeAL',
   },
 };
 
