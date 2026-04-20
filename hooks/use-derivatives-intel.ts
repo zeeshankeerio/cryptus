@@ -38,7 +38,8 @@ function getOrCreateWorker(): Worker | null {
   if (derivativesWorker) return derivativesWorker;
 
   try {
-    derivativesWorker = new Worker('/derivatives-worker.js');
+    // Cache-bust so the Service Worker precache doesn't serve a stale version
+    derivativesWorker = new Worker(`/derivatives-worker.js?v=${Date.now()}`);
     console.log('[DerivativesIntel] Worker created');
     return derivativesWorker;
   } catch (e) {
@@ -88,15 +89,6 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
         whaleAlerts,
         orderFlow
       );
-      console.log('[DEBUG] Smart Money Computed:', {
-        symbolsCount: symbols.size,
-        fundingRatesSize: fundingRates.size,
-        liquidationsCount: liquidations.length,
-        whaleAlertsCount: whaleAlerts.length,
-        orderFlowSize: orderFlow.size,
-        resultSize: result.size,
-        sampleEntries: Array.from(result.entries()).slice(0, 3)
-      });
       setSmartMoney(result);
     }, 2000); // Recompute at most every 2s
     return () => {
@@ -127,7 +119,12 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           break;
 
         case 'HEALTH_STATUS': {
-          setLastHealthPulse(payload.lastDataReceived);
+          // Only update state if the value meaningfully changed (>1s difference)
+          // to avoid re-rendering every 400ms from the flush interval
+          setLastHealthPulse(prev => {
+            const next = payload.lastDataReceived as number;
+            return Math.abs(next - prev) > 1000 ? next : prev;
+          });
           break;
         }
 

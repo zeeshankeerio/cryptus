@@ -120,8 +120,10 @@ class PriceTickEngine extends EventTarget {
     if (typeof window === 'undefined' || this.worker) return;
     this.symbols = initialSymbols;
 
-    // ── SharedWorker Migration ──
-    const workerUrl = '/ticker-worker.js';
+    // ── Cache-bust the worker URL so the Service Worker precache is bypassed ──
+    // The SW precaches ticker-worker.js with a revision hash. Without a cache-bust,
+    // the browser may serve a stale cached version after a deploy, breaking real-time.
+    const workerUrl = `/ticker-worker.js?v=${Date.now()}`;
     try {
       if (typeof SharedWorker !== 'undefined') {
         const sw = new SharedWorker(workerUrl, 'rsiq-ticker-v4');
@@ -593,7 +595,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
       if (!mountedRef.current) return;
       const detail = (e as CustomEvent).detail as Map<string, LiveTick>;
 
-      // Accumulate
+      // Accumulate into pending batch
       detail.forEach((tick, sym) => {
         const prevPrice = previousPricesObj.get(sym);
         let tickDelta = prevPrice ? tick.price - prevPrice : 0;
@@ -601,7 +603,6 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
         if (tick.price !== prevPrice) {
           previousPricesObj.set(sym, tick.price);
         } else {
-          // If the price is the same, keep the previous tick delta so we don't clear the direction
           const existing = pendingBatch.get(sym);
           if (existing && existing.tickDelta) {
             tickDelta = existing.tickDelta;
@@ -611,10 +612,16 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
         pendingBatch.set(sym, { ...tick, tickDelta });
       });
 
+      // Only flush immediately if throttle window has passed AND we have data
       const now = Date.now();
       const throttle = throttleRef.current;
-      if (now - lastUpdate >= throttle) {
-        setLivePrices(new Map(pendingBatch));
+      if (pendingBatch.size > 0 && now - lastUpdate >= throttle) {
+        const snapshot = new Map(pendingBatch);
+        setLivePrices(prev => {
+          const next = new Map(prev);
+          snapshot.forEach((tick, sym) => next.set(sym, tick));
+          return next;
+        });
         lastUpdate = now;
         pendingBatch.clear();
       }
@@ -622,18 +629,23 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
 
     // Periodic flush: ensures accumulated ticks reach React state even when
     // the WebSocket goes quiet between batches (e.g. low-volatility periods).
-    // CRITICAL: Synchronized with worker's flush interval (50ms) for consistent rhythm
-    // This alignment eliminates stuttering and perceived freezes
+    // CRITICAL: Only flush when there is actually pending data — avoids empty
+    // Map allocations every 50ms which cause unnecessary React re-renders.
     const flushTimer = setInterval(() => {
-      if (!mountedRef.current || pendingBatch.size === 0) return;
+      if (!mountedRef.current || pendingBatch.size === 0) return; // ← guard: skip if nothing pending
       const now = Date.now();
       const throttle = throttleRef.current;
       if (now - lastUpdate >= throttle) {
-        setLivePrices(new Map(pendingBatch));
+        setLivePrices(prev => {
+          // Merge into previous map to avoid full re-render when only a few symbols changed
+          const next = new Map(prev);
+          pendingBatch.forEach((tick, sym) => next.set(sym, tick));
+          return next;
+        });
         lastUpdate = now;
         pendingBatch.clear();
       }
-    }, 50); // Aligned with worker's 50ms flush interval for consistent rhythm
+    }, 100); // 100ms flush — fast enough for real-time feel, avoids 50ms render storms
 
     const handleWorkerMessage = (e: MessageEvent) => {
       if (!mountedRef.current) return;

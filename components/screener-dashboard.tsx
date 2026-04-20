@@ -2593,16 +2593,6 @@ export default function ScreenerDashboard() {
     new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
   );
   
-  // DEBUG: Log visible columns
-  useEffect(() => {
-    console.log('[DEBUG] Visible Columns:', {
-      hasSmartMoney: visibleCols.has('smartMoney'),
-      hasFundingRate: visibleCols.has('fundingRate'),
-      hasOrderFlow: visibleCols.has('orderFlow'),
-      allVisible: Array.from(visibleCols)
-    });
-  }, [visibleCols]);
-  
   const [showCorrelation, setShowCorrelation] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -2643,7 +2633,7 @@ export default function ScreenerDashboard() {
       'TRXUSDT', 'UNIUSDT', 'SUIUSDT', 'APTUSDT', 'OPUSDT'
     ]);
   }, [data, watchlist, search]);
-  const liveThrottleMs = pairCount <= 100 ? 50 : pairCount <= 300 ? 100 : 200;
+  const liveThrottleMs = pairCount <= 100 ? 150 : pairCount <= 300 ? 250 : 400;
   const {
     livePrices,
     isConnected,
@@ -2656,15 +2646,19 @@ export default function ScreenerDashboard() {
   } = useLivePrices(symbolSet, liveThrottleMs);
 
   // ── PWA Performance: Track last price update for live status indicator ──
-  // Use a ref to avoid triggering re-renders on every tick (every 100ms).
-  // Only update state at 1s intervals so the indicator stays accurate without causing storms.
+  // Use a ref to avoid triggering re-renders on every tick.
+  // Update state at 2s intervals max — the LiveStatusIndicator only needs ~1s precision.
   const lastGlobalUpdateRef = useRef(Date.now());
+  const lastGlobalUpdateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (livePrices.size === 0) return;
     lastGlobalUpdateRef.current = Date.now();
-    // Throttle the state update to 1s so the LiveStatusIndicator doesn't cause re-renders
-    const id = setTimeout(() => setLastGlobalUpdate(lastGlobalUpdateRef.current), 1000);
-    return () => clearTimeout(id);
+    // Only schedule one pending timer at a time — cancel previous to prevent timer storms
+    if (lastGlobalUpdateTimerRef.current) return;
+    lastGlobalUpdateTimerRef.current = setTimeout(() => {
+      setLastGlobalUpdate(lastGlobalUpdateRef.current);
+      lastGlobalUpdateTimerRef.current = null;
+    }, 2000);
   }, [livePrices]);
 
   // ── Win Rate Ribbon: read from localStorage at most every 30s ──
@@ -2706,21 +2700,6 @@ export default function ScreenerDashboard() {
     isStale: derivativesStale,
     updateConfig: updateDerivConfig,
   } = useDerivativesIntel(symbolSet, activeAssetClass === 'crypto');
-
-  // DEBUG: Log Smart Money data
-  useEffect(() => {
-    console.log('[DEBUG] Smart Money Data:', {
-      size: smartMoney.size,
-      entries: Array.from(smartMoney.entries()).slice(0, 3),
-      fundingRatesSize: fundingRates.size,
-      liquidationsCount: liquidations.length,
-      whaleAlertsCount: whaleAlerts.length,
-      orderFlowSize: orderFlow.size,
-      derivativesConnected,
-      derivativesStale,
-      activeAssetClass
-    });
-  }, [smartMoney, fundingRates, liquidations, whaleAlerts, orderFlow, derivativesConnected, derivativesStale, activeAssetClass]);
 
   // ─── Multi-Asset Market Data (Forex, Metals, Stocks) ───
   const {
