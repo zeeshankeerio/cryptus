@@ -11,11 +11,11 @@
  * - Alert-active symbols prioritised in Bybit Spot subscriptions
  */
 
-const RECONNECT_BASE_DELAY = 2000;
-const RECONNECT_MAX_DELAY = 30000;
-const HEARTBEAT_MS = 30000;
-const ZOMBIE_WATCHDOG_MS = 30000;   // check every 30s
-const ZOMBIE_THRESHOLD_MS = 15000;  // force reconnect if no data for 15s (reduced from 60s for faster dead connection detection)
+const RECONNECT_BASE_DELAY = 1000;  // Faster initial reconnect (was 2000)
+const RECONNECT_MAX_DELAY = 15000;  // Lower max delay (was 30000)
+const HEARTBEAT_MS = 15000;         // More frequent heartbeat (was 30000)
+const ZOMBIE_WATCHDOG_MS = 10000;   // Check every 10s (was 30s) - ANTI-FREEZE FIX
+const ZOMBIE_THRESHOLD_MS = 5000;   // Force reconnect if no data for 5s (was 15s) - ANTI-FREEZE FIX
 const BYBIT_SPOT_REST_POLL_MS = 2000;  // Task 2.7: REST poll interval for stale Bybit Spot symbols
 const BYBIT_SPOT_STALE_THRESHOLD_MS = 5000; // Symbol is stale if no WS update for 5s
 const PERSIST_THROTTLE_MS = 1000; // Max 1 IndexedDB write per second to prevent blocking
@@ -384,17 +384,47 @@ function ensureExchange(name) {
 /** Zombie connection watchdog - forces reconnect if no data received for ZOMBIE_THRESHOLD_MS */
 function startZombieWatchdog() {
   stopZombieWatchdog();
+  
+  let consecutiveZombieCount = 0;
+  
   zombieWatchdog = setInterval(() => {
     if (activeAdapters.size === 0) return;
+    
     const silenceMs = Date.now() - lastDataReceived;
-    if (silenceMs > ZOMBIE_THRESHOLD_MS) {
-      console.warn(`[worker] ZOMBIE DETECTED: No data for ${Math.round(silenceMs / 1000)}s - forcing reconnect`);
+    const threshold = ZOMBIE_THRESHOLD_MS;
+    
+    // Log warnings at different thresholds for visibility
+    if (silenceMs > threshold * 0.6 && silenceMs < threshold) {
+      console.warn(`[worker] ⚠️ Data silence: ${Math.round(silenceMs / 1000)}s (threshold: ${threshold / 1000}s)`);
+    }
+    
+    if (silenceMs > threshold) {
+      consecutiveZombieCount++;
+      console.error(`[worker] 🚨 ZOMBIE DETECTED #${consecutiveZombieCount}: No data for ${Math.round(silenceMs / 1000)}s - FORCING RECONNECT`);
+      
       // Force reconnect all active adapters
       const names = Array.from(activeAdapters.keys());
       activeAdapters.forEach(adapter => adapter.disconnect());
       activeAdapters.clear();
       lastDataReceived = Date.now(); // reset to avoid immediate re-trigger
-      names.forEach(name => ensureExchange(name));
+      
+      // Reconnect with slight delay
+      setTimeout(() => {
+        names.forEach(name => ensureExchange(name));
+      }, 500);
+      
+      // If we've had 3+ consecutive zombies, request recalibration
+      if (consecutiveZombieCount >= 3) {
+        console.error('[worker] 🔥 CRITICAL: 3+ consecutive zombies - requesting recalibration');
+        broadcast({ type: 'RECALIBRATE_REQUEST' });
+        consecutiveZombieCount = 0;
+      }
+    } else {
+      // Reset counter if data is flowing
+      if (consecutiveZombieCount > 0) {
+        console.log(`[worker] ✅ Data restored after ${consecutiveZombieCount} zombie(s)`);
+        consecutiveZombieCount = 0;
+      }
     }
   }, ZOMBIE_WATCHDOG_MS);
 }
@@ -1621,11 +1651,15 @@ function stopWorkerHeartbeat() {
 }
 
 function startFlushing(interval) {
-  if (flushInterval) clearInterval(flushInterval);
+  stopFlushing(); // Clean stop first
   
-  const performFlush = () => {
+  // ANTI-FREEZE FIX: Use setInterval instead of setTimeout
+  // setInterval is more reliable and won't be throttled as aggressively by browsers
+  flushInterval = setInterval(() => {
     if (tickerBuffer.size > 0) {
       const payload = Array.from(tickerBuffer.entries());
+      
+      // Broadcast to all connected tabs
       broadcast({
         type: 'TICKS',
         payload
@@ -1641,19 +1675,19 @@ function startFlushing(interval) {
       
       tickerBuffer.clear();
     }
-
-    // PERFORMANCE: Fixed 50ms interval for consistent rhythm
-    // Eliminates stuttering from variable intervals (50-100ms)
-    // Provides smooth updates while maintaining battery efficiency
-    flushInterval = setTimeout(performFlush, 50);
-  };
-
-  flushInterval = setTimeout(performFlush, interval || 50);
+    
+    // ANTI-FREEZE: Monitor data freshness during flush
+    const silenceMs = Date.now() - lastDataReceived;
+    if (silenceMs > 3000) { // 3 seconds of silence during active flush
+      console.warn(`[worker] ⚠️ Flush detected ${Math.round(silenceMs / 1000)}s silence - data may be frozen`);
+    }
+  }, interval || 50);
+  
+  console.log(`[worker] Flush started with ${interval || 50}ms interval (setInterval mode - anti-freeze)`);
 }
 
 function stopFlushing() {
   if (flushInterval) {
-    clearTimeout(flushInterval);
     clearInterval(flushInterval);
     flushInterval = null;
   }

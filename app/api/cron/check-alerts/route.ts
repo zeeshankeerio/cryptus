@@ -8,6 +8,12 @@ import type { ScreenerEntry } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300; // 5 minute max for deeper scans
 
+// ⚠️ DEPRECATED: This route is no longer used for automatic alerts
+// Alerts are now handled 100% client-side via ticker-worker.js for Vercel Free compatibility
+// This endpoint remains available for manual testing only
+//
+// To test manually: POST /api/cron/check-alerts with Authorization: Bearer <CRON_SECRET>
+
 // ── Zone-state persistence across cron invocations ──
 // In-memory Map survives across invocations on the same serverless instance.
 // On cold starts, we fall back to DB-based cooldown to avoid re-fire.
@@ -58,14 +64,29 @@ function getZoneWithHysteresis(
   return 'NEUTRAL';
 }
 
+// VERCEL CRON: Vercel automatically calls GET for cron jobs
+export async function GET(request: Request) {
+  return handleCronRequest(request);
+}
+
+// Support POST for manual triggers and external schedulers
 export async function POST(request: Request) {
+  return handleCronRequest(request);
+}
+
+async function handleCronRequest(request: Request) {
   const requestId = Math.random().toString(36).substring(7);
   console.log(`[cron-alerts:${requestId}] Starting background check...`);
 
   try {
     // 1. Authenticate the Cron request
+    // Vercel Cron sends Authorization header automatically
     const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    const cronSecret = process.env.CRON_SECRET;
+    
+    // For Vercel Cron, the auth header format is: Bearer <CRON_SECRET>
+    // For external schedulers, require explicit Bearer token
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       console.warn(`[cron-alerts:${requestId}] Unauthorized attempt.`);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

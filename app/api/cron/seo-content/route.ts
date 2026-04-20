@@ -1,15 +1,16 @@
 /**
  * RSIQ Pro — Daily SEO Content Agent
  *
- * Triggered by a cron job (Vercel Cron / external scheduler).
- * Generates fresh, keyword-rich content for:
- *   1. Google Search Console ping (sitemap re-index request)
- *   2. Dynamic meta descriptions for top symbols
- *   3. Social share content snippets (X / Telegram)
- *   4. Structured data freshness signal
+ * ⚠️ DEPRECATED: This route is no longer used for automatic SEO updates
+ * SEO content is now generated on-demand via ISR (Incremental Static Regeneration)
+ * This endpoint remains available for manual testing only
  *
- * Schedule: Daily at 08:00 UTC
- * Vercel cron config: vercel.json → "crons": [{ "path": "/api/cron/seo-content", "schedule": "0 8 * * *" }]
+ * To test manually: GET /api/cron/seo-content with Authorization: Bearer <CRON_SECRET>
+ *
+ * For production SEO automation on Vercel Free, use:
+ * - GitHub Actions (free, runs on GitHub's infrastructure)
+ * - Upstash QStash (free tier: 500 requests/day)
+ * - EasyCron (free tier: 1 job)
  */
 
 import { NextRequest, NextResponse } from 'next/server';

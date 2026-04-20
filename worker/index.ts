@@ -138,6 +138,13 @@ const showNativeNotification = (payload: any) => {
     }
   }
 
+  // CRITICAL FIX: Check if service worker is actually active before showing notification
+  // This prevents "No active registration available" errors
+  if (!self.registration || !self.registration.active) {
+    console.warn('[sw] Cannot show notification: Service worker not active');
+    return Promise.resolve();
+  }
+
   // Use exchange-aware tag to prevent notification collision across exchanges
   const tag = `rsiq-${(exchange || 'unknown')}-${title.replace(/\s+/g, '-').toLowerCase()}`;
   const priority = payload.priority || 'medium';
@@ -170,7 +177,12 @@ const showNativeNotification = (payload: any) => {
     options.vibrate = [100];
   }
 
-  return self.registration.showNotification(title, options);
+  try {
+    return self.registration.showNotification(title, options);
+  } catch (error) {
+    console.error('[sw] showNotification failed:', error);
+    return Promise.resolve();
+  }
 };
 
 // Listen for messages from the main thread (Foreground/UI fallback)

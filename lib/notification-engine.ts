@@ -38,29 +38,39 @@ class NotificationEngine {
       // Institutional approach: Use Service Worker for reliability if possible
       try {
         const registration = await navigator.serviceWorker.ready;
-        if (registration && registration.showNotification) {
-          registration.showNotification(title, {
-            body,
-            icon: '/icon-192x192.png',
-            badge: '/icon-192x192.png',
-            tag: 'rsiq-alert',
-            renotify: true,
-            vibrate: priority === 'critical' ? [200, 100, 200, 100, 400] : [100, 50, 100],
-            data: { url: window.location.href }
-          } as any);
-          return;
+        
+        // CRITICAL FIX: Wait for ACTIVE service worker, not just installed
+        // showNotification() requires an active SW, not just ready state
+        if (registration && registration.active && registration.showNotification) {
+          // Additional safety: Check if SW is actually active
+          if (registration.active.state === 'activated') {
+            await registration.showNotification(title, {
+              body,
+              icon: '/icon-192x192.png',
+              badge: '/icon-192x192.png',
+              tag: 'rsiq-alert',
+              renotify: true,
+              vibrate: priority === 'critical' ? [200, 100, 200, 100, 400] : [100, 50, 100],
+              data: { url: window.location.href }
+            } as any);
+            return;
+          }
         }
       } catch (e) {
         console.warn('[notification-engine] SW Notification failed, falling back to legacy:', e);
       }
 
-      // Legacy fallback (standard browser)
-      new Notification(title, { 
-        body,
-        icon: '/favicon.ico',
-        tag: 'rsiq-alert',
-        renotify: true
-      } as any);
+      // Legacy fallback (standard browser) - always works
+      try {
+        new Notification(title, { 
+          body,
+          icon: '/favicon.ico',
+          tag: 'rsiq-alert',
+          renotify: true
+        } as any);
+      } catch (e) {
+        console.error('[notification-engine] All notification methods failed:', e);
+      }
     }
   }
 
