@@ -2070,6 +2070,14 @@ const ScreenerCard = memo(function ScreenerCard({
 
           {/* Quick Indicator Sub-Bar (Mobile High Density) */}
           <div className="flex items-center gap-2 mt-1.5 opacity-80 scale-90 origin-right">
+            {/* Volume Display */}
+            <div className="flex flex-col items-end">
+              <span className="text-[5px] font-black text-slate-600 uppercase leading-none mb-0.5">VOL</span>
+              <span className="text-[7px] font-black tabular-nums leading-none text-slate-400">
+                {formatVolume(display.volume24h)}
+              </span>
+            </div>
+            
             {fundingRate && (
               <div className="flex flex-col items-end">
                 <span className="text-[5px] font-black text-slate-600 uppercase leading-none mb-0.5">FUND</span>

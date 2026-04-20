@@ -62,9 +62,13 @@ class PriceTickEngine extends EventTarget {
   private exchange: string = 'binance';
   private isMasterTab: boolean = false;
   private heartbeatInterval: any = null;
+  private lastWorkerHeartbeat: number = Date.now();
+  private connectionCheckInterval: any = null;
   // Stored so they can be removed on stop() — prevents listener accumulation
   private handleVisibility: (() => void) | null = null;
   private handleOnline: (() => void) | null = null;
+  private handleFocus: (() => void) | null = null;
+  private handlePageShow: ((e: PageTransitionEvent) => void) | null = null;
 
   constructor() {
     super();
@@ -149,6 +153,15 @@ class PriceTickEngine extends EventTarget {
           this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
         });
         this.dispatchEvent(new CustomEvent('ticks', { detail: batch }));
+      } else if (type === 'WORKER_HEARTBEAT') {
+        // Track worker liveness
+        this.lastWorkerHeartbeat = Date.now();
+        // Check if worker is alive but not sending data
+        const silenceMs = Date.now() - payload.lastDataReceived;
+        if (silenceMs > 30000 && payload.adaptersConnected > 0) {
+          console.warn('[PriceEngine] Worker alive but no data for 30s, forcing reconnect...');
+          this.postToWorker({ type: 'RESUME' });
+        }
       } else if (type === 'ALERT_TRIGGERED') {
         if (this.isMasterTab) {
           this.dispatchEvent(new CustomEvent('alert', { detail: payload }));
@@ -170,28 +183,51 @@ class PriceTickEngine extends EventTarget {
       }
     });
 
-    // ── Visibility Wake-up Logic ──
-    // Store handlers so they can be removed on stop()
+    // ── Enhanced Visibility Wake-up Logic (Mobile PWA Critical) ──
+    // Multiple detection methods for better mobile browser support
     if (typeof document !== 'undefined') {
+      // Method 1: Standard visibilitychange
       this.handleVisibility = () => {
         const visible = document.visibilityState === 'visible';
         if (visible) {
-          console.log('[PriceEngine] App visible, signaling worker to resume...');
-          this.postToWorker({ type: 'RESUME' });
-          const warmBatch = new Map<string, LiveTick>();
-          this.prices.forEach((tick, sym) => {
-            warmBatch.set(sym, tick);
-            this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
-          });
-          if (warmBatch.size > 0) {
-            this.dispatchEvent(new CustomEvent('ticks', { detail: warmBatch }));
-          }
+          console.log('[PriceEngine] App visible (visibilitychange), resuming...');
+          this.forceResume();
         }
         this.postToWorker({ type: 'VISIBILITY_CHANGE', payload: { visible } });
       };
       document.addEventListener('visibilitychange', this.handleVisibility);
+      
+      // Method 2: Window focus (iOS Safari fallback)
+      this.handleFocus = () => {
+        console.log('[PriceEngine] Window focused, resuming...');
+        this.forceResume();
+      };
+      window.addEventListener('focus', this.handleFocus);
+      
+      // Method 3: Page show (iOS Safari back/forward cache)
+      this.handlePageShow = (e: PageTransitionEvent) => {
+        if (e.persisted) {
+          console.log('[PriceEngine] Page restored from bfcache, resuming...');
+          this.forceResume();
+        }
+      };
+      window.addEventListener('pageshow', this.handlePageShow as any);
+      
+      // Initial check
       this.handleVisibility();
     }
+    
+    // Method 4: Periodic heartbeat check (aggressive recovery for mobile)
+    this.connectionCheckInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        const lastTick = this.getLastTickTime();
+        const silenceMs = Date.now() - lastTick;
+        if (silenceMs > 10000) { // No ticks for 10s while visible
+          console.warn('[PriceEngine] Detected stale data while visible, forcing resume...');
+          this.forceResume();
+        }
+      }
+    }, 5000); // Check every 5s
 
     // ── Network Recovery Logic (PWA Critical) ──
     if (typeof window !== 'undefined') {
@@ -381,6 +417,27 @@ class PriceTickEngine extends EventTarget {
     }
   }
 
+  private forceResume() {
+    this.postToWorker({ type: 'RESUME' });
+    // Immediately flush cached data to UI
+    const warmBatch = new Map<string, LiveTick>();
+    this.prices.forEach((tick, sym) => {
+      warmBatch.set(sym, tick);
+      this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
+    });
+    if (warmBatch.size > 0) {
+      this.dispatchEvent(new CustomEvent('ticks', { detail: warmBatch }));
+    }
+  }
+
+  private getLastTickTime(): number {
+    let latest = 0;
+    this.prices.forEach(tick => {
+      if (tick.updatedAt > latest) latest = tick.updatedAt;
+    });
+    return latest || Date.now();
+  }
+
   updateSymbols(newSymbols: Set<string>) {
     this.symbols = newSymbols;
     this.postToWorker({
@@ -459,10 +516,22 @@ class PriceTickEngine extends EventTarget {
       clearInterval(this.virtualPollInterval);
       this.virtualPollInterval = null;
     }
+    if (this.connectionCheckInterval) {
+      clearInterval(this.connectionCheckInterval);
+      this.connectionCheckInterval = null;
+    }
     // Remove global event listeners to prevent accumulation
     if (this.handleVisibility && typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.handleVisibility);
       this.handleVisibility = null;
+    }
+    if (this.handleFocus && typeof window !== 'undefined') {
+      window.removeEventListener('focus', this.handleFocus);
+      this.handleFocus = null;
+    }
+    if (this.handlePageShow && typeof window !== 'undefined') {
+      window.removeEventListener('pageshow', this.handlePageShow as any);
+      this.handlePageShow = null;
     }
     if (this.handleOnline && typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleOnline);

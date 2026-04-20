@@ -29,6 +29,7 @@ let flushInterval = null;
 let zombieWatchdog = null;
 let stalenessInterval = null; // Task 2.3: periodic staleness check handle
 let bybitSpotRestPollInterval = null; // Task 2.7: REST polling for Bybit Spot overflow
+let workerHeartbeatInterval = null; // Worker heartbeat for liveness detection
 let lastDataReceived = Date.now();  // track data freshness
 let lastPersistTime = 0; // Track last IndexedDB write time for throttling
 let currentSymbols = new Set();
@@ -1011,6 +1012,7 @@ function handleMessage(e, port = null) {
       startFlushing(payload.flushInterval || 50);
       startZombieWatchdog();
       startStalenessCheck(); // Task 2.3: begin periodic staleness detection
+      startWorkerHeartbeat(); // Mobile PWA: liveness detection
       // Task 2.7: Start REST polling fallback for Bybit Spot stale symbols
       if (currentExchangeName === 'bybit') {
         startBybitSpotRestPoll();
@@ -1254,6 +1256,7 @@ function teardown() {
   stopZombieWatchdog();
   stopStalenessCheck(); // Task 2.3: stop staleness interval on teardown
   stopBybitSpotRestPoll(); // Task 2.7: stop REST polling fallback
+  stopWorkerHeartbeat(); // Mobile PWA: stop heartbeat
   console.log('[worker] Stream fully terminated');
 }
 
@@ -1589,6 +1592,31 @@ function stopStalenessCheck() {
   if (stalenessInterval) {
     clearInterval(stalenessInterval);
     stalenessInterval = null;
+  }
+}
+
+// ── Worker Heartbeat (Mobile PWA Liveness Detection) ──────────
+const WORKER_HEARTBEAT_MS = 5000; // Broadcast heartbeat every 5s
+
+function startWorkerHeartbeat() {
+  stopWorkerHeartbeat();
+  workerHeartbeatInterval = setInterval(() => {
+    broadcast({
+      type: 'WORKER_HEARTBEAT',
+      payload: {
+        timestamp: Date.now(),
+        activeSymbols: currentSymbols.size,
+        lastDataReceived: lastDataReceived,
+        adaptersConnected: activeAdapters.size
+      }
+    });
+  }, WORKER_HEARTBEAT_MS);
+}
+
+function stopWorkerHeartbeat() {
+  if (workerHeartbeatInterval) {
+    clearInterval(workerHeartbeatInterval);
+    workerHeartbeatInterval = null;
   }
 }
 
