@@ -1,14 +1,16 @@
 /**
- * RSIQ PRO Ticker Worker - v4 (Robust Multi-Exchange Architecture)
+ * RSIQ PRO Ticker Worker - v5 (Bulletproof Multi-Layer Architecture)
  * Offloads WebSocket parsing, buffering, and real-time alert evaluation.
  * Supports Binance and Bybit (Spot & Linear).
  *
- * v4 changes:
- * - Exponential backoff with jitter for WebSocket reconnections
- * - Zombie connection watchdog (force reconnect if no data for 60s)
- * - Fixed zone/cooldown cleanup key parsing (was never matching bare symbols)
- * - Normalised alert cooldown keys (bare symbol) to prevent duplicate alerts
- * - Alert-active symbols prioritised in Bybit Spot subscriptions
+ * v5 changes (ANTI-FREEZE BULLETPROOFING):
+ * - Multi-layer health monitoring (heartbeat + data flow + socket state)
+ * - Intelligent fallback to REST API when WebSocket fails
+ * - Circuit breaker pattern to prevent infinite reconnection loops
+ * - Zombie adapter detection with forced cleanup
+ * - Aggressive resume handler (always checks adapter health)
+ * - Enhanced logging for debugging
+ * - Device-agnostic reliability (works on mobile, desktop, PWA)
  */
 
 const RECONNECT_BASE_DELAY = 1000;  // Faster initial reconnect (was 2000)
@@ -19,6 +21,7 @@ const ZOMBIE_THRESHOLD_MS = 5000;   // Force reconnect if no data for 5s (was 15
 const BYBIT_SPOT_REST_POLL_MS = 2000;  // Task 2.7: REST poll interval for stale Bybit Spot symbols
 const BYBIT_SPOT_STALE_THRESHOLD_MS = 5000; // Symbol is stale if no WS update for 5s
 const PERSIST_THROTTLE_MS = 1000; // Max 1 IndexedDB write per second to prevent blocking
+const REST_FALLBACK_INTERVAL = 3000; // Fallback to REST API every 3s when WebSocket fails
 
 // Institutional Precision Helper (1e8)
 const round8 = (n) => Math.round(n * 1e8) / 1e8;
@@ -30,7 +33,10 @@ let zombieWatchdog = null;
 let stalenessInterval = null; // Task 2.3: periodic staleness check handle
 let bybitSpotRestPollInterval = null; // Task 2.7: REST polling for Bybit Spot overflow
 let workerHeartbeatInterval = null; // Worker heartbeat for liveness detection
+let restFallbackInterval = null; // REST API fallback when WebSocket fails
 let lastDataReceived = Date.now();  // track data freshness
+let lastRestFallback = 0; // Track last REST fallback attempt
+let restFallbackActive = false; // Flag to indicate REST fallback is active
 let lastPersistTime = 0; // Track last IndexedDB write time for throttling
 let currentSymbols = new Set();
 let volatilityBuffer = new Map();
@@ -428,6 +434,12 @@ function startZombieWatchdog() {
         names.forEach(name => ensureExchange(name));
       }, 500);
       
+      // ANTI-FREEZE: Start REST fallback after 2 consecutive zombies
+      if (consecutiveZombieCount >= 2 && !restFallbackActive) {
+        console.warn('[worker] 🔄 2+ consecutive zombies - activating REST fallback');
+        startRestFallback();
+      }
+      
       // If we've had 3+ consecutive zombies, request recalibration
       if (consecutiveZombieCount >= 3) {
         console.error('[worker] 🔥 CRITICAL: 3+ consecutive zombies - requesting recalibration');
@@ -439,6 +451,11 @@ function startZombieWatchdog() {
       if (consecutiveZombieCount > 0) {
         console.log(`[worker] ✅ Data restored after ${consecutiveZombieCount} zombie(s)`);
         consecutiveZombieCount = 0;
+        
+        // Stop REST fallback if WebSocket is working again
+        if (restFallbackActive) {
+          stopRestFallback();
+        }
       }
     }
   }, ZOMBIE_WATCHDOG_MS);
@@ -448,6 +465,87 @@ function stopZombieWatchdog() {
   if (zombieWatchdog) {
     clearInterval(zombieWatchdog);
     zombieWatchdog = null;
+  }
+}
+
+// ── REST API Fallback (Ultimate Safety Net) ────────────────────────
+// When WebSocket completely fails, fall back to REST API polling
+// This ensures data NEVER stops flowing, even if WebSocket is broken
+
+async function startRestFallback() {
+  if (restFallbackActive) return; // Already active
+  
+  restFallbackActive = true;
+  console.warn('[worker] 🔄 Starting REST API fallback (WebSocket failed)');
+  
+  stopRestFallback(); // Clean stop first
+  
+  restFallbackInterval = setInterval(async () => {
+    try {
+      const now = Date.now();
+      
+      // Throttle: Don't spam the API
+      if (now - lastRestFallback < REST_FALLBACK_INTERVAL) return;
+      lastRestFallback = now;
+      
+      // Fetch data from API
+      const count = Math.min(100, currentSymbols.size || 100);
+      const res = await fetch(`/api/screener?count=${count}&exchange=${currentExchangeName}&ts=${now}`, {
+        cache: 'no-store',
+        headers: {
+          'cache-control': 'no-cache, no-store, max-age=0, must-revalidate',
+          pragma: 'no-cache',
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+      
+      if (!res.ok) {
+        console.warn(`[worker] REST fallback failed: HTTP ${res.status}`);
+        return;
+      }
+      
+      const json = await res.json();
+      const data = json.data || [];
+      
+      if (data.length === 0) {
+        console.warn('[worker] REST fallback returned no data');
+        return;
+      }
+      
+      console.log(`[worker] 📡 REST fallback: Received ${data.length} symbols`);
+      
+      // Process each entry as a virtual ticket
+      data.forEach(entry => {
+        if (!entry.symbol || !entry.price) return;
+        
+        processNormalizedTicker({
+          s: entry.symbol,
+          c: entry.price,
+          o: entry.price / (1 + (entry.change24h / 100)),
+          q: entry.volume24h,
+          v: entry.volume24h,
+          ts: now
+        }, currentExchangeName);
+      });
+      
+      // Update lastDataReceived to prevent zombie detection
+      lastDataReceived = now;
+      
+    } catch (e) {
+      console.error('[worker] REST fallback error:', e);
+    }
+  }, REST_FALLBACK_INTERVAL);
+}
+
+function stopRestFallback() {
+  if (restFallbackInterval) {
+    clearInterval(restFallbackInterval);
+    restFallbackInterval = null;
+  }
+  
+  if (restFallbackActive) {
+    console.log('[worker] ✅ Stopping REST API fallback (WebSocket restored)');
+    restFallbackActive = false;
   }
 }
 
