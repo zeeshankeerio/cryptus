@@ -165,7 +165,7 @@ class PriceTickEngine extends EventTarget {
       type: 'START',
       payload: {
         symbols: Array.from(this.symbols),
-        flushInterval: 100,
+        flushInterval: 50, // Fixed 50ms for consistent rhythm
         exchange: this.exchange
       }
     });
@@ -210,6 +210,11 @@ class PriceTickEngine extends EventTarget {
     if (this.virtualPollInterval) return;
 
     this.virtualPollInterval = setInterval(async () => {
+      // PERFORMANCE: Skip polling when document is hidden to save CPU/network
+      if (typeof document !== 'undefined' && document.hidden) {
+        return;
+      }
+
       // Yahoo symbols: poll for indices that don't have a WebSocket source (Binance only)
       if (this.exchange === 'binance') {
         const knownYahoo = new Set([
@@ -492,10 +497,10 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
     return engine.hydrate();
   });
   const mountedRef = useRef(true);
-  const throttleRef = useRef(Math.max(50, throttleMs)); // 🔥 REDUCED: 80ms → 50ms for smoother updates
+  const throttleRef = useRef(Math.max(50, throttleMs)); // Fixed at 50ms to match worker flush interval
 
   useEffect(() => {
-    throttleRef.current = Math.max(50, throttleMs); // 🔥 REDUCED: 80ms → 50ms for smoother updates
+    throttleRef.current = Math.max(50, throttleMs); // Fixed at 50ms to match worker flush interval
   }, [throttleMs]);
 
   useEffect(() => {
@@ -548,8 +553,8 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
 
     // Periodic flush: ensures accumulated ticks reach React state even when
     // the WebSocket goes quiet between batches (e.g. low-volatility periods).
-    // CRITICAL: Synchronized with worker's max flush interval (100ms) to reduce stuttering
-    // This alignment creates a consistent update rhythm and eliminates perceived freezes
+    // CRITICAL: Synchronized with worker's flush interval (50ms) for consistent rhythm
+    // This alignment eliminates stuttering and perceived freezes
     const flushTimer = setInterval(() => {
       if (!mountedRef.current || pendingBatch.size === 0) return;
       const now = Date.now();
@@ -559,7 +564,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
         lastUpdate = now;
         pendingBatch.clear();
       }
-    }, 100); // Increased from 80ms to 100ms to match worker's maximum interval
+    }, 50); // Aligned with worker's 50ms flush interval for consistent rhythm
 
     const handleWorkerMessage = (e: MessageEvent) => {
       if (!mountedRef.current) return;

@@ -32,6 +32,7 @@ export function Roadmap() {
                 title="Descriptive Intelligence"
                 desc="(0.5ms Terminal, Confluence Logic, Whale Flux)"
                 active
+                color="green"
               />
             </div>
             
@@ -40,6 +41,8 @@ export function Roadmap() {
                 subtitle="Near-Term"
                 title="Predictive Forensics"
                 desc="(Macro Liquidity Topologies, Spoofing Detection, Vectorized Data Parsing)"
+                active
+                color="blue"
               />
             </div>
 
@@ -48,6 +51,8 @@ export function Roadmap() {
                 subtitle="Future"
                 title="Agentic Execution"
                 desc="(Autonomous Alpha Agents)"
+                active
+                color="purple"
               />
               
               {/* Behavioral Risk Guardrails Callout */}

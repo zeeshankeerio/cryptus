@@ -164,6 +164,7 @@ const COL_WIDTHS = {
   funding: "w-[100px] min-w-[100px]",  // Increased from 95px to prevent overflow
   flow: "w-[95px] min-w-[95px]",      // Increased from 90px to prevent overflow
   smart: "w-[90px] min-w-[90px]",
+  winRate: "w-[90px] min-w-[90px]",   // Win Rate column
 };
 
 // ─── Atomic Components ──────────────────────────────────────────
@@ -1226,6 +1227,12 @@ const ScreenerRow = memo(function ScreenerRow({
           widthClass={COL_WIDTHS.smart}
           intensity={true}
         />
+      )}
+
+      {visibleCols.has('winRate') && (
+        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.winRate)}>
+          <WinRateBadge symbol={entry.symbol} className="scale-90 origin-right" />
+        </td>
       )}
 
       <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
@@ -2577,6 +2584,17 @@ export default function ScreenerDashboard() {
   const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(
     new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
   );
+  
+  // DEBUG: Log visible columns
+  useEffect(() => {
+    console.log('[DEBUG] Visible Columns:', {
+      hasSmartMoney: visibleCols.has('smartMoney'),
+      hasFundingRate: visibleCols.has('fundingRate'),
+      hasOrderFlow: visibleCols.has('orderFlow'),
+      allVisible: Array.from(visibleCols)
+    });
+  }, [visibleCols]);
+  
   const [showCorrelation, setShowCorrelation] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -2680,6 +2698,21 @@ export default function ScreenerDashboard() {
     isStale: derivativesStale,
     updateConfig: updateDerivConfig,
   } = useDerivativesIntel(symbolSet, activeAssetClass === 'crypto');
+
+  // DEBUG: Log Smart Money data
+  useEffect(() => {
+    console.log('[DEBUG] Smart Money Data:', {
+      size: smartMoney.size,
+      entries: Array.from(smartMoney.entries()).slice(0, 3),
+      fundingRatesSize: fundingRates.size,
+      liquidationsCount: liquidations.length,
+      whaleAlertsCount: whaleAlerts.length,
+      orderFlowSize: orderFlow.size,
+      derivativesConnected,
+      derivativesStale,
+      activeAssetClass
+    });
+  }, [smartMoney, fundingRates, liquidations, whaleAlerts, orderFlow, derivativesConnected, derivativesStale, activeAssetClass]);
 
   // ─── Multi-Asset Market Data (Forex, Metals, Stocks) ───
   const {
@@ -5340,6 +5373,7 @@ export default function ScreenerDashboard() {
                   {visibleCols.has('fundingRate') && <SortHeader label="Funding" sortKey="fundingRate" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.funding} />}
                   {visibleCols.has('orderFlow') && <SortHeader label="Flow" sortKey="orderFlow" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.flow} />}
                   {visibleCols.has('smartMoney') && <SortHeader label="Smart $" sortKey="smartMoney" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.smart} />}
+                  {visibleCols.has('winRate') && <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-right tracking-widest whitespace-nowrap", COL_WIDTHS.winRate)}>Win Rate</th>}
 
                   <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />
                   {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
@@ -7399,7 +7433,51 @@ function GlobalSettingsModal({
           </section>
         </div>
 
-        <div className="p-6 border-t border-white/5 bg-white/[0.02]">
+        <div className="p-6 border-t border-white/5 bg-white/[0.02] space-y-3">
+          {/* Reset to Default Button */}
+          <button
+            onClick={() => {
+              if (confirm('Reset all settings to default values? This will:\n\n• Reset all indicator toggles to ON\n• Reset RSI period to 14\n• Reset thresholds to 70/30\n• Reset refresh interval to 3s\n• Reset pair count to 100\n• Keep your watchlist and alerts\n\nContinue?')) {
+                // Reset all indicators to default (all ON)
+                setGlobalUseRsi(true);
+                setGlobalUseMacd(true);
+                setGlobalUseBb(true);
+                setGlobalUseStoch(true);
+                setGlobalUseEma(true);
+                setGlobalUseVwap(true);
+                setGlobalUseConfluence(true);
+                setGlobalUseDivergence(true);
+                setGlobalUseMomentum(true);
+                
+                // Reset RSI settings
+                setRsiPeriod(14);
+                setGlobalOverbought(70);
+                setGlobalOversold(30);
+                setGlobalThresholdsEnabled(false);
+                setGlobalThresholdTimeframes(['15m']);
+                
+                // Reset signal display
+                setGlobalShowSignalTags(true);
+                setGlobalSignalThresholdMode('default');
+                
+                // Reset volatility
+                setGlobalVolatilityEnabled(false);
+                setGlobalLongCandleThreshold(3);
+                setGlobalVolumeSpikeThreshold(3);
+                
+                // Reset performance
+                setRefreshInterval(3000);
+                setPairCount(100);
+                
+                toast.success('Settings reset to default values');
+              }
+            }}
+            className="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-2xl border border-white/5 hover:border-white/10 active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
+          >
+            <RefreshCcw size={14} />
+            Reset to Default
+          </button>
+          
           <button
             onClick={onClose}
             className="w-full bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] py-5 rounded-3xl shadow-xl shadow-[#39FF14]/10 active:scale-95 transition-all text-xs"

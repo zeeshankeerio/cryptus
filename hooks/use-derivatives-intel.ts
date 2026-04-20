@@ -81,13 +81,23 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     }
     if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);
     smartMoneyTimerRef.current = setTimeout(() => {
-      setSmartMoney(computeAllSmartMoney(
+      const result = computeAllSmartMoney(
         Array.from(symbols),
         fundingRates,
         liquidations,
         whaleAlerts,
         orderFlow
-      ));
+      );
+      console.log('[DEBUG] Smart Money Computed:', {
+        symbolsCount: symbols.size,
+        fundingRatesSize: fundingRates.size,
+        liquidationsCount: liquidations.length,
+        whaleAlertsCount: whaleAlerts.length,
+        orderFlowSize: orderFlow.size,
+        resultSize: result.size,
+        sampleEntries: Array.from(result.entries()).slice(0, 3)
+      });
+      setSmartMoney(result);
     }, 2000); // Recompute at most every 2s
     return () => {
       if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);

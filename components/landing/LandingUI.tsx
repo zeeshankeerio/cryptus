@@ -10,16 +10,38 @@ import {
   Lock 
 } from 'lucide-react';
 
-export function FeatureCard({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
+export function FeatureCard({ 
+  icon, 
+  title, 
+  desc, 
+  color = "green" 
+}: { 
+  icon: React.ReactNode; 
+  title: string; 
+  desc: string; 
+  color?: "green" | "blue" | "purple" | "amber" | "red" | "cyan";
+}) {
+  const themes = {
+    green: "hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] group-hover:bg-[#39FF14]/10 group-hover:text-[#39FF14]",
+    blue: "hover:border-blue-500/30 hover:bg-blue-500/[0.02] group-hover:bg-blue-500/10 group-hover:text-blue-500",
+    purple: "hover:border-purple-500/30 hover:bg-purple-500/[0.02] group-hover:bg-purple-500/10 group-hover:text-purple-500",
+    amber: "hover:border-amber-500/30 hover:bg-amber-500/[0.02] group-hover:bg-amber-500/10 group-hover:text-amber-500",
+    red: "hover:border-red-500/30 hover:bg-red-500/[0.02] group-hover:bg-red-500/10 group-hover:text-red-500",
+    cyan: "hover:border-cyan-400/30 hover:bg-cyan-400/[0.02] group-hover:bg-cyan-400/10 group-hover:text-cyan-400"
+  };
+
   return (
     <motion.div
       whileHover={{ y: -8 }}
-      className="p-6 sm:p-8 md:p-10 rounded-3xl sm:rounded-[40px] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all group relative overflow-hidden"
+      className={cn(
+        "p-6 sm:p-8 md:p-10 rounded-3xl sm:rounded-[40px] bg-white/[0.02] border border-white/5 transition-all group relative overflow-hidden",
+        themes[color]
+      )}
     >
       <div className="absolute top-0 right-0 p-6 sm:p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
         {React.cloneElement(icon as React.ReactElement<any>, { size: 80 })}
       </div>
-      <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl bg-white/5 flex items-center justify-center mb-6 sm:mb-8 md:mb-10 group-hover:scale-110 transition-transform relative z-10 group-hover:bg-[#39FF14]/10 group-hover:text-[#39FF14]">
+      <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl bg-white/5 flex items-center justify-center mb-6 sm:mb-8 md:mb-10 group-hover:scale-110 transition-transform relative z-10">
         {React.cloneElement(icon as React.ReactElement<any>, { size: 24 })}
       </div>
       <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight mb-3 sm:mb-5 relative z-10">{title}</h3>
@@ -92,25 +114,94 @@ export function TradingViewMiniChart({ symbol }: { symbol: string }) {
   );
 }
 
-export function IntelligenceCard({ icon, title, subtitle, children, delay = 0 }: { icon: React.ReactNode; title: string; subtitle: string; children: React.ReactNode; delay?: number }) {
+export function IntelligenceCard({ 
+  icon, 
+  title, 
+  subtitle, 
+  children, 
+  delay = 0,
+  color = "green"
+}: { 
+  icon: React.ReactNode; 
+  title: string; 
+  subtitle: string; 
+  children: React.ReactNode; 
+  delay?: number;
+  color?: "green" | "blue" | "purple" | "amber" | "red" | "cyan";
+}) {
+  const themes = {
+    green: {
+      border: "hover:border-[#39FF14]/30",
+      bg: "hover:bg-[#39FF14]/[0.02]",
+      text: "text-[#39FF14]",
+      iconBorder: "group-hover:border-[#39FF14]/40",
+      dot: "bg-[#39FF14]"
+    },
+    blue: {
+      border: "hover:border-blue-500/30",
+      bg: "hover:bg-blue-500/[0.02]",
+      text: "text-blue-500",
+      iconBorder: "group-hover:border-blue-500/40",
+      dot: "bg-blue-500"
+    },
+    purple: {
+      border: "hover:border-purple-500/30",
+      bg: "hover:bg-purple-500/[0.02]",
+      text: "text-purple-500",
+      iconBorder: "group-hover:border-purple-500/40",
+      dot: "bg-purple-500"
+    },
+    amber: {
+      border: "hover:border-amber-500/30",
+      bg: "hover:bg-amber-500/[0.02]",
+      text: "text-amber-500",
+      iconBorder: "group-hover:border-amber-500/40",
+      dot: "bg-amber-500"
+    },
+    red: {
+      border: "hover:border-red-500/30",
+      bg: "hover:bg-red-500/[0.02]",
+      text: "text-red-500",
+      iconBorder: "group-hover:border-red-500/40",
+      dot: "bg-red-500"
+    },
+    cyan: {
+      border: "hover:border-cyan-400/30",
+      bg: "hover:bg-cyan-400/[0.02]",
+      text: "text-cyan-400",
+      iconBorder: "group-hover:border-cyan-400/40",
+      dot: "bg-cyan-400"
+    }
+  };
+
+  const theme = themes[color];
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay }}
-      className="group relative p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/5 hover:border-[#39FF14]/30 hover:bg-[#39FF14]/[0.02] transition-all duration-500 overflow-hidden flex flex-col h-full"
+      className={cn(
+        "group relative p-8 rounded-[2.5rem] bg-white/[0.02] border border-white/5 transition-all duration-500 overflow-hidden flex flex-col h-full",
+        theme.border,
+        theme.bg
+      )}
     >
       <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.1] group-hover:scale-125 transition-all duration-700">
         {React.cloneElement(icon as React.ReactElement<any>, { size: 120 })}
       </div>
 
       <div className="flex items-center gap-4 mb-8">
-        <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-[#39FF14] group-hover:border-[#39FF14]/40 transition-all">
+        <div className={cn(
+          "w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 group-hover:text-inherit transition-all",
+          theme.text,
+          theme.iconBorder
+        )}>
           {icon}
         </div>
         <div className="flex flex-col">
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-[#39FF14]">{subtitle}</span>
+          <span className={cn("text-[10px] font-black uppercase tracking-[0.2em]", theme.text)}>{subtitle}</span>
           <h3 className="text-xl font-black text-white tracking-tight">{title}</h3>
         </div>
       </div>
@@ -121,10 +212,10 @@ export function IntelligenceCard({ icon, title, subtitle, children, delay = 0 }:
 
       <div className="mt-8 pt-6 border-t border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14] animate-pulse" />
+          <div className={cn("w-1.5 h-1.5 rounded-full animate-pulse", theme.dot)} />
           <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">Live Engine Stream</span>
         </div>
-        <ArrowUpRight size={14} className="text-slate-600 group-hover:text-[#39FF14] transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+        <ArrowUpRight size={14} className={cn("text-slate-600 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5", theme.text)} />
       </div>
     </motion.div>
   );
@@ -278,12 +369,31 @@ export function MobileFeature({ icon, text }: { icon: React.ReactNode; text: str
   );
 }
 
-export function PersonaCard({ icon, role, needs, impact }: { icon: React.ReactNode; role: string; needs: string; impact: string }) {
+export function PersonaCard({ 
+  icon, 
+  role, 
+  needs, 
+  impact,
+  color = "green"
+}: { 
+  icon: React.ReactNode; 
+  role: string; 
+  needs: string; 
+  impact: string;
+  color?: "green" | "blue" | "purple" | "cyan";
+}) {
+  const themes = {
+    green: "text-[#39FF14]",
+    blue: "text-blue-500",
+    purple: "text-purple-500",
+    cyan: "text-cyan-400"
+  };
+
   return (
     <motion.div
       whileHover={{ y: -5 }}
       whileTap={{ scale: 0.98 }}
-      className="p-6 sm:p-10 rounded-[28px] sm:rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col"
+      className="p-6 sm:p-10 rounded-[28px] sm:rounded-[32px] bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all flex flex-col h-full"
     >
       <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/5 flex items-center justify-center mb-6 sm:mb-8">
         {React.cloneElement(icon as React.ReactElement<any>, { size: 20 })}
@@ -294,7 +404,7 @@ export function PersonaCard({ icon, role, needs, impact }: { icon: React.ReactNo
         {needs}
       </p>
       <div className="pt-6 border-t border-white/5">
-        <span className="text-[10px] font-black uppercase tracking-widest text-[#39FF14]">IMPACT:</span>
+        <span className={cn("text-[10px] font-black uppercase tracking-widest", themes[color])}>IMPACT:</span>
         <p className="mt-1 text-xs text-white/80 font-bold">"{impact}"</p>
       </div>
     </motion.div>
@@ -379,16 +489,36 @@ export function SignalPreview({ type, title, subtitle, bullets }: { type: 'buy' 
   );
 }
 
-export function ProjectStep({ title, subtitle, desc, active = false }: { title: string; subtitle: string; desc: string; active?: boolean }) {
+export function ProjectStep({ 
+  title, 
+  subtitle, 
+  desc, 
+  active = false,
+  color = "green"
+}: { 
+  title: string; 
+  subtitle: string; 
+  desc: string; 
+  active?: boolean;
+  color?: "green" | "blue" | "purple" | "cyan" | "amber";
+}) {
+  const themes = {
+    green: "bg-[#39FF14]/[0.05] border-[#39FF14]/30 text-[#39FF14]",
+    blue: "bg-blue-500/[0.05] border-blue-500/30 text-blue-500",
+    purple: "bg-purple-500/[0.05] border-purple-500/30 text-purple-500",
+    cyan: "bg-cyan-400/[0.05] border-cyan-400/30 text-cyan-400",
+    amber: "bg-amber-400/[0.05] border-amber-400/30 text-amber-400"
+  };
+
   return (
     <div className={cn(
       "p-8 rounded-3xl border transition-all duration-500 flex flex-col gap-4",
       active 
-        ? "bg-[#39FF14]/[0.05] border-[#39FF14]/30 shadow-[0_0_50px_rgba(57,255,20,0.05)] scale-105" 
+        ? cn("scale-105 shadow-[0_0_50px_rgba(57,255,20,0.05)]", themes[color]) 
         : "bg-white/[0.02] border-white/5 opacity-60 flex-shrink"
     )}>
       <div className="flex flex-col">
-        <span className={cn("text-[10px] font-black uppercase tracking-[0.5em] mb-1", active ? "text-[#39FF14]" : "text-slate-500")}>
+        <span className={cn("text-[10px] font-black uppercase tracking-[0.5em] mb-1", active ? "text-inherit" : "text-slate-500")}>
           {subtitle}
         </span>
         <h4 className="text-xl font-black text-white tracking-tight">{title}</h4>

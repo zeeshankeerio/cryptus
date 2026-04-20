@@ -9,10 +9,10 @@ import { StatBox, GridBackground } from './LandingUI';
 
 function AlphaTimeline() {
   const points = [
-    { time: '0ms', label: 'ALE-v4 Trigger', desc: 'Calculates indicators tick-by-tick.', pos: 'top' },
-    { time: '12s', label: 'Whale & Liq. Flux', desc: 'Detects distribution clusters.', pos: 'bottom' },
-    { time: '45s', label: 'Neural Divergence', desc: 'Identifies RSI/MACD lead.', pos: 'top' },
-    { time: '60s', label: 'Retail Reaction', desc: 'Crowd reacts to old data.', pos: 'bottom', retail: true }
+    { time: '0ms', label: 'ALE-v4 Trigger', desc: 'Calculates indicators tick-by-tick.', pos: 'top', color: 'bg-[#39FF14]', text: 'text-[#39FF14]' },
+    { time: '12s', label: 'Whale & Liq. Flux', desc: 'Detects distribution clusters.', pos: 'bottom', color: 'bg-amber-400', text: 'text-amber-400' },
+    { time: '45s', label: 'Neural Divergence', desc: 'Identifies RSI/MACD lead.', pos: 'top', color: 'bg-cyan-400', text: 'text-cyan-400' },
+    { time: '60s', label: 'Retail Reaction', desc: 'Crowd reacts to old data.', pos: 'bottom', retail: true, color: 'bg-slate-600', text: 'text-slate-500' }
   ];
 
   return (
@@ -24,7 +24,7 @@ function AlphaTimeline() {
             {/* Timeline Marker */}
             <div className={cn(
               "w-4 h-4 rounded-full border-2 border-[#05080F] z-10 transition-all duration-500",
-              p.retail ? "bg-slate-600 scale-90" : "bg-[#39FF14] shadow-[0_0_15px_rgba(57,255,20,0.5)]"
+              p.retail ? "bg-slate-600 scale-90" : p.color + " shadow-[0_0_15px_rgba(57,255,20,0.5)]"
             )} />
             
             {/* Time Label */}
@@ -36,7 +36,7 @@ function AlphaTimeline() {
               p.pos === 'top' ? "-top-32" : "top-16",
               p.retail ? "opacity-40 grayscale" : "group-hover:border-[#39FF14]/30"
             )}>
-              <h4 className={cn("text-[11px] font-black uppercase tracking-widest mb-1", p.retail ? "text-slate-500" : "text-[#39FF14]")}>
+              <h4 className={cn("text-[11px] font-black uppercase tracking-widest mb-1", p.text)}>
                 {p.label}
               </h4>
               <p className="text-[10px] text-slate-400 leading-relaxed">{p.desc}</p>
@@ -58,9 +58,9 @@ function AlphaTimeline() {
 
 function LogicFunnel() {
   const layers = [
-    { title: 'Trend & Momentum', desc: 'EMA 20/50 Cross, MACD Divergence', color: 'bg-slate-700/50' },
-    { title: 'Oscillators', desc: 'RSI(14) 15m/1h Align, Stochastic K/D', color: 'bg-red-900/20' },
-    { title: 'Volume & Volatility', desc: 'VWAP Diff, Volume Spike Detection', color: 'bg-emerald-900/20' }
+    { title: 'Trend & Momentum', desc: 'EMA 20/50 Cross, MACD Divergence', color: 'bg-cyan-500/10', border: 'border-cyan-500/20' },
+    { title: 'Oscillators', desc: 'RSI(14) 15m/1h Align, Stochastic K/D', color: 'bg-purple-500/10', border: 'border-purple-500/20' },
+    { title: 'Volume & Volatility', desc: 'VWAP Diff, Volume Spike Detection', color: 'bg-emerald-500/10', border: 'border-emerald-500/20' }
   ];
 
   return (
@@ -78,7 +78,8 @@ function LogicFunnel() {
             whileInView={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.2 }}
             className={cn(
-              "relative p-6 border border-white/10 rounded-xl overflow-hidden group",
+              "relative p-6 border rounded-xl overflow-hidden group",
+              l.border,
               "clip-funnel-" + (i + 1)
             )}
             style={{

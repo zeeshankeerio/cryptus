@@ -9,8 +9,7 @@ import { TerminalPreview } from '@/components/landing/Preview';
 import { IntelligenceHub } from '@/components/landing/IntelligenceHub';
 import { LogicSection } from '@/components/landing/LogicSection';
 import { MobileExperience } from '@/components/landing/MobileExperience';
-import { PersonaSection } from '@/components/landing/PersonaSection';
-import { FeaturesGrid } from '@/components/landing/FeaturesGrid';
+import { ProfessionalEdge } from '@/components/landing/ProfessionalEdge';
 import { Roadmap } from '@/components/landing/Roadmap';
 import { Services } from '@/components/landing/Services';
 import { Pricing } from '@/components/landing/Pricing';
@@ -58,11 +57,8 @@ export default function LandingPage() {
         {/* ─── Mobile PWA ─── */}
         <MobileExperience />
 
-        {/* ─── Personas ─── */}
-        <PersonaSection />
-
-        {/* ─── Features ─── */}
-        <FeaturesGrid />
+        {/* ─── Professional Edge (Consolidated) ─── */}
+        <ProfessionalEdge />
 
         {/* ─── Vision/Roadmap ─── */}
         <Roadmap />

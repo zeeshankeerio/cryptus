@@ -9,22 +9,26 @@ const SERVICES = [
   {
     title: "AI Agents & Voice",
     desc: "Automate lead qualification and trading community management 24/7.",
-    pos: "tl"
+    pos: "tl",
+    color: "text-cyan-400"
   },
   {
     title: "SaaS Engineering",
     desc: "High-performance Next.js builds, enterprise auth, and multi-tenant architecture.",
-    pos: "tr"
+    pos: "tr",
+    color: "text-[#39FF14]"
   },
   {
     title: "Cloud & Data Ops",
     desc: "Global, low-latency node clusters engineered for high-frequency analytical workloads.",
-    pos: "bl"
+    pos: "bl",
+    color: "text-blue-500"
   },
   {
     title: "Custom Automation",
     desc: "Algorithmic trading systems and webhook integrations.",
-    pos: "br"
+    pos: "br",
+    color: "text-amber-400"
   }
 ];
 
@@ -72,7 +76,7 @@ export function Services() {
                 )}
               >
                 <div className="flex-1">
-                  <h3 className="text-2xl sm:text-3xl font-black text-white tracking-tight uppercase mb-4 group-hover/service:text-[#39FF14] transition-colors">{s.title}</h3>
+                  <h3 className={cn("text-2xl sm:text-3xl font-black tracking-tight uppercase mb-4 transition-colors", s.color)}>{s.title}</h3>
                   <p className="text-slate-400 text-sm sm:text-base leading-relaxed max-w-sm">{s.desc}</p>
                 </div>
                 <a 

@@ -18,6 +18,7 @@ const ZOMBIE_WATCHDOG_MS = 30000;   // check every 30s
 const ZOMBIE_THRESHOLD_MS = 15000;  // force reconnect if no data for 15s (reduced from 60s for faster dead connection detection)
 const BYBIT_SPOT_REST_POLL_MS = 2000;  // Task 2.7: REST poll interval for stale Bybit Spot symbols
 const BYBIT_SPOT_STALE_THRESHOLD_MS = 5000; // Symbol is stale if no WS update for 5s
+const PERSIST_THROTTLE_MS = 1000; // Max 1 IndexedDB write per second to prevent blocking
 
 // Institutional Precision Helper (1e8)
 const round8 = (n) => Math.round(n * 1e8) / 1e8;
@@ -29,6 +30,7 @@ let zombieWatchdog = null;
 let stalenessInterval = null; // Task 2.3: periodic staleness check handle
 let bybitSpotRestPollInterval = null; // Task 2.7: REST polling for Bybit Spot overflow
 let lastDataReceived = Date.now();  // track data freshness
+let lastPersistTime = 0; // Track last IndexedDB write time for throttling
 let currentSymbols = new Set();
 let volatilityBuffer = new Map();
 let currentExchangeName = 'binance';
@@ -1005,8 +1007,8 @@ function handleMessage(e, port = null) {
         console.log('[worker] Cold-start baseline sync ready - awaiting SYNC_STATES with open1m/volStart1m');
       });
       
-      // Institutional Latency: Default to 100ms for "smooth" real-time experience
-      startFlushing(payload.flushInterval || 100);
+      // Institutional Latency: Fixed 50ms for smooth, consistent real-time experience
+      startFlushing(payload.flushInterval || 50);
       startZombieWatchdog();
       startStalenessCheck(); // Task 2.3: begin periodic staleness detection
       // Task 2.7: Start REST polling fallback for Bybit Spot stale symbols
@@ -1600,25 +1602,25 @@ function startFlushing(interval) {
         type: 'TICKS',
         payload
       });
-      persistToDB(payload);
+      
+      // PERFORMANCE: Throttle IndexedDB writes to max 1 per second
+      // This prevents blocking on slow devices while maintaining persistence
+      const now = Date.now();
+      if (now - lastPersistTime >= PERSIST_THROTTLE_MS) {
+        persistToDB(payload);
+        lastPersistTime = now;
+      }
+      
       tickerBuffer.clear();
     }
 
-    // Adaptive Flushing Logic (2026 Optimization - PWA Tuned)
-    // Faster flushes (50ms) during high volatility/large buffers.
-    // Moderate flushes (100ms max) during idle periods for smooth UX.
-    // CRITICAL: 300ms was too slow and caused perceived "freezes"
-    // The 100ms maximum provides smooth updates while still saving battery
-    const currentSize = tickerBuffer.size;
-    let nextInterval = 100; // Reduced from 300ms to eliminate perceived freezes
-    if (currentSize > 100) nextInterval = 50; 
-    else if (currentSize > 40) nextInterval = 75; // Reduced from 100ms for smoother mid-volatility
-    else if (currentSize > 15) nextInterval = 100; // Reduced from 200ms for consistent rhythm
-
-    flushInterval = setTimeout(performFlush, nextInterval);
+    // PERFORMANCE: Fixed 50ms interval for consistent rhythm
+    // Eliminates stuttering from variable intervals (50-100ms)
+    // Provides smooth updates while maintaining battery efficiency
+    flushInterval = setTimeout(performFlush, 50);
   };
 
-  flushInterval = setTimeout(performFlush, interval || 100);
+  flushInterval = setTimeout(performFlush, interval || 50);
 }
 
 function stopFlushing() {

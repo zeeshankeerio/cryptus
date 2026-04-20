@@ -1,9 +1,9 @@
 "use client";
-
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ShieldCheck, Zap, Activity, Brain } from 'lucide-react';
-import { IntelligenceCard, SignalPreview, GridBackground } from './LandingUI';
+import { ShieldCheck, Zap, Layers, ArrowUpRight } from 'lucide-react';
+import { IntelligenceCard, GridBackground, SignalRibbon } from './LandingUI';
+import { cn } from '@/lib/utils';
 
 export function IntelligenceHub() {
   return (
@@ -14,129 +14,118 @@ export function IntelligenceHub() {
         <div className="text-center mb-24">
           <h2 className="text-[10px] sm:text-[11px] font-black uppercase tracking-[0.5em] text-[#39FF14] mb-4">Situational Awareness</h2>
           <p className="text-4xl sm:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9]">
-            Global Market <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Surveillance.</span>
+            Global Market <span className="text-[#39FF14]">Surveillance.</span>
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8 lg:gap-12">
-          {/* Module 1: Smart Money & Liquidation Flux */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 mb-24">
+          {/* Module 1: The Logic Layer */}
           <IntelligenceCard
-            icon={<ShieldCheck className="text-[#39FF14]" />}
-            subtitle="Orderbook Intelligence"
-            title="Smart Money & Liquidation Flux"
+            icon={<Layers />}
+            subtitle="The Logic Layer"
+            title="Deep Signal Confluence"
+            color="green"
             delay={0.1}
           >
             <div className="space-y-6 mt-6">
               <p className="text-sm text-slate-400 leading-relaxed">
-                Intercept institutional margin exhaustion and whale cluster movements instantly. Intercept the footprints of capital before they hit the chart.
+                Our Neural Engine syncs <span className="text-white font-bold">5+ indicators</span> across all timeframes to identify institutional-grade setups in real-time.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10">
-                  <h4 className="text-[10px] font-black text-[#39FF14] uppercase tracking-widest mb-1">Smart Money Index</h4>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">Track aggregate institutional accumulation in real-time.</p>
-                </div>
-                <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10">
-                  <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Liquidation Flux V4</h4>
-                  <p className="text-xs text-slate-500 font-medium leading-relaxed">Identify high-probability reversal zones driven by forced liquidations.</p>
-                </div>
+              <div className="space-y-2">
+                <SignalRibbon label="RSI(14) 15M / 1H ALIGN" value="OVERSOLD" status="bullish" />
+                <SignalRibbon label="MACD Histogram Divergence" value="CONFIRMED" status="bullish" />
+                <SignalRibbon label="EMA 20/50 Multi-Cross" value="BULLISH" status="bullish" />
+                <SignalRibbon label="Stochastic K/D Signal" value="NEUTRAL" status="neutral" />
               </div>
             </div>
           </IntelligenceCard>
 
-          {/* Module 2: The Signal Narration Engine */}
+          {/* Module 2: Smart Money */}
           <IntelligenceCard
-            icon={<Brain className="text-emerald-400" />}
-            subtitle="Linguistic Intelligence"
-            title="The Signal Narration Engine™"
+            icon={<ShieldCheck />}
+            subtitle="Smart Money"
+            title="Whale Surveillance"
+            color="amber"
             delay={0.2}
           >
             <div className="space-y-6 mt-6">
               <p className="text-sm text-slate-400 leading-relaxed">
-                Moving beyond raw data into verified, institutional-grade intelligence. Automated pattern narration for instant decision scaling.
+                Intercept the footprints of institutional capital. Track big wallet movements and margin exhaustion levels instantly.
               </p>
-              <SignalPreview 
-                type="buy"
-                title="STRONG BUY"
-                subtitle="RSI oversold at 22.4 with bullish divergence"
-                bullets={[
-                  "MACD crossed bullish",
-                  "EMA9 > EMA21",
-                  "Whale accumulation detected"
-                ]}
-              />
-              <div className="flex gap-4">
-                <div className="flex-1 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Win Rate</span>
-                  <span className="text-sm font-black text-[#39FF14]">73% (last 30d)</span>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center justify-center">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Buy Volume</span>
+                  <span className="text-lg font-black text-[#39FF14] tracking-tight">$42.8M</span>
                 </div>
-                <div className="flex-1 p-4 rounded-xl bg-white/[0.02] border border-white/5">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Ecosystem</span>
-                  <span className="text-sm font-black text-white">X / Discord / TG</span>
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 flex flex-col items-center justify-center">
+                  <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Liq. Risk</span>
+                  <span className="text-lg font-black text-red-500 tracking-tight">V. LOW</span>
+                </div>
+              </div>
+              <div className="p-4 rounded-xl bg-[#05080F] border border-white/5 relative overflow-hidden">
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-2">Recent Footprint <span className="text-[7px] lowercase opacity-50 ml-1">1.4s ago</span></span>
+                <p className="text-[10px] text-slate-300 font-medium italic leading-snug">"Large Buy Wall detected at $94,800. Net Flow: +1,240 BTC."</p>
+                <div className="absolute top-0 right-0 p-2 opacity-10">
+                   <ShieldCheck size={40} />
                 </div>
               </div>
             </div>
           </IntelligenceCard>
 
-          {/* Module 3: Portfolio Armor */}
+          {/* Module 3: Terminal Flow */}
           <IntelligenceCard
-            icon={<Activity className="text-amber-400" />}
-            subtitle="Risk Management"
-            title="Portfolio Armor & Risk Guardrails"
+            icon={<Zap />}
+            subtitle="Terminal Flow"
+            title="Institutional Execution"
+            color="blue"
             delay={0.3}
           >
             <div className="space-y-6 mt-6">
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Mathematical intervention to protect enterprise assets during volatility cascades. An adaptive copilot that monitors execution psychology.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/10 group/item">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Neural HHI Scoring</span>
-                    <span className="text-[9px] text-slate-500 font-medium">Market concentration monitoring.</span>
-                  </div>
-                  <span className="text-[10px] font-black text-[#39FF14] bg-[#39FF14]/10 py-1 px-2 rounded">LOW RISK</span>
+              <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/5 relative group/terminal">
+                <div className="flex justify-between items-center mb-4">
+                   <div className="flex gap-1.5">
+                      {[1,2,3].map(i => <div key={i} className="w-4 h-1 rounded-full bg-[#39FF14]/40" />)}
+                   </div>
+                   <span className="text-[9px] font-black text-[#39FF14] uppercase tracking-widest">Logic Verified</span>
                 </div>
-                <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/10 group/item">
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Aggregate RSI</span>
-                    <span className="text-[9px] text-slate-500 font-medium">Real-time momentum analysis.</span>
-                  </div>
-                  <span className="text-[10px] font-black text-white">54.5</span>
+                <div className="flex justify-between items-end mb-1">
+                   <span className="text-[10px] font-bold text-slate-400">Execution Lead</span>
+                   <span className="text-sm font-black text-white">0.5ms</span>
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden mb-4">
+                  <motion.div initial={{ width: 0 }} whileInView={{ width: '94%' }} className="h-full bg-[#39FF14] shadow-[0_0_10px_#39FF14]" />
+                </div>
+                <div className="flex justify-between items-center">
+                   <span className="text-[10px] font-bold text-slate-400">Total Alpha Scored</span>
+                   <span className="text-sm font-black text-[#39FF14]">+14.2%</span>
                 </div>
               </div>
-            </div>
-          </IntelligenceCard>
 
-          {/* Module 4: Institutional Execution */}
-          <IntelligenceCard
-            icon={<Zap className="text-blue-400" />}
-            subtitle="Performance"
-            title="Institutional Execution Lead"
-            delay={0.4}
-          >
-            <div className="space-y-6 mt-6">
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Engineered for high-frequency analytical workloads. ALE-v4 prioritizes 0.5ms data fidelity during extreme market cascades.
-              </p>
-              <div className="p-6 rounded-2xl bg-[#39FF14]/5 border border-[#39FF14]/10 relative overflow-hidden">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-[9px] font-black text-[#39FF14] uppercase tracking-widest">Terminal Latency</span>
-                  <span className="text-xl font-black text-white tracking-tighter">0.5ms</span>
-                </div>
-                <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    whileInView={{ width: '92%' }}
-                    transition={{ duration: 1.5 }}
-                    className="h-full bg-[#39FF14]" 
-                  />
-                </div>
-              </div>
-              <button className="w-full py-4 rounded-xl bg-[#39FF14] text-black text-[11px] font-black uppercase tracking-widest hover:scale-[1.02] transition-all shadow-xl shadow-[#39FF14]/10">
-                Unlock Edge Control
+              <button className="w-full py-4 rounded-xl bg-white/[0.03] border border-white/10 text-white text-[11px] font-black uppercase tracking-[0.2em] hover:bg-[#39FF14] hover:text-black hover:border-transparent transition-all group/btn flex items-center justify-center gap-2">
+                Access Signals <ArrowUpRight size={14} className="group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform" />
               </button>
             </div>
           </IntelligenceCard>
+        </div>
+
+        {/* Institutional Stats Bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12 pt-16 border-t border-white/5">
+          <div className="flex flex-col gap-1">
+             <span className="text-3xl font-black text-white tracking-tighter uppercase">500+</span>
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Symbols scanned autonomously every tick</span>
+          </div>
+          <div className="flex flex-col gap-1">
+             <span className="text-3xl font-black text-white tracking-tighter uppercase">Real-Time</span>
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Lead alerts before retail closes candles</span>
+          </div>
+          <div className="flex flex-col gap-1">
+             <span className="text-3xl font-black text-white tracking-tighter uppercase">Verified</span>
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Instantly verified confluence win-rate tracking</span>
+          </div>
+          <div className="flex flex-col gap-1">
+             <span className="text-3xl font-black text-white tracking-tighter uppercase">24/7</span>
+             <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none">Native push alerts triggered in your pocket</span>
+          </div>
         </div>
       </div>
     </section>

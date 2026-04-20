@@ -131,6 +131,12 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
     };
     // Cache and return
     entitlementsCache.set(user.id, entitlements);
+    console.log('[entitlements] Owner user detected - all features enabled:', {
+      email: user.email,
+      maxRecords,
+      maxSymbols: 1000,
+      features: entitlements.features
+    });
     return entitlements;
   }
 
