@@ -129,7 +129,7 @@ export function LogicSection() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 sm:gap-24 items-center mt-32">
           <div className="space-y-12">
             <div className="space-y-4">
-              <h3 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase">Deep Signal Confluence: <br /><span className="text-slate-500">The Logic Layer</span></h3>
+              <h3 className="text-2xl sm:text-4xl font-black text-white tracking-tight uppercase">Deep Signal Confluence: <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">The Logic Layer</span></h3>
               <p className="text-slate-400 text-sm leading-relaxed max-w-md">
                 Our Neural Engine syncs technicals across all timeframes to identify institutional-grade setups. 2.4 Billion daily ticks processed into a single verified score.
               </p>

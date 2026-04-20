@@ -48,7 +48,7 @@ export function MobileExperience() {
               />
               
               {/* Overlay Badge */}
-              <div className="absolute -top-4 -right-4 z-20 bg-slate-100 text-slate-900 px-6 py-2 rounded-2xl shadow-2xl">
+              <div className="absolute -top-4 -right-4 z-20 bg-white/10 text-white px-6 py-2 rounded-2xl shadow-2xl border border-white/10 backdrop-blur-md">
                  <span className="text-[10px] font-black uppercase tracking-widest leading-none">System Settings</span>
               </div>
             </motion.div>

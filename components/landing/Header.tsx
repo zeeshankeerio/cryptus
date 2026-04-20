@@ -14,7 +14,7 @@ interface LandingHeaderProps {
 
 export function LandingHeader({ session, mobileMenuOpen, setMobileMenuOpen }: LandingHeaderProps) {
   return (
-    <nav className="fixed top-0 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl">
+    <nav className="fixed top-6 sm:top-8 w-full z-[100] border-b border-white/5 bg-[#05080F]/95 backdrop-blur-2xl transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
         {/* Logo */}
         <div className="flex items-center gap-2 sm:gap-3">

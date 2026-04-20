@@ -22,7 +22,7 @@ export function Affiliate() {
           <div className="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
             <a
               href="mailto:partners@mindscapeanalytics.com"
-              className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl bg-white text-black font-black uppercase tracking-[0.2em] hover:bg-slate-200 transition-all text-xs text-center shadow-xl hover:scale-105"
+              className="w-full sm:w-auto px-10 py-5 sm:py-6 rounded-2xl bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] hover:scale-105 transition-all text-xs text-center shadow-xl shadow-[#39FF14]/20"
             >
               Apply as Affiliate
             </a>

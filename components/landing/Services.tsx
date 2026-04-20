@@ -37,7 +37,7 @@ export function Services() {
         <div className="text-left mb-16 sm:mb-24 space-y-4">
           <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9]">
             Build More <br />
-            <span className="text-slate-500">Than a Scanner.</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">Than a Scanner.</span>
           </h2>
           <p className="text-slate-400 text-sm sm:text-base font-medium max-w-2xl">
             Powered by Mindscape Analytics: Turn RSIQ Pro into your growth engine with productized SaaS engineering and managed infrastructure.
@@ -51,10 +51,10 @@ export function Services() {
           
           {/* Central Engine Node */}
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 hidden md:flex flex-col items-center">
-            <div className="w-12 h-12 rounded-full bg-[#05080F] border-4 border-slate-800 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-[#05080F] border-4 border-white/10 flex items-center justify-center">
               <div className="w-4 h-4 rounded-full bg-slate-500 animate-pulse" />
             </div>
-            <div className="mt-4 px-4 py-1.5 rounded-full bg-slate-100 text-slate-900 text-[11px] font-black uppercase tracking-widest whitespace-nowrap shadow-2xl">
+            <div className="mt-4 px-4 py-1.5 rounded-full bg-white/5 border border-white/10 text-white text-[11px] font-black uppercase tracking-widest whitespace-nowrap shadow-2xl backdrop-blur-md">
               RSIQ Pro Engine
             </div>
           </div>

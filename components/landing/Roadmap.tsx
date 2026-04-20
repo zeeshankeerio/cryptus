@@ -17,7 +17,7 @@ export function Roadmap() {
         <div className="text-left mb-20 max-w-3xl">
           <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9] mb-4">
             Project 2026: <br />
-            <span className="text-slate-500">The Autonomous Edge.</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#39FF14] to-emerald-400">The Autonomous Edge.</span>
           </h2>
         </div>
 
@@ -51,14 +51,14 @@ export function Roadmap() {
               />
               
               {/* Behavioral Risk Guardrails Callout */}
-              <div className="mt-8 lg:absolute lg:-bottom-48 lg:left-0 lg:right-0 p-6 rounded-2xl bg-white border border-white shadow-2xl group transition-all hover:-translate-y-1">
+              <div className="mt-8 lg:absolute lg:-bottom-48 lg:left-0 lg:right-0 p-6 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] group transition-all hover:-translate-y-1">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-800 flex-shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-[#39FF14] flex-shrink-0">
                     <ShieldCheck size={20} />
                   </div>
                   <div>
-                    <h5 className="text-[11px] font-black text-slate-900 uppercase tracking-widest mb-1">Behavioral Risk Guardrails</h5>
-                    <p className="text-[10px] text-slate-600 leading-relaxed font-medium">
+                    <h5 className="text-[11px] font-black text-white uppercase tracking-widest mb-1">Behavioral Risk Guardrails</h5>
+                    <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
                       An adaptive copilot that learns your execution psychology and mathematically intervenes to protect capital.
                     </p>
                   </div>

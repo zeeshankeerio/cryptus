@@ -2210,8 +2210,10 @@ export default function ScreenerDashboard() {
     if (typeof window === 'undefined') return false;
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   });
-  const useAnimations = !prefersReducedMotion && pairCount <= 300;
   const [rsiPeriod, setRsiPeriod] = useState(14);
+  
+  // Compute useAnimations with useMemo to avoid TDZ issues in production build
+  const useAnimations = useMemo(() => !prefersReducedMotion && pairCount <= 300, [prefersReducedMotion, pairCount]);
   const [countdown, setCountdown] = useState(30);
   const [refreshing, setRefreshing] = useState(false);
   const [lastSuccessfulFetchAt, setLastSuccessfulFetchAt] = useState<number | null>(null);
@@ -2640,10 +2642,11 @@ export default function ScreenerDashboard() {
   }, [livePrices]);
 
   // ── Win Rate Ribbon: read from localStorage at most every 30s ──
-  const [globalWinRate, setGlobalWinRate] = useState(() => getGlobalWinRate());
+  // Initialize with null to avoid TDZ issues, then load in useEffect
+  const [globalWinRate, setGlobalWinRate] = useState<ReturnType<typeof getGlobalWinRate> | null>(null);
   useEffect(() => {
     const update = () => setGlobalWinRate(getGlobalWinRate());
-    update();
+    update(); // Load immediately on mount
     const id = setInterval(update, 30_000);
     return () => clearInterval(id);
   // getGlobalWinRate is a stable imported function — safe to omit from deps
@@ -5074,7 +5077,7 @@ export default function ScreenerDashboard() {
       </div>
 
       {/* ─── SIGNAL WIN RATE TRACKER™ RIBBON ─── */}
-      {globalWinRate.evaluated15m >= 3 && (
+      {globalWinRate && globalWinRate.evaluated15m >= 3 && (
         <div className="mb-4 flex items-center gap-3 px-4 py-2.5 rounded-2xl border border-white/[0.04] bg-white/[0.015] backdrop-blur-sm">
           <div className="flex items-center gap-1.5">
             <ShieldCheck size={13} className="text-[#39FF14]/70" />
