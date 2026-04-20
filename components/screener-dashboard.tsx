@@ -16,6 +16,9 @@ import { useSession, signOut } from '@/lib/auth-client';
 import { AUTH_CONFIG } from '@/lib/config';
 import { UserProfileDropdown } from './user-profile-dropdown';
 import { TrialIndicator } from './trial-indicator';
+import { GlobalWinRateBadge } from './global-win-rate-badge';
+import { WinRateBadge } from './win-rate-badge';
+import { SignalNarrationModal } from './signal-narration-modal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -338,6 +341,8 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
 }
 
 function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry }) {
+  const [showNarrationModal, setShowNarrationModal] = useState(false);
+  
   const config: Record<string, { bg: string; text: string; border: string; icon: string }> = {
     'strong-buy': {
       bg: 'bg-[#39FF14]/25',
@@ -396,21 +401,47 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
   }, [narration, entry]);
 
   return (
-    <span
-      className={cn(
-        "inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-w-[100px]",
-        "text-[9px] font-black uppercase tracking-[0.12em] leading-none",
-        "rounded-lg border-2 transition-all duration-300",
-        style.bg, style.text, style.border,
-        (narration || reasons?.length) && 'cursor-help hover:scale-105'
+    <>
+      <span
+        className={cn(
+          "inline-flex items-center justify-center gap-1.5 px-3 py-1.5 min-w-[100px]",
+          "text-[9px] font-black uppercase tracking-[0.12em] leading-none",
+          "rounded-lg border-2 transition-all duration-300",
+          style.bg, style.text, style.border,
+          (narration || reasons?.length) && 'cursor-help hover:scale-105'
+        )}
+        title={title}
+        onClick={narration ? handleCopySignal : undefined}
+      >
+        <span className="text-[10px]">{style.icon}</span>
+        <span>{label}</span>
+        {narration && (
+          <>
+            <LinkIcon size={9} className="opacity-60" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowNarrationModal(true);
+              }}
+              className="ml-1 p-0.5 hover:bg-white/10 rounded transition-colors"
+              title="View detailed analysis"
+            >
+              <Info size={10} className="opacity-80 hover:opacity-100" />
+            </button>
+          </>
+        )}
+      </span>
+      
+      {/* Signal Narration Modal */}
+      {entry && (
+        <SignalNarrationModal
+          isOpen={showNarrationModal}
+          onClose={() => setShowNarrationModal(false)}
+          narration={narration}
+          symbol={entry.symbol}
+        />
       )}
-      title={title}
-      onClick={narration ? handleCopySignal : undefined}
-    >
-      <span className="text-[10px]">{style.icon}</span>
-      <span>{label}</span>
-      {narration && <LinkIcon size={9} className="opacity-60" />}
-    </span>
+    </>
   );
 }
 
@@ -1238,7 +1269,7 @@ function SkeletonRows({ visibleCols }: { visibleCols: Set<string> }) {
 // ─── Column definitions ───────────────────────────────────────
 
 type ColumnId =
-  | 'rank' | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
+  | 'rank' | 'winRate' | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
   | 'ema9' | 'ema21' | 'emaCross' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK'
   | 'vwapDiff' | 'volumeSpike' | 'longCandle' | 'strategy'
   | 'confluence' | 'divergence' | 'momentum'
@@ -1254,6 +1285,7 @@ interface ColumnDef {
 
 const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'rank', label: 'Rank #', group: 'Asset', defaultVisible: true },
+  { id: 'winRate', label: 'Win Rate', group: 'Intelligence', defaultVisible: true },
   { id: 'rsi1m', label: 'RSI 1m', group: 'RSI', defaultVisible: false },
   { id: 'rsi5m', label: 'RSI 5m', group: 'RSI', defaultVisible: false },
   { id: 'rsi15m', label: 'RSI 15m', group: 'RSI', defaultVisible: true },
@@ -1712,6 +1744,8 @@ const ScreenerCard = memo(function ScreenerCard({
                   </span>
                 ) : col.id === 'strategy' ? (
                   <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} />
+                ) : col.id === 'winRate' ? (
+                  <WinRateBadge symbol={entry.symbol} className="scale-90 origin-center" />
                 ) : col.id === 'divergence' ? (
                   <span className={cn("text-[8px] font-black uppercase", (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bullish' ? "text-[#39FF14]" : (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bearish' ? "text-[#FF4B5C]" : "text-slate-700")}>
                     {(entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bullish' ? 'DIV+' : (entry.rsiPeriodAtCreation === rsiPeriod ? display.rsiDivergenceCustom : display.rsiDivergence) === 'bearish' ? 'DIV-' : '-'}
@@ -4288,6 +4322,10 @@ export default function ScreenerDashboard() {
                     {alertsEnabled ? <Zap size={14} /> : <ZapOff size={14} />}
                   </button>
                   <button onClick={() => setShowGlobalSettings(true)} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-[#39FF14] hover:bg-[#39FF14]/5 transition-all" title="Institutional Interface Settings"><Settings size={14} /></button>
+                  
+                  {/* Global Win Rate Badge */}
+                  <GlobalWinRateBadge />
+                  
                   <div className="relative h-full" ref={profileRef}>
                     <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="h-full w-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center hover:border-[#39FF14]/30 transition-all text-slate-500 hover:text-white group">
                       <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
