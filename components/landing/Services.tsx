@@ -10,7 +10,7 @@ const SERVICES = [
     title: "AI Agents & Voice",
     desc: "Automate lead qualification and trading community management 24/7.",
     pos: "tl",
-    color: "text-cyan-400"
+    color: "text-[#39FF14]"
   },
   {
     title: "SaaS Engineering",
@@ -22,13 +22,13 @@ const SERVICES = [
     title: "Cloud & Data Ops",
     desc: "Global, low-latency node clusters engineered for high-frequency analytical workloads.",
     pos: "bl",
-    color: "text-blue-500"
+    color: "text-[#39FF14]"
   },
   {
     title: "Custom Automation",
     desc: "Algorithmic trading systems and webhook integrations.",
     pos: "br",
-    color: "text-amber-400"
+    color: "text-[#39FF14]"
   }
 ];
 

@@ -36,7 +36,6 @@ export function LandingHeader({ session, mobileMenuOpen, setMobileMenuOpen }: La
 
         {/* Desktop Nav Links */}
         <div className="hidden md:flex items-center gap-8 mr-auto ml-16">
-          <Link href="/features" className="text-[10px] font-black uppercase tracking-widest text-[#39FF14] hover:text-white transition-colors">Features</Link>
           <a href="#logic" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">The Logic</a>
           <a href="#pricing" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Pricing</a>
           <a href="#mobile" className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-[#39FF14] transition-colors">Mobile</a>
@@ -77,7 +76,6 @@ export function LandingHeader({ session, mobileMenuOpen, setMobileMenuOpen }: La
             className="md:hidden border-t border-white/5 bg-[#05080F]/98 backdrop-blur-2xl overflow-hidden"
           >
             <div className="px-4 py-4 flex flex-col gap-1">
-              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Features</a>
               <a href="#logic" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">The Logic</a>
               <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Pricing</a>
               <a href="#mobile" onClick={() => setMobileMenuOpen(false)} className="px-4 py-3 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 hover:text-[#39FF14] hover:bg-white/5 transition-all">Mobile</a>
