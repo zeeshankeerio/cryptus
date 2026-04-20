@@ -366,7 +366,22 @@ function resetReconnectAttempts(exchangeName) {
 }
 
 function ensureExchange(name) {
-  if (activeAdapters.has(name)) return;
+  // ANTI-FREEZE FIX: Check if existing adapter is actually connected
+  // If adapter exists but socket is dead/zombie, remove it first
+  const existing = activeAdapters.get(name);
+  if (existing) {
+    // Check if socket is actually alive
+    if (existing.socket && 
+        (existing.socket.readyState === WebSocket.OPEN || 
+         existing.socket.readyState === WebSocket.CONNECTING)) {
+      // Socket is alive, don't reconnect
+      return;
+    }
+    // Socket is dead or doesn't exist, remove the zombie adapter
+    console.warn(`[worker] Removing zombie adapter for ${name} (state: ${existing.socket?.readyState})`);
+    existing.disconnect();
+    activeAdapters.delete(name);
+  }
 
   let adapter;
   if (name === 'bybit' || name === 'bybit-linear') {
@@ -378,7 +393,7 @@ function ensureExchange(name) {
   adapter.exchangeName = name;
   activeAdapters.set(name, adapter);
   adapter.connect();
-  console.log(`[worker] Concurrent adapter added: ${name}`);
+  console.log(`[worker] Adapter connected: ${name}`);
 }
 
 /** Zombie connection watchdog - forces reconnect if no data received for ZOMBIE_THRESHOLD_MS */
@@ -1053,36 +1068,57 @@ function handleMessage(e, port = null) {
       const now = Date.now();
       const silenceMs = now - lastDataReceived;
       
-      // PWA CRITICAL: Lower threshold to 1.5s for faster recovery.
-      // PWA containers can background WebSockets almost instantly.
-      // 3s was too lenient and left the UI feeling frozen after app switching.
-      // 1.5s provides aggressive recovery while avoiding false positives.
-      if (silenceMs > 1500) {
-        console.log(`[worker] Health check on resume (silence: ${Math.round(silenceMs/1000)}s)`);
-        activeAdapters.forEach((adapter, name) => {
-          // Force reconnect if socket is closed, closing, OR stuck in CONNECTING
-          // (zombie CONNECTING state happens when OS kills the TCP connection
-          // without a proper close frame - common on mobile PWA sleep)
-          if (!adapter.socket || 
-              adapter.socket.readyState === WebSocket.CLOSED ||
-              adapter.socket.readyState === WebSocket.CLOSING ||
-              (adapter.socket.readyState === WebSocket.CONNECTING && silenceMs > 10000)) {
-            console.log(`[worker] Force-reconnecting ${name} (state: ${adapter.socket?.readyState})`);
-            adapter.disconnect();
-            activeAdapters.delete(name);
-            ensureExchange(name);
-          }
-        });
-        lastDataReceived = now;
+      console.log(`[worker] 🔄 RESUME requested - silence: ${Math.round(silenceMs / 1000)}s, adapters: ${activeAdapters.size}`);
+      
+      // ANTI-FREEZE FIX: Always check adapter health on resume, regardless of silence duration
+      // This fixes the issue where adapters exist but are in zombie state
+      let reconnectedCount = 0;
+      activeAdapters.forEach((adapter, name) => {
+        const socketState = adapter.socket?.readyState;
+        const isZombie = !adapter.socket || 
+                        socketState === WebSocket.CLOSED ||
+                        socketState === WebSocket.CLOSING ||
+                        (socketState === WebSocket.CONNECTING && silenceMs > 5000);
+        
+        if (isZombie) {
+          console.warn(`[worker] 🔧 Reconnecting zombie adapter: ${name} (state: ${socketState}, silence: ${Math.round(silenceMs/1000)}s)`);
+          adapter.disconnect();
+          activeAdapters.delete(name);
+          ensureExchange(name);
+          reconnectedCount++;
+        }
+      });
+      
+      // If no adapters exist at all, ensure the current exchange is connected
+      if (activeAdapters.size === 0) {
+        console.warn(`[worker] ⚠️ No active adapters found, connecting ${currentExchangeName}...`);
+        ensureExchange(currentExchangeName);
+        reconnectedCount++;
       }
       
+      if (reconnectedCount > 0) {
+        console.log(`[worker] ✅ Reconnected ${reconnectedCount} adapter(s)`);
+      } else {
+        console.log(`[worker] ✅ All adapters healthy, no reconnection needed`);
+      }
+      
+      lastDataReceived = now;
+      
       // PWA CRITICAL: Immediately flush any buffered ticks to the UI
-      // so the user sees fresh data the moment they switch back to the app.
       if (tickerBuffer.size > 0) {
         const payload = Array.from(tickerBuffer.entries());
         broadcast({ type: 'TICKS', payload });
         tickerBuffer.clear();
       }
+      
+      // Also send cached data from IndexedDB for instant UI update
+      getStoredTicks().then(stored => {
+        if (stored.length > 0) {
+          console.log(`[worker] 📦 Sending ${stored.length} cached ticks`);
+          broadcast({ type: 'TICKS', payload: stored });
+        }
+      });
+      
       break;
     }
 

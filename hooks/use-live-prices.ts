@@ -224,7 +224,8 @@ class PriceTickEngine extends EventTarget {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const lastTick = this.getLastTickTime();
         const silenceMs = Date.now() - lastTick;
-        if (silenceMs > 10000) { // No ticks for 10s while visible
+        // ANTI-FREEZE FIX: Reduced from 10s to 5s for faster detection
+        if (silenceMs > 5000) { // No ticks for 5s while visible
           console.warn('[PriceEngine] Detected stale data while visible, forcing resume...');
           this.forceResume();
         }

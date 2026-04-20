@@ -275,28 +275,28 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 **Requirements:** Requirement 11  
 **Design:** MobileBottomSheet, MobileFAB, MobileContextMenu, TouchFriendlyInput components
 
-- [~] 12.1 Create `MobileBottomSheet` component in `components/mobile-bottom-sheet.tsx`
+- [ ] 12.1 Create `MobileBottomSheet` component in `components/mobile-bottom-sheet.tsx`
   - [ ] 12.1.1 Implement slide-up drawer
   - [ ] 12.1.2 Add drag handle
   - [ ] 12.1.3 Support swipe to close
   - [ ] 12.1.4 Add backdrop with tap to close
-- [~] 12.2 Create `MobileFAB` component in `components/mobile-fab.tsx`
+- [ ] 12.2 Create `MobileFAB` component in `components/mobile-fab.tsx`
   - [ ] 12.2.1 Position fixed bottom-right
   - [ ] 12.2.2 Add Settings icon
   - [ ] 12.2.3 Open global settings on tap
-- [~] 12.3 Implement mobile context menu
+- [ ] 12.3 Implement mobile context menu
   - [ ] 12.3.1 Add long-press handler to `ScreenerRow`
   - [ ] 12.3.2 Show menu with: Add to Watchlist, Configure Alerts, View History
   - [ ] 12.3.3 Use native-like styling
-- [~] 12.4 Replace modals with bottom sheets on mobile
+- [ ] 12.4 Replace modals with bottom sheets on mobile
   - [ ] 12.4.1 Detect mobile with `useIsMobile()` hook
   - [ ] 12.4.2 Conditionally render bottom sheet vs modal
   - [ ] 12.4.3 Test on various screen sizes
-- [~] 12.5 Ensure touch-friendly controls
+- [ ] 12.5 Ensure touch-friendly controls
   - [ ] 12.5.1 Verify all interactive elements are 44x44px minimum
   - [ ] 12.5.2 Add proper spacing between touch targets
   - [ ] 12.5.3 Test on actual mobile devices
-- [~] 12.6 Optimize form inputs for mobile
+- [ ] 12.6 Optimize form inputs for mobile
   - [ ] 12.6.1 Use `inputMode="numeric"` for number inputs
   - [ ] 12.6.2 Use native time pickers
   - [ ] 12.6.3 Add proper autocomplete attributes
@@ -309,34 +309,34 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 **Requirements:** Requirement 15  
 **Design:** PerformanceDashboard, MetricsCard, WinRateTrendChart, HourlyHeatmap, ExportButton components
 
-- [~] 13.1 Create `PerformanceDashboard` component in `components/performance-dashboard.tsx`
+- [ ] 13.1 Create `PerformanceDashboard` component in `components/performance-dashboard.tsx`
   - [ ] 13.1.1 Implement main dashboard layout
   - [ ] 13.1.2 Add filter controls (symbol, timeframe, alert type, priority)
   - [ ] 13.1.3 Add chart view selector (daily, weekly, monthly)
-- [~] 13.2 Create `MetricsCard` component
+- [ ] 13.2 Create `MetricsCard` component
   - [ ] 13.2.1 Display total alerts fired
   - [ ] 13.2.2 Show alert frequency per symbol
   - [ ] 13.2.3 Highlight most profitable timeframe
   - [ ] 13.2.4 Show best performing priority level
-- [~] 13.3 Create `WinRateTrendChart` component
+- [ ] 13.3 Create `WinRateTrendChart` component
   - [ ] 13.3.1 Use recharts or similar library
   - [ ] 13.3.2 Display time-series data
   - [ ] 13.3.3 Support daily, weekly, monthly views
   - [ ] 13.3.4 Add interactive tooltips
-- [~] 13.4 Create `HourlyHeatmap` component
+- [ ] 13.4 Create `HourlyHeatmap` component
   - [ ] 13.4.1 Display 24-hour heatmap
   - [ ] 13.4.2 Color code by win rate
   - [ ] 13.4.3 Add hover tooltips with details
-- [~] 13.5 Implement data computation
+- [ ] 13.5 Implement data computation
   - [ ] 13.5.1 Aggregate alert history and signal snapshots
   - [ ] 13.5.2 Compute metrics by filters
   - [ ] 13.5.3 Generate recommendations based on patterns
   - [ ] 13.5.4 Memoize expensive computations
-- [~] 13.6 Add export functionality
+- [ ] 13.6 Add export functionality
   - [ ] 13.6.1 Create CSV export button
   - [ ] 13.6.2 Format data for export
   - [ ] 13.6.3 Trigger download
-- [~] 13.7 Add as tab in Signal Tracker Dashboard
+- [ ] 13.7 Add as tab in Signal Tracker Dashboard
   - [ ] 13.7.1 Create "Performance" tab
   - [ ] 13.7.2 Lazy load dashboard component
   - [ ] 13.7.3 Ensure proper routing
@@ -345,38 +345,38 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 **Requirements:** Requirement 14  
 **Design:** TemplateManager, TemplateList, TemplateEditor, TemplatePreview components
 
-- [~] 14.1 Create database model for AlertTemplate
+- [ ] 14.1 Create database model for AlertTemplate
   - [ ] 14.1.1 Add to `prisma/schema.prisma`
   - [ ] 14.1.2 Run migration
   - [ ] 14.1.3 Create API routes for CRUD operations
-- [~] 14.2 Create `TemplateManager` component in `components/template-manager.tsx`
+- [ ] 14.2 Create `TemplateManager` component in `components/template-manager.tsx`
   - [ ] 14.2.1 Implement main template management UI
   - [ ] 14.2.2 Add "Create Template" button
   - [ ] 14.2.3 Display list of saved templates
-- [~] 14.3 Create `TemplateEditor` component
+- [ ] 14.3 Create `TemplateEditor` component
   - [ ] 14.3.1 Add form for template name and description
   - [ ] 14.3.2 Include all alert settings (RSI periods, thresholds, priority, sound, quiet hours)
   - [ ] 14.3.3 Add save/cancel buttons
   - [ ] 14.3.4 Validate inputs
-- [~] 14.4 Create `TemplateList` component
+- [ ] 14.4 Create `TemplateList` component
   - [ ] 14.4.1 Display templates with name, description, creation date
   - [ ] 14.4.2 Add actions: Edit, Delete, Apply to Symbol, Apply to Multiple
   - [ ] 14.4.3 Implement delete with confirmation
-- [~] 14.5 Create `TemplatePreview` component
+- [ ] 14.5 Create `TemplatePreview` component
   - [ ] 14.5.1 Show preview of changes before applying
   - [ ] 14.5.2 Highlight differences from current config
   - [ ] 14.5.3 Add apply/cancel buttons
-- [~] 14.6 Implement template application
+- [ ] 14.6 Implement template application
   - [ ] 14.6.1 Apply template settings to `coinConfig`
   - [ ] 14.6.2 Support single symbol application
   - [ ] 14.6.3 Support bulk application
   - [ ] 14.6.4 Show success toast
-- [~] 14.7 Create default templates
+- [ ] 14.7 Create default templates
   - [ ] 14.7.1 Conservative: High thresholds, low priority
   - [ ] 14.7.2 Aggressive: Low thresholds, high priority
   - [ ] 14.7.3 Day Trading: Short timeframes, frequent alerts
   - [ ] 14.7.4 Swing Trading: Long timeframes, selective alerts
-- [~] 14.8 Add to global settings
+- [ ] 14.8 Add to global settings
   - [ ] 14.8.1 Create "Templates" section
   - [ ] 14.8.2 Ensure proper layout
   - [ ] 14.8.3 Add help text
@@ -385,36 +385,36 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 **Requirements:** Requirement 10  
 **Design:** FeaturesPanel, FeatureCard, FeatureModal, FeatureBadge components
 
-- [~] 15.1 Create `FeaturesPanel` component in `components/features-panel.tsx`
+- [ ] 15.1 Create `FeaturesPanel` component in `components/features-panel.tsx`
   - [ ] 15.1.1 Implement main discovery panel
   - [ ] 15.1.2 Display feature cards in grid layout
   - [ ] 15.1.3 Add search/filter functionality
-- [~] 15.2 Create `FeatureCard` component
+- [ ] 15.2 Create `FeatureCard` component
   - [ ] 15.2.1 Display feature name, icon, and description
   - [ ] 15.2.2 Add "Learn More" button
   - [ ] 15.2.3 Show "New" badge for unused features
   - [ ] 15.2.4 Add hover effects
-- [~] 15.3 Create `FeatureModal` component
+- [ ] 15.3 Create `FeatureModal` component
   - [ ] 15.3.1 Display detailed explanation
   - [ ] 15.3.2 List benefits with icons
   - [ ] 15.3.3 Add "Try It Now" button that navigates to settings
   - [ ] 15.3.4 Include screenshots or demos
-- [~] 15.4 Implement feature tracking
+- [ ] 15.4 Implement feature tracking
   - [ ] 15.4.1 Store used features in localStorage
   - [ ] 15.4.2 Mark feature as used on first interaction
   - [ ] 15.4.3 Update badge count
-- [~] 15.5 Add feature cards for all major features
+- [ ] 15.5 Add feature cards for all major features
   - [ ] 15.5.1 Win Rate Tracking
   - [ ] 15.5.2 Conditional Alerts
   - [ ] 15.5.3 Push Notifications
   - [ ] 15.5.4 Quiet Hours
   - [ ] 15.5.5 Derivatives Intelligence
   - [ ] 15.5.6 Signal Tracker Dashboard
-- [~] 15.6 Add to main navigation
+- [ ] 15.6 Add to main navigation
   - [ ] 15.6.1 Create "Features" menu item
   - [ ] 15.6.2 Add notification badge with count
   - [ ] 15.6.3 Open panel on click
-- [~] 15.7 Add contextual help
+- [ ] 15.7 Add contextual help
   - [ ] 15.7.1 Add info icons next to advanced settings
   - [ ] 15.7.2 Display tooltips with explanations
   - [ ] 15.7.3 Link to relevant feature cards
@@ -424,50 +424,50 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 ## Testing Tasks
 
 ### Task 16: Unit Tests
-- [~] 16.1 Test win rate computation functions
-- [~] 16.2 Test conditional alert validation
-- [~] 16.3 Test template CRUD operations
-- [~] 16.4 Test bulk action logic
-- [~] 16.5 Test mobile detection hook
+- [ ] 16.1 Test win rate computation functions
+- [ ] 16.2 Test conditional alert validation
+- [ ] 16.3 Test template CRUD operations
+- [ ] 16.4 Test bulk action logic
+- [ ] 16.5 Test mobile detection hook
 
 ### Task 17: Integration Tests
-- [~] 17.1 Test win rate display with signal tracker
-- [~] 17.2 Test alert history with alert engine
-- [~] 17.3 Test derivatives integration with hook
-- [~] 17.4 Test push notification flow
-- [~] 17.5 Test template application
+- [ ] 17.1 Test win rate display with signal tracker
+- [ ] 17.2 Test alert history with alert engine
+- [ ] 17.3 Test derivatives integration with hook
+- [ ] 17.4 Test push notification flow
+- [ ] 17.5 Test template application
 
 ### Task 18: E2E Tests
-- [~] 18.1 Test complete user flow for conditional alerts
-- [~] 18.2 Test bulk configuration workflow
-- [~] 18.3 Test mobile responsiveness on real devices
-- [~] 18.4 Test accessibility with screen reader
-- [~] 18.5 Test performance with large datasets
+- [ ] 18.1 Test complete user flow for conditional alerts
+- [ ] 18.2 Test bulk configuration workflow
+- [ ] 18.3 Test mobile responsiveness on real devices
+- [ ] 18.4 Test accessibility with screen reader
+- [ ] 18.5 Test performance with large datasets
 
 ### Task 19: Accessibility Audit
-- [~] 19.1 Verify keyboard navigation for all features
-- [~] 19.2 Test with screen reader (NVDA/JAWS)
-- [~] 19.3 Check color contrast ratios
-- [~] 19.4 Verify focus indicators
-- [~] 19.5 Test with browser zoom (200%)
+- [ ] 19.1 Verify keyboard navigation for all features
+- [ ] 19.2 Test with screen reader (NVDA/JAWS)
+- [ ] 19.3 Check color contrast ratios
+- [ ] 19.4 Verify focus indicators
+- [ ] 19.5 Test with browser zoom (200%)
 
 ---
 
 ## Documentation Tasks
 
 ### Task 20: User Documentation
-- [~] 20.1 Create user guide for win rate tracking
-- [~] 20.2 Document conditional alert creation
-- [~] 20.3 Write push notification setup guide
-- [~] 20.4 Document quiet hours configuration
-- [~] 20.5 Create template system tutorial
+- [ ] 20.1 Create user guide for win rate tracking
+- [ ] 20.2 Document conditional alert creation
+- [ ] 20.3 Write push notification setup guide
+- [ ] 20.4 Document quiet hours configuration
+- [ ] 20.5 Create template system tutorial
 
 ### Task 21: Developer Documentation
-- [~] 21.1 Document component API
-- [~] 21.2 Create integration guide for new features
-- [~] 21.3 Document state management patterns
-- [~] 21.4 Write performance optimization guide
-- [~] 21.5 Document mobile responsiveness patterns
+- [ ] 21.1 Document component API
+- [ ] 21.2 Create integration guide for new features
+- [ ] 21.3 Document state management patterns
+- [ ] 21.4 Write performance optimization guide
+- [ ] 21.5 Document mobile responsiveness patterns
 
 ---
 
