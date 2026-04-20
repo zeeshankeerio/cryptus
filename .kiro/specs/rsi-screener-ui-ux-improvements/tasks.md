@@ -182,94 +182,94 @@ This document breaks down the implementation of 15 major UI/UX improvements into
 **Requirements:** Requirement 2  
 **Design:** ConditionalAlertBuilder, ConditionRow, LogicToggle, ConditionTypeSelect, OperatorSelect, ValueInput components
 
-- [~] 9.1 Create `ConditionalAlertBuilder` component in `components/conditional-alert-builder.tsx`
-  - [ ] 9.1.1 Implement main builder interface
-  - [ ] 9.1.2 Add "Add Condition" button (max 5 conditions)
-  - [ ] 9.1.3 Add AND/OR logic toggle
-  - [ ] 9.1.4 Display validation errors
-- [~] 9.2 Create `ConditionRow` component
-  - [ ] 9.2.1 Add condition type dropdown (rsi, volume_spike, ema_cross, macd_signal, bb_touch, price_change)
-  - [ ] 9.2.2 Add operator dropdown (<, >, =, cross_above, cross_below)
-  - [ ] 9.2.3 Add value input with validation
-  - [ ] 9.2.4 Add timeframe selector for RSI conditions
-  - [ ] 9.2.5 Add delete button
-- [~] 9.3 Integrate with `conditional-alerts.ts`
-  - [ ] 9.3.1 Use `validateConditionalConfig()` on save
-  - [ ] 9.3.2 Display specific error messages
-  - [ ] 9.3.3 Save to `coinConfig` as JSON
-- [~] 9.4 Display active conditional alerts
-  - [ ] 9.4.1 List all conditions for symbol
-  - [ ] 9.4.2 Add edit and delete actions
-  - [ ] 9.4.3 Show which conditions are currently met
-- [~] 9.5 Add to symbol settings modal
-  - [ ] 9.5.1 Create "Conditional Alerts" section
-  - [ ] 9.5.2 Ensure mobile-friendly layout
-  - [ ] 9.5.3 Add help text and examples
+- [x] 9.1 Create `ConditionalAlertBuilder` component in `components/conditional-alert-builder.tsx`
+  - [x] 9.1.1 Implement main builder interface
+  - [x] 9.1.2 Add "Add Condition" button (max 5 conditions)
+  - [x] 9.1.3 Add AND/OR logic toggle
+  - [x] 9.1.4 Display validation errors
+- [x] 9.2 Create `ConditionRow` component
+  - [x] 9.2.1 Add condition type dropdown (rsi, volume_spike, ema_cross, macd_signal, bb_touch, price_change)
+  - [x] 9.2.2 Add operator dropdown (<, >, =, cross_above, cross_below)
+  - [x] 9.2.3 Add value input with validation
+  - [x] 9.2.4 Add timeframe selector for RSI conditions
+  - [x] 9.2.5 Add delete button
+- [x] 9.3 Integrate with `conditional-alerts.ts`
+  - [x] 9.3.1 Use `validateConditionalConfig()` on save
+  - [x] 9.3.2 Display specific error messages
+  - [x] 9.3.3 Save to `coinConfig` as JSON
+- [x] 9.4 Display active conditional alerts
+  - [x] 9.4.1 List all conditions for symbol
+  - [x] 9.4.2 Add edit and delete actions
+  - [x] 9.4.3 Show which conditions are currently met
+- [x] 9.5 Add to symbol settings modal
+  - [x] 9.5.1 Create "Conditional Alerts" section
+  - [x] 9.5.2 Ensure mobile-friendly layout
+  - [x] 9.5.3 Add help text and examples
 
 ### Task 10: Signal Tracker Dashboard
 **Requirements:** Requirement 6  
 **Design:** SignalTrackerDashboard, SignalStatsTable, GlobalStatsCard, SignalDetailView, ClearDataButton components
 
-- [~] 10.1 Create `SignalTrackerDashboard` component in `components/signal-tracker-dashboard.tsx`
-  - [ ] 10.1.1 Implement main dashboard layout
-  - [ ] 10.1.2 Add tab navigation (Overview, Performance)
-  - [ ] 10.1.3 Ensure responsive design
-- [~] 10.2 Create `SignalStatsTable` component
-  - [ ] 10.2.1 Display sortable table with columns: symbol, total signals, win rates (5m, 15m, 1h), avg returns
-  - [ ] 10.2.2 Implement sorting by any column
-  - [ ] 10.2.3 Add filter for minimum signal count
-  - [ ] 10.2.4 Use virtualization for performance (react-window)
-- [~] 10.3 Create `GlobalStatsCard` component
-  - [ ] 10.3.1 Display total signals tracked
-  - [ ] 10.3.2 Show overall win rate
-  - [ ] 10.3.3 Highlight best/worst performing symbols
-  - [ ] 10.3.4 Add visual indicators (charts, badges)
-- [~] 10.4 Create `SignalDetailView` component
-  - [ ] 10.4.1 Show individual signal breakdown on symbol click
-  - [ ] 10.4.2 Display entry price, outcome prices, win/loss status
-  - [ ] 10.4.3 Add timestamp and signal type
-- [~] 10.5 Implement data refresh
-  - [ ] 10.5.1 Use `computeWinRateStats()` from `signal-tracker.ts`
-  - [ ] 10.5.2 Update every 30s with useEffect interval
-  - [ ] 10.5.3 Memoize expensive computations
-- [~] 10.6 Add "Clear All Data" functionality
-  - [ ] 10.6.1 Create confirmation dialog
-  - [ ] 10.6.2 Call `clearSignalTracker()` on confirm
-  - [ ] 10.6.3 Show success toast
-- [~] 10.7 Add dashboard to main navigation
-  - [ ] 10.7.1 Create new tab or menu item
-  - [ ] 10.7.2 Add icon (BarChart3)
-  - [ ] 10.7.3 Ensure proper routing
+- [x] 10.1 Create `SignalTrackerDashboard` component in `components/signal-tracker-dashboard.tsx`
+  - [x] 10.1.1 Implement main dashboard layout
+  - [x] 10.1.2 Add tab navigation (Overview, Performance)
+  - [x] 10.1.3 Ensure responsive design
+- [x] 10.2 Create `SignalStatsTable` component
+  - [x] 10.2.1 Display sortable table with columns: symbol, total signals, win rates (5m, 15m, 1h), avg returns
+  - [x] 10.2.2 Implement sorting by any column
+  - [x] 10.2.3 Add filter for minimum signal count
+  - [x] 10.2.4 Use virtualization for performance (react-window)
+- [x] 10.3 Create `GlobalStatsCard` component
+  - [x] 10.3.1 Display total signals tracked
+  - [x] 10.3.2 Show overall win rate
+  - [x] 10.3.3 Highlight best/worst performing symbols
+  - [x] 10.3.4 Add visual indicators (charts, badges)
+- [x] 10.4 Create `SignalDetailView` component
+  - [x] 10.4.1 Show individual signal breakdown on symbol click
+  - [x] 10.4.2 Display entry price, outcome prices, win/loss status
+  - [x] 10.4.3 Add timestamp and signal type
+- [x] 10.5 Implement data refresh
+  - [x] 10.5.1 Use `computeWinRateStats()` from `signal-tracker.ts`
+  - [x] 10.5.2 Update every 30s with useEffect interval
+  - [x] 10.5.3 Memoize expensive computations
+- [x] 10.6 Add "Clear All Data" functionality
+  - [x] 10.6.1 Create confirmation dialog
+  - [x] 10.6.2 Call `clearSignalTracker()` on confirm
+  - [x] 10.6.3 Show success toast
+- [x] 10.7 Add dashboard to main navigation
+  - [x] 10.7.1 Create new tab or menu item
+  - [x] 10.7.2 Add icon (BarChart3)
+  - [x] 10.7.3 Ensure proper routing
 
 ### Task 11: Bulk Alert Configuration
 **Requirements:** Requirement 13  
 **Design:** BulkActionsToolbar, BulkActionButton, BulkConfirmationDialog, SelectionCheckbox components
 
-- [~] 11.1 Create `BulkActionsToolbar` component in `components/bulk-actions-toolbar.tsx`
-  - [ ] 11.1.1 Display floating action bar
-  - [ ] 11.1.2 Show selected symbol count
-  - [ ] 11.1.3 Add action buttons: Set Priority, Set Sound, Enable Quiet Hours, Apply Template
-  - [ ] 11.1.4 Add "Cancel" button to exit bulk mode
-- [~] 11.2 Add bulk mode state to `ScreenerDashboard`
-  - [ ] 11.2.1 Add `bulkMode` and `selectedSymbols` state
-  - [ ] 11.2.2 Add "Bulk Actions" button to toolbar
-  - [ ] 11.2.3 Toggle bulk mode on click
-- [~] 11.3 Add selection checkboxes to `ScreenerRow`
-  - [ ] 11.3.1 Show checkbox when bulk mode active
-  - [ ] 11.3.2 Handle selection toggle
-  - [ ] 11.3.3 Add "Select All" checkbox to header
-- [~] 11.4 Create `BulkConfirmationDialog` component
-  - [ ] 11.4.1 Display affected symbols
-  - [ ] 11.4.2 Show preview of changes
-  - [ ] 11.4.3 Add confirm/cancel buttons
-- [~] 11.5 Implement bulk actions
-  - [ ] 11.5.1 Batch update using `updateCoinConfig()`
-  - [ ] 11.5.2 Show progress indicator
-  - [ ] 11.5.3 Display success toast with count
-  - [ ] 11.5.4 Handle errors gracefully
-- [~] 11.6 Ensure mobile responsiveness
-  - [ ] 11.6.1 Adapt toolbar for mobile
-  - [ ] 11.6.2 Use bottom sheet for action selection
+- [x] 11.1 Create `BulkActionsToolbar` component in `components/bulk-actions-toolbar.tsx`
+  - [x] 11.1.1 Display floating action bar
+  - [x] 11.1.2 Show selected symbol count
+  - [x] 11.1.3 Add action buttons: Set Priority, Set Sound, Enable Quiet Hours, Apply Template
+  - [x] 11.1.4 Add "Cancel" button to exit bulk mode
+- [x] 11.2 Add bulk mode state to `ScreenerDashboard`
+  - [x] 11.2.1 Add `bulkMode` and `selectedSymbols` state
+  - [x] 11.2.2 Add "Bulk Actions" button to toolbar
+  - [x] 11.2.3 Toggle bulk mode on click
+- [x] 11.3 Add selection checkboxes to `ScreenerRow`
+  - [x] 11.3.1 Show checkbox when bulk mode active
+  - [x] 11.3.2 Handle selection toggle
+  - [x] 11.3.3 Add "Select All" checkbox to header
+- [x] 11.4 Create `BulkConfirmationDialog` component
+  - [x] 11.4.1 Display affected symbols
+  - [x] 11.4.2 Show preview of changes
+  - [x] 11.4.3 Add confirm/cancel buttons
+- [x] 11.5 Implement bulk actions
+  - [x] 11.5.1 Batch update using `updateCoinConfig()`
+  - [x] 11.5.2 Show progress indicator
+  - [x] 11.5.3 Display success toast with count
+  - [x] 11.5.4 Handle errors gracefully
+- [x] 11.6 Ensure mobile responsiveness
+  - [x] 11.6.1 Adapt toolbar for mobile
+  - [x] 11.6.2 Use bottom sheet for action selection
 
 ### Task 12: Mobile Optimizations
 **Requirements:** Requirement 11  

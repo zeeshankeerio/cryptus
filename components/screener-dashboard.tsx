@@ -10,7 +10,7 @@ import {
   Flame, ShieldCheck, Activity, BrainCircuit, Gauge,
   LogOut, User as UserIcon, Minus, Plus, AlertTriangle,
   ArrowDownCircle, MinusCircle, ArrowUpCircle, Smartphone,
-  Link as LinkIcon, Shield, Menu, X, SortAsc
+  Link as LinkIcon, Shield, Menu, X, SortAsc, CheckSquare, Square
 } from 'lucide-react';
 import { useSession, signOut } from '@/lib/auth-client';
 import { AUTH_CONFIG } from '@/lib/config';
@@ -20,6 +20,8 @@ import { GlobalWinRateBadge } from './global-win-rate-badge';
 import { WinRateBadge } from './win-rate-badge';
 import { SignalNarrationModal } from './signal-narration-modal';
 import { QuietHoursSection } from './quiet-hours-section';
+import { BulkActionsToolbar } from './bulk-actions-toolbar';
+import { BulkConfirmationDialog, type BulkActionConfig } from './bulk-confirmation-dialog';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
@@ -498,6 +500,9 @@ const ScreenerRow = memo(function ScreenerRow({
   fundingRate,
   orderFlowData,
   smartMoneyScore,
+  bulkMode,
+  isSelected,
+  onToggleSelection,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -530,6 +535,9 @@ const ScreenerRow = memo(function ScreenerRow({
   fundingRate: { rate: number; annualized: number } | null;
   orderFlowData: { ratio: number; pressure: string; buyVolume1m: number; sellVolume1m: number } | null;
   smartMoneyScore: { score: number; label: string } | null;
+  bulkMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: (symbol: string) => void;
 }) {
   const isStarred = watchlist.has(entry.symbol);
   const [isVisible, setIsVisible] = useState(false);
@@ -750,7 +758,9 @@ const ScreenerRow = memo(function ScreenerRow({
     }
   }, [display.strategySignal, isVisible]);
 
-  const stickyOffsetSym = visibleCols.has('rank') ? 88 : 40;
+  const stickyOffsetSym = bulkMode 
+    ? (visibleCols.has('rank') ? 132 : 84)  // Add 44px for checkbox
+    : (visibleCols.has('rank') ? 88 : 40);
   const stickyOffsetPrice = stickyOffsetSym + 160;
 
   return (
@@ -770,6 +780,20 @@ const ScreenerRow = memo(function ScreenerRow({
         containIntrinsicSize: '0 68px'
       } as any}
     >
+      {bulkMode && (
+        <td className="sticky left-0 z-10 px-3 py-4 bg-[#0A0F1B]/95 w-[44px] min-w-[44px]">
+          <button
+            onClick={() => onToggleSelection?.(entry.symbol)}
+            className="flex items-center justify-center w-full h-full text-slate-500 hover:text-[#39FF14] transition-colors"
+          >
+            {isSelected ? (
+              <CheckSquare size={14} className="text-[#39FF14]" />
+            ) : (
+              <Square size={14} />
+            )}
+          </button>
+        </td>
+      )}
       {visibleCols.has('rank') && (
         <IndicatorCell value={idx + 1} formatted={(idx + 1).toString()} colorClass="text-slate-600" widthClass={COL_WIDTHS.rank} align="left" />
       )}
@@ -2411,6 +2435,13 @@ export default function ScreenerDashboard() {
   const [watchlistReady, setWatchlistReady] = useState(false);
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
 
+  // Bulk Actions State
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedSymbols, setSelectedSymbols] = useState<Set<string>>(new Set());
+  const [bulkActionConfig, setBulkActionConfig] = useState<BulkActionConfig | null>(null);
+  const [showBulkConfirmation, setShowBulkConfirmation] = useState(false);
+  const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
   // Live WebSocket prices
   const symbolSet = useMemo(() => {
     const baseSet = data.length > 0 ? new Set(data.map((e) => e.symbol)) : new Set<string>();
@@ -3249,6 +3280,129 @@ export default function ScreenerDashboard() {
     });
   }, []);
 
+  // Bulk Actions Handlers
+  const toggleBulkMode = useCallback(() => {
+    setBulkMode(prev => !prev);
+    if (bulkMode) {
+      // Exiting bulk mode - clear selections
+      setSelectedSymbols(new Set());
+    }
+  }, [bulkMode]);
+
+  const toggleSymbolSelection = useCallback((symbol: string) => {
+    setSelectedSymbols(prev => {
+      const next = new Set(prev);
+      if (next.has(symbol)) {
+        next.delete(symbol);
+      } else {
+        next.add(symbol);
+      }
+      return next;
+    });
+  }, []);
+
+  const clearAllSelections = useCallback(() => {
+    setSelectedSymbols(new Set());
+  }, []);
+
+  const handleBulkAction = useCallback((actionId: 'priority' | 'sound' | 'quietHours' | 'template') => {
+    switch (actionId) {
+      case 'priority':
+        setBulkActionConfig({
+          type: 'priority',
+          priority: 'medium'
+        });
+        setShowBulkConfirmation(true);
+        break;
+      
+      case 'sound':
+        setBulkActionConfig({
+          type: 'sound',
+          sound: 'default'
+        });
+        setShowBulkConfirmation(true);
+        break;
+      
+      case 'quietHours':
+        setBulkActionConfig({
+          type: 'quietHours',
+          quietHoursEnabled: true,
+          quietHoursStart: 22,
+          quietHoursEnd: 8
+        });
+        setShowBulkConfirmation(true);
+        break;
+      
+      case 'template':
+        toast.info('Template selection coming soon');
+        break;
+    }
+  }, []);
+
+  const executeBulkAction = useCallback(async () => {
+    if (!bulkActionConfig || selectedSymbols.size === 0) return;
+    
+    setIsBulkProcessing(true);
+    
+    try {
+      const updates: Record<string, any> = {};
+      
+      switch (bulkActionConfig.type) {
+        case 'priority':
+          updates.priority = bulkActionConfig.priority;
+          break;
+        case 'sound':
+          updates.sound = bulkActionConfig.sound;
+          break;
+        case 'quietHours':
+          updates.quietHoursEnabled = bulkActionConfig.quietHoursEnabled;
+          updates.quietHoursStart = bulkActionConfig.quietHoursStart;
+          updates.quietHoursEnd = bulkActionConfig.quietHoursEnd;
+          break;
+      }
+      
+      const response = await fetch('/api/config/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          symbols: Array.from(selectedSymbols),
+          updates
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Bulk update failed');
+      }
+      
+      const result = await response.json();
+      
+      toast.success(`Updated ${result.processed} symbols successfully`, {
+        description: result.failed > 0 ? `${result.failed} symbols failed to update` : undefined
+      });
+      
+      // Refresh coin configs
+      fetch(`/api/config?ts=${Date.now()}`, { cache: 'no-store' })
+        .then(res => res.json())
+        .then(json => setCoinConfigs(json))
+        .catch(err => console.error('[screener] Failed to reload configs:', err));
+      
+      setSelectedSymbols(new Set());
+      setBulkMode(false);
+      setShowBulkConfirmation(false);
+      setBulkActionConfig(null);
+      
+    } catch (error: any) {
+      console.error('[bulk-action] Failed:', error);
+      toast.error('Bulk action failed', {
+        description: error.message || 'Please try again'
+      });
+    } finally {
+      setIsBulkProcessing(false);
+    }
+  }, [bulkActionConfig, selectedSymbols]);
+
   const toggleCol = useCallback((id: ColumnId) => {
     setVisibleCols((prev) => {
       const next = new Set(prev);
@@ -3941,6 +4095,12 @@ export default function ScreenerDashboard() {
     return items;
   }, [processedData, signalFilter, search, sortKey, sortDir, showWatchlistOnly, watchlist, activeAssetClass, fundingRates, orderFlow, smartMoney]);
 
+  // Bulk Actions: Select all visible symbols (must be after filtered is defined)
+  const selectAllSymbols = useCallback(() => {
+    const visibleSymbols = filtered.map(e => e.symbol);
+    setSelectedSymbols(new Set(visibleSymbols));
+  }, [filtered]);
+
   // ── 2026 UX Improvement: Live Tab Item Counts ──
   const assetClassCounts = useMemo(() => {
     const counts = { crypto: 0, forex: 0, metals: 0, stocks: 0 };
@@ -4330,6 +4490,20 @@ export default function ScreenerDashboard() {
                     {alertsEnabled ? <Zap size={14} /> : <ZapOff size={14} />}
                   </button>
                   <button onClick={() => setShowGlobalSettings(true)} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-[#39FF14] hover:bg-[#39FF14]/5 transition-all" title="Institutional Interface Settings"><Settings size={14} /></button>
+                  
+                  {/* Bulk Actions Button */}
+                  <button
+                    onClick={toggleBulkMode}
+                    className={cn(
+                      "h-full px-3 rounded-2xl border transition-all",
+                      bulkMode
+                        ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14] shadow-[0_0_10px_rgba(57,255,20,0.1)]"
+                        : "bg-white/5 border-white/10 text-slate-500 hover:text-[#39FF14] hover:bg-[#39FF14]/5"
+                    )}
+                    title={bulkMode ? "Exit Bulk Mode" : "Bulk Actions"}
+                  >
+                    {bulkMode ? <CheckSquare size={14} /> : <Square size={14} />}
+                  </button>
                   
                   {/* Global Win Rate Badge */}
                   <GlobalWinRateBadge />
@@ -4885,6 +5059,23 @@ export default function ScreenerDashboard() {
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-20 bg-[#0A0F1B]/95 border-b border-white/5">
                 <tr>
+                  {bulkMode && (
+                    <th className="sticky left-0 z-30 bg-[#0A0F1B]/95 px-3 py-3 w-[44px] min-w-[44px]">
+                      <button
+                        onClick={selectedSymbols.size === filtered.length ? clearAllSelections : selectAllSymbols}
+                        className="flex items-center justify-center w-full h-full text-slate-500 hover:text-[#39FF14] transition-colors"
+                        title={selectedSymbols.size === filtered.length ? "Deselect All" : "Select All"}
+                      >
+                        {selectedSymbols.size === filtered.length ? (
+                          <CheckSquare size={14} className="text-[#39FF14]" />
+                        ) : selectedSymbols.size > 0 ? (
+                          <MinusCircle size={14} className="text-[#39FF14]" />
+                        ) : (
+                          <Square size={14} />
+                        )}
+                      </button>
+                    </th>
+                  )}
                   {visibleCols.has('rank') && (
                     <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-left tracking-widest whitespace-nowrap", COL_WIDTHS.rank)}>#</th>
                   )}
@@ -5001,6 +5192,9 @@ export default function ScreenerDashboard() {
                         fundingRate={fundingRates.get(entry.symbol) ? { rate: fundingRates.get(entry.symbol)!.rate, annualized: fundingRates.get(entry.symbol)!.annualized } : null}
                         orderFlowData={orderFlow.get(entry.symbol) ? { ratio: orderFlow.get(entry.symbol)!.ratio, pressure: orderFlow.get(entry.symbol)!.pressure, buyVolume1m: orderFlow.get(entry.symbol)!.buyVolume1m, sellVolume1m: orderFlow.get(entry.symbol)!.sellVolume1m } : null}
                         smartMoneyScore={smartMoney.get(entry.symbol) ? { score: smartMoney.get(entry.symbol)!.score, label: smartMoney.get(entry.symbol)!.label } : null}
+                        bulkMode={bulkMode}
+                        isSelected={selectedSymbols.has(entry.symbol)}
+                        onToggleSelection={toggleSymbolSelection}
                       />
                     ))}
                   </>
@@ -5380,6 +5574,29 @@ export default function ScreenerDashboard() {
         }}
         activeTab={activeTab}
         alertCount={alerts.length}
+      />
+
+      {/* Bulk Actions Toolbar */}
+      <BulkActionsToolbar
+        selectedCount={selectedSymbols.size}
+        onAction={handleBulkAction}
+        onCancel={() => {
+          setBulkMode(false);
+          setSelectedSymbols(new Set());
+        }}
+      />
+
+      {/* Bulk Confirmation Dialog */}
+      <BulkConfirmationDialog
+        isOpen={showBulkConfirmation}
+        onClose={() => {
+          setShowBulkConfirmation(false);
+          setBulkActionConfig(null);
+        }}
+        onConfirm={executeBulkAction}
+        symbols={Array.from(selectedSymbols)}
+        action={bulkActionConfig || { type: 'priority', priority: 'medium' }}
+        isProcessing={isBulkProcessing}
       />
     </div>
   );
