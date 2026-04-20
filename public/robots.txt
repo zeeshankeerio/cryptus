@@ -1,5 +1,18 @@
 User-agent: *
 Allow: /
+Allow: /symbol/
+Allow: /terminal
+Allow: /about
+Allow: /services
+Allow: /guide
+Allow: /subscription
 Disallow: /api/
 Disallow: /admin/
-Sitemap: /sitemap.xml
+Disallow: /terminal/settings
+Disallow: /_next/
+
+User-agent: GPTBot
+Allow: /
+Disallow: /api/
+
+Sitemap: https://rsiq.mindscapeanalytics.com/sitemap.xml

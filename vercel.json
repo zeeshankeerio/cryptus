@@ -26,6 +26,24 @@
           "value": "public, max-age=604800"
         }
       ]
+    },
+    {
+      "source": "/og-image.(png|webp)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400, stale-while-revalidate=3600"
+        }
+      ]
+    },
+    {
+      "source": "/og_RSIQ_mindscapeanalytics.png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
     }
   ],
   "regions": ["fra1"],
@@ -35,6 +53,9 @@
     },
     "app/api/cron/check-alerts/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/og/[symbol]/route.tsx": {
+      "maxDuration": 15
     }
   }
 }
