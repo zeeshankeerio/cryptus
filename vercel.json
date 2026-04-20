@@ -51,9 +51,6 @@
     "app/api/screener/route.ts": {
       "maxDuration": 60
     },
-    "app/api/cron/check-alerts/route.ts": {
-      "maxDuration": 300
-    },
     "app/api/og/[symbol]/route.tsx": {
       "maxDuration": 15
     }

@@ -59,8 +59,8 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
   const [isConnected, setIsConnected] = useState(false);
   const [lastHealthPulse, setLastHealthPulse] = useState<number>(Date.now());
   
-  // Stale detection: true if we haven't received data in 12 seconds
-  const isStale = isConnected && (Date.now() - lastHealthPulse > 12000);
+  // Stale detection: true if we haven't received data in 8 seconds (tighter for ultra-live feel)
+  const isStale = isConnected && (Date.now() - lastHealthPulse > 8000);
 
   const mountedRef = useRef(true);
   const enabledRef = useRef(enabled);

@@ -254,6 +254,7 @@ class PriceTickEngine extends EventTarget {
       }
 
       // Yahoo symbols: poll for indices that don't have a WebSocket source (Binance only)
+      // 10s interval is sufficient for slow-moving assets (indices/forex don't tick every second)
       if (this.exchange === 'binance') {
         const knownYahoo = new Set([
           'SPX', 'NDAQ', 'DOW', 'SILVER', 'FTSE', 'DAX', 'NKY',
@@ -305,7 +306,7 @@ class PriceTickEngine extends EventTarget {
           console.warn('[price-engine] Bybit Spot REST poll failed', e);
         }
       }
-    }, 5000); // 5s poll cycle
+    }, 10000); // 10s poll cycle - optimized for slow-moving assets (indices/forex)
   }
 
   private async triggerRecalibration() {
