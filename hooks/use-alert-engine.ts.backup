@@ -448,9 +448,9 @@ export function useAlertEngine(
           }
         });
 
-        // Win Rate Evaluation — improved timing (10s interval for better accuracy)
+        // Evaluation
         const now = Date.now();
-        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 10000) {
+        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30000) {
           lastWinRateEvalRef.current = now;
           const pm = new Map<string, number>();
           batch.forEach((l, s) => { if (l.price > 0) pm.set(s, l.price); });

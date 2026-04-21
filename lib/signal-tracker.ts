@@ -310,3 +310,19 @@ export function clearSignalTracker(): void {
   _cache = [];
   _cacheTs = Date.now();
 }
+
+/**
+ * Prune stale symbols that are no longer in the active watchlist.
+ * Call this periodically to prevent localStorage bloat.
+ */
+export function pruneStaleSymbols(activeSymbols: Set<string>): void {
+  if (typeof window === 'undefined') return;
+  const snapshots = loadSnapshots();
+  const filtered = snapshots.filter(s => activeSymbols.has(s.symbol));
+  
+  // Only save if we actually removed something
+  if (filtered.length < snapshots.length) {
+    console.log(`[signal-tracker] Pruned ${snapshots.length - filtered.length} stale signals`);
+    saveSnapshots(filtered);
+  }
+}

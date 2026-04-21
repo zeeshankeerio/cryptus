@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import type { ScreenerEntry } from '@/lib/types';
 import { approximateRsi, approximateEma } from '@/lib/rsi';
@@ -10,7 +10,7 @@ import { shouldSuppressAlert, getAlertBehavior, type AlertPriority } from '@/lib
 import { recordSignal, evaluateOutcomes, getGlobalWinRate } from '@/lib/signal-tracker';
 import { notificationEngine } from '@/lib/notification-engine';
 
-// ── Wake Lock for mobile alert reliability (GAP-E4) ──
+// â”€â”€ Wake Lock for mobile alert reliability (GAP-E4) â”€â”€
 let wakeLock: WakeLockSentinel | null = null;
 async function requestWakeLock() {
   if (typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
@@ -20,7 +20,7 @@ async function requestWakeLock() {
       console.log('[alerts] Wake Lock released');
       wakeLock = null;
     });
-    console.log('[alerts] Wake Lock acquired — screen will stay on for alerts');
+    console.log('[alerts] Wake Lock acquired â€” screen will stay on for alerts');
   } catch (e) {
     console.warn('[alerts] Wake Lock unavailable:', e);
   }
@@ -36,7 +36,7 @@ declare global {
   }
 }
 
-// ── 2026 Resilient Audio Anchor (Media Session) ──
+// â”€â”€ 2026 Resilient Audio Anchor (Media Session) â”€â”€
 const SILENT_WAV_BASE64 = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
 export interface Alert {
@@ -84,7 +84,7 @@ export function useAlertEngine(
   },
   globalSignalThresholdMode: 'default' | 'custom' = 'default'
 ) {
-  // ── HOISTED REFS (GAP FIX) ──
+  // â”€â”€ HOISTED REFS (GAP FIX) â”€â”€
   const audioCtxRef = useRef<AudioContext | null>(null);
   const audioAnchorRef = useRef<HTMLAudioElement | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -154,7 +154,7 @@ export function useAlertEngine(
   const enabledIndicatorsRef = useRef(enabledIndicators);
   useEffect(() => { enabledIndicatorsRef.current = enabledIndicators; }, [enabledIndicators]);
 
-  // ── Callbacks ──
+  // â”€â”€ Callbacks â”€â”€
   const getExchange = useCallback(() => {
     if (typeof window === 'undefined') return 'binance';
     return (window as any).__priceEngine?.getExchange?.() ?? 'binance';
@@ -263,7 +263,7 @@ export function useAlertEngine(
         });
         if (res.ok) {
           const saved = await res.json();
-          if (saved.skipped) return; // Server-side cooldown dedup — keep optimistic entry
+          if (saved.skipped) return; // Server-side cooldown dedup â€” keep optimistic entry
           const normalized: Alert = {
             ...saved,
             createdAt: typeof saved.createdAt === 'string' ? new Date(saved.createdAt).getTime() : saved.createdAt,
@@ -271,18 +271,18 @@ export function useAlertEngine(
           // Replace the optimistic entry with the server-confirmed one
           setAlerts(prev => prev.map(a => a.id === optimisticAlert.id ? normalized : a));
         } else if (res.status >= 500 && retryCount === 0) {
-          // Server error — retry once after 2s
+          // Server error â€” retry once after 2s
           await new Promise(r => setTimeout(r, 2000));
           return attempt(1);
         }
-        // 4xx errors (auth, entitlement) — don't retry, keep optimistic entry
+        // 4xx errors (auth, entitlement) â€” don't retry, keep optimistic entry
       } catch (e) {
         if (retryCount === 0) {
-          // Network error — retry once after 3s
+          // Network error â€” retry once after 3s
           await new Promise(r => setTimeout(r, 3000));
           return attempt(1);
         }
-        // Second failure — keep optimistic entry, log silently
+        // Second failure â€” keep optimistic entry, log silently
         console.warn('[alerts] Failed to persist alert after retry:', e);
       }
     };
@@ -313,7 +313,7 @@ export function useAlertEngine(
   const triggerNativeRef = useRef(triggerNativeNotification);
   useEffect(() => { triggerNativeRef.current = triggerNativeNotification; }, [triggerNativeNotification]);
 
-  // ── Life Cycle: Wake Lock & Audio Watchdog ──
+  // â”€â”€ Life Cycle: Wake Lock & Audio Watchdog â”€â”€
   useEffect(() => {
     if (enabled) {
       requestWakeLock();
@@ -361,7 +361,7 @@ export function useAlertEngine(
       }).catch(e => console.error('[alerts] Hydrate failed:', e));
   }, []);
 
-  // ── THE ENGINE: Tick Evaluation ──
+  // â”€â”€ THE ENGINE: Tick Evaluation â”€â”€
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const eng = (window as any).__priceEngine;
@@ -420,83 +420,3 @@ export function useAlertEngine(
             zoneState.current.set(stateKey, currentZone);
           });
 
-          // Strategy Shift — only compute if explicitly enabled for this symbol
-          if (config?.alertOnStrategyShift) {
-            // Debounce: only evaluate strategy once per 500ms per symbol to avoid CPU spikes
-            const stratKey = `${symbol}-STRAT-EVAL`;
-            const lastEval = lastTriggered.current.get(stratKey) || 0;
-            const now2 = Date.now();
-            if (now2 - lastEval < 500) return; // Skip if evaluated recently
-            lastTriggered.current.set(stratKey, now2);
-
-            const liveStrategy = computeStrategyScore({ ...entry, price: live.price, enabledIndicators: enabledIndicatorsRef.current });
-            const sKey = `${symbol}-STRAT`;
-            const prevS = zoneState.current.get(sKey);
-            if (prevS !== undefined && prevS !== liveStrategy.signal && (liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'strong-sell')) {
-              const now = Date.now();
-              if (now - (lastTriggered.current.get(sKey) || 0) > COOLDOWN_MS) {
-                lastTriggered.current.set(sKey, now);
-                const isBuy = liveStrategy.signal === 'strong-buy';
-                recordSignal(symbol, isBuy ? 'strong-buy' : 'strong-sell', live.price);
-                toast[isBuy ? 'success' : 'error'](`${getSymbolAlias(symbol)} → ${isBuy?'🟢 BUY':'🔴 SELL'}`, { description: `Score: ${liveStrategy.score.toFixed(0)} @ $${formatPrice(live.price)}` });
-                playAlertSoundRef.current(false, (config.priority as any) ?? 'medium');
-                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRATEGY', value: liveStrategy.score, price: live.price, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
-                triggerNativeRef.current(`${getSymbolAlias(symbol)} Strategy Shift`, `${isBuy?'Bullish':'Bearish'} signal @ $${formatPrice(live.price)}`);
-              }
-            }
-            zoneState.current.set(sKey, liveStrategy.signal);
-          }
-        });
-
-        // Win Rate Evaluation — improved timing (10s interval for better accuracy)
-        const now = Date.now();
-        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 10000) {
-          lastWinRateEvalRef.current = now;
-          const pm = new Map<string, number>();
-          batch.forEach((l, s) => { if (l.price > 0) pm.set(s, l.price); });
-          if (pm.size > 0) evaluateOutcomes(pm);
-        }
-      } catch (err) { console.warn('[alerts] Tick fail:', err); }
-    };
-
-    const handleWorkerAlert = (e: Event) => {
-      if (!enabledRef.current) return;
-      const payload = (e as CustomEvent).detail;
-      const { symbol, exchange, timeframe, value, type } = payload;
-      const config = coinConfigsRef.current[symbol];
-      const isVol = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
-      if (!config && ((isVol && !globalVolatilityEnabledRef.current) || (!isVol && !globalThresholdsEnabledRef.current))) return;
-
-      const aKey = isVol ? `${symbol}-${type}` : `${symbol}-${timeframe}`;
-      const now = Date.now();
-      const cKey = alertCoordinator.getCooldownKey(symbol, exchange ?? getExchange(), isVol ? type : timeframe, type);
-      
-      if (now - (lastTriggered.current.get(aKey) || 0) > COOLDOWN_MS && !alertCoordinator.isInCooldown(cKey, COOLDOWN_MS)) {
-        lastTriggered.current.set(aKey, now);
-        alertCoordinator.setCooldown(cKey);
-        const priority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
-        const isPos = type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || type === 'LONG_CANDLE';
-        toast[isPos ? 'success' : 'error'](`${getSymbolAlias(symbol)} ${timeframe} ${type}`, { description: `Value: ${value.toFixed(1)}` });
-        playAlertSoundRef.current(isVol, priority);
-        logAlertRef.current({ symbol, exchange: exchange ?? getExchange(), timeframe, value, price: payload.price, type });
-        triggerNativeRef.current(`${getSymbolAlias(symbol)} Alert`, `${type} detected on ${timeframe}`);
-      }
-    };
-
-    eng.addEventListener('ticks', handleBatchTicks);
-    eng.addEventListener('alert', handleWorkerAlert);
-    return () => {
-      eng.removeEventListener('ticks', handleBatchTicks);
-      eng.removeEventListener('alert', handleWorkerAlert);
-    };
-  }, [getExchange]);
-
-  return {
-    alerts,
-    clearAlertHistory: async () => { setAlerts([]); await fetch('/api/alerts', { method: 'DELETE' }); },
-    resumeAudioContext,
-    getGlobalWinRate,
-    audioState,
-    isAudioSuspended: audioState === 'suspended' || audioState === 'uninitialized'
-  };
-}

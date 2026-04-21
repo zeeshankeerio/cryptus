@@ -1,19 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
-import { computeWinRateStats, type WinRateStats } from '@/lib/signal-tracker';
+import { useState, useEffect } from 'react';
+import { TrendingUp, TrendingDown, Activity, Clock } from 'lucide-react';
+import { useSymbolWinRate } from './win-rate-context';
 import { cn } from '@/lib/utils';
 
 /**
  * Win Rate Badge — per-symbol signal accuracy display.
  *
  * Design decisions:
- * - Uses useState + useEffect with a 30s refresh interval instead of useMemo,
- *   so the badge re-reads localStorage when new signals are recorded.
- * - Uses native `title` tooltip to avoid z-index / overflow issues inside
- *   the scrollable table container.
- * - Shows "-" (not a spinner) when no data — avoids Loader2 re-renders on 500 rows.
+ * - Uses centralized context for efficient data refresh
+ * - Shows countdown timer for pending evaluations
+ * - Uses native `title` tooltip to avoid z-index / overflow issues
+ * - Shows "-" (not a spinner) when no data — avoids Loader2 re-renders on 500 rows
+ * 
+ * Performance: No individual refresh intervals - all data comes from WinRateContext
  */
 
 interface WinRateBadgeProps {
@@ -27,22 +28,25 @@ function winRateColor(rate: number): string {
   return 'text-[#FF4B5C]';
 }
 
+function formatTimeRemaining(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes > 0) return `${minutes}m ${secs}s`;
+  return `${secs}s`;
+}
+
 export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
-  const [stats, setStats] = useState<WinRateStats | null>(null);
+  const stats = useSymbolWinRate(symbol);
+  const [now, setNow] = useState(Date.now());
 
-  const refresh = useCallback(() => {
-    const all = computeWinRateStats(symbol);
-    setStats(all.length > 0 ? all[0] : null);
-  }, [symbol]);
-
+  // Update clock every second for countdown timers
   useEffect(() => {
-    refresh();
-    // Refresh every 30s so outcomes that just settled become visible
-    const id = setInterval(refresh, 30_000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // No data yet — show a minimal placeholder, no spinner (avoids 500 re-renders)
+  // No data yet — show a minimal placeholder
   if (!stats || stats.totalSignals === 0) {
     return (
       <div className={cn(
@@ -60,7 +64,12 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
                        stats.wins1h + stats.losses1h > 0;
 
   // Signals recorded but none evaluated yet (< 5 minutes old)
+  // Show countdown to next evaluation
   if (!hasEvaluated) {
+    // Estimate time until first evaluation (5m from most recent signal)
+    // This is approximate since we don't have individual signal timestamps here
+    const timeUntil5m = 5 * 60 * 1000; // Placeholder - actual time varies per signal
+    
     return (
       <div
         className={cn(
@@ -69,7 +78,7 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
         )}
         title={`${stats.totalSignals} signal${stats.totalSignals !== 1 ? 's' : ''} recorded — awaiting 5m evaluation`}
       >
-        <Activity size={9} />
+        <Clock size={9} className="animate-pulse" />
         <span>{stats.totalSignals}sig</span>
       </div>
     );

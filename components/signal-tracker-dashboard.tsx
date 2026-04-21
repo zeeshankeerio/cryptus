@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { WinRateStats } from '@/lib/signal-tracker';
-import { computeWinRateStats, getGlobalWinRate, clearSignalTracker } from '@/lib/signal-tracker';
+import { getGlobalWinRate, clearSignalTracker } from '@/lib/signal-tracker';
+import { useWinRateContext } from './win-rate-context';
 import { toast } from 'sonner';
 
 /**
@@ -36,31 +37,13 @@ interface SignalTrackerDashboardProps {
 export const SignalTrackerDashboard = memo(function SignalTrackerDashboard({
   className
 }: SignalTrackerDashboardProps) {
-  const [stats, setStats] = useState<WinRateStats[]>([]);
+  const { stats: statsMap, refresh, isRefreshing } = useWinRateContext();
+  const stats = useMemo(() => Array.from(statsMap.values()), [statsMap]);
+  
   const [sortColumn, setSortColumn] = useState<SortColumn>('totalSignals');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [minSignals, setMinSignals] = useState(0);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Load and refresh data
-  const loadData = useCallback(() => {
-    setIsRefreshing(true);
-    const data = computeWinRateStats();
-    setStats(data);
-    setTimeout(() => setIsRefreshing(false), 300);
-  }, []);
-
-  // Initial load
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  // Auto-refresh every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(loadData, 30000);
-    return () => clearInterval(interval);
-  }, [loadData]);
 
   // Filter and sort data
   const filteredAndSortedStats = useMemo(() => {
@@ -125,10 +108,10 @@ export const SignalTrackerDashboard = memo(function SignalTrackerDashboard({
   // Handle clear data
   const handleClearData = useCallback(() => {
     clearSignalTracker();
-    setStats([]);
+    refresh(); // Refresh context after clearing
     setShowClearConfirm(false);
     toast.success('Signal tracking data cleared');
-  }, []);
+  }, [refresh]);
 
   // Global stats
   const globalStats = useMemo(() => getGlobalWinRate(), [stats]);
@@ -149,7 +132,7 @@ export const SignalTrackerDashboard = memo(function SignalTrackerDashboard({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadData}
+            onClick={refresh}
             disabled={isRefreshing}
             className="p-2 rounded-lg bg-white/5 border border-white/10 text-slate-400 hover:text-[#39FF14] hover:border-[#39FF14]/30 transition-all disabled:opacity-50"
             title="Refresh data"

@@ -1,29 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, Activity, ShieldCheck } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { getGlobalWinRate } from '@/lib/signal-tracker';
+import { useWinRateContext } from './win-rate-context';
 import { cn } from '@/lib/utils';
 
 /**
  * Global Win Rate Badge — system-wide signal accuracy display.
  *
  * Design decisions:
+ * - Uses centralized context for efficient data refresh
  * - Uses native `title` tooltip to avoid z-index / overflow issues.
- * - Updates every 30s to pick up newly evaluated outcomes.
  * - Shows "Calibrating" when < 10 signals evaluated (not just recorded).
  * - No hover:scale-105 to avoid layout shift / overlap.
+ * 
+ * Performance: No individual refresh interval - data comes from WinRateContext
  */
 
 export function GlobalWinRateBadge() {
-  const [stats, setStats] = useState(() => getGlobalWinRate());
-
-  useEffect(() => {
-    const update = () => setStats(getGlobalWinRate());
-    update();
-    const id = setInterval(update, 30_000);
-    return () => clearInterval(id);
-  }, []);
+  const { lastUpdate } = useWinRateContext();
+  const stats = getGlobalWinRate();
 
   // Calibrating state: need at least 10 evaluated signals (not just recorded)
   const totalEvaluated = stats.evaluated5m + stats.evaluated15m + stats.evaluated1h;
