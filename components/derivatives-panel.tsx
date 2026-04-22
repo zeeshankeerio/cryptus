@@ -388,12 +388,12 @@ export const DerivativesPanel = memo(function DerivativesPanel({
             </span>
           </div>
           {isConnected && (
-            <span className="hidden lg:flex text-[8px] font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-full items-center gap-1">
-              <span>{fundingRates.size} feeds</span>
+            <span className="flex text-[7px] xs:text-[8px] font-mono text-slate-500 bg-slate-800/60 px-1.5 xs:px-2 py-0.5 rounded-full items-center gap-1">
+              <span>{fundingRates.size}<span className="hidden xs:inline"> feeds</span></span>
               <span className="opacity-30">•</span>
-              <span>{liquidations.length} liqs</span>
+              <span>{liquidations.length}<span className="hidden xs:inline"> liqs</span></span>
               <span className="opacity-30">•</span>
-              <span>{whaleAlerts.length} whales</span>
+              <span>{whaleAlerts.length}<span className="hidden xs:inline"> whales</span></span>
             </span>
           )}
         </div>

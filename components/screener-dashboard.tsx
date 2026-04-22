@@ -18,6 +18,7 @@ import { UserProfileDropdown } from './user-profile-dropdown';
 import { TrialIndicator } from './trial-indicator';
 import { GlobalWinRateBadge } from './global-win-rate-badge';
 import { WinRateBadge } from './win-rate-badge';
+import { useWinRateContext } from './win-rate-context';
 import { SignalNarrationModal } from './signal-narration-modal';
 import { QuietHoursSection } from './quiet-hours-section';
 import { BulkActionsToolbar } from './bulk-actions-toolbar';
@@ -374,7 +375,7 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
 
 function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry }) {
   const [showNarrationModal, setShowNarrationModal] = useState(false);
-  
+
   const config: Record<string, { bg: string; text: string; border: string; icon: string }> = {
     'strong-buy': {
       bg: 'bg-[#39FF14]/25',
@@ -460,7 +461,7 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
           </button>
         )}
       </span>
-      
+
       {/* Signal Narration Modal */}
       {entry && (
         <SignalNarrationModal
@@ -490,20 +491,20 @@ function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
 }
 
 // ─── Live Status Indicator (PWA Performance Monitor) ──────────────
-const LiveStatusIndicator = memo(function LiveStatusIndicator({ 
+const LiveStatusIndicator = memo(function LiveStatusIndicator({
   lastUpdate,
-  isConnected 
-}: { 
+  isConnected
+}: {
   lastUpdate: number;
   isConnected: boolean;
 }) {
   const [now, setNow] = useState(Date.now());
-  
+
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  
+
   if (!isConnected) {
     return (
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-800/30 border border-slate-700/40">
@@ -512,17 +513,17 @@ const LiveStatusIndicator = memo(function LiveStatusIndicator({
       </div>
     );
   }
-  
+
   const ageMs = now - lastUpdate;
   const ageSec = Math.floor(ageMs / 1000);
-  
+
   let color = 'text-[#39FF14]'; // Green
   let bgColor = 'bg-[#39FF14]/10';
   let borderColor = 'border-[#39FF14]/30';
   let dotColor = 'bg-[#39FF14]';
   let status = 'LIVE';
   let shouldPulse = true;
-  
+
   if (ageMs > 3000) {
     color = 'text-red-500';
     bgColor = 'bg-red-500/10';
@@ -538,9 +539,9 @@ const LiveStatusIndicator = memo(function LiveStatusIndicator({
     status = 'SLOW';
     shouldPulse = true;
   }
-  
+
   return (
-    <div 
+    <div
       className={cn(
         "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all duration-300",
         bgColor,
@@ -859,7 +860,7 @@ const ScreenerRow = memo(function ScreenerRow({
     }
   }, [display.strategySignal, isVisible]);
 
-  const stickyOffsetSym = bulkMode 
+  const stickyOffsetSym = bulkMode
     ? (visibleCols.has('rank') ? 132 : 84)  // Add 44px for checkbox
     : (visibleCols.has('rank') ? 88 : 40);
   const stickyOffsetPrice = stickyOffsetSym + 160;
@@ -898,7 +899,7 @@ const ScreenerRow = memo(function ScreenerRow({
       {visibleCols.has('rank') && (
         <IndicatorCell value={idx + 1} formatted={(idx + 1).toString()} colorClass="text-slate-600" widthClass={COL_WIDTHS.rank} align="left" />
       )}
-      
+
       <td className={cn("px-2 py-4 text-center", COL_WIDTHS.star)}>
         <button
           onClick={() => toggleWatchlist(entry.symbol)}
@@ -911,34 +912,34 @@ const ScreenerRow = memo(function ScreenerRow({
         </button>
       </td>
 
-      <SymbolCell 
-        symbol={entry.symbol} 
-        market={entry.market} 
-        marketState={entry.marketState} 
-        isLive={!!display.isLiveRsi} 
+      <SymbolCell
+        symbol={entry.symbol}
+        market={entry.market}
+        marketState={entry.marketState}
+        isLive={!!display.isLiveRsi}
         stickyOffset={stickyOffsetSym}
         onOpenSettings={onOpenSettings}
       />
 
-      <PriceCell 
-        price={display.price} 
-        lastChange={display.lastPriceChange} 
+      <PriceCell
+        price={display.price}
+        lastChange={display.lastPriceChange}
         stickyOffset={stickyOffsetPrice}
         market={entry.market}
       />
 
-      <IndicatorCell 
-        value={display.change24h} 
-        formatted={formatPct(display.change24h)} 
-        colorClass={display.change24h > 0 ? "text-[#39FF14]" : display.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"} 
-        widthClass={COL_WIDTHS.change} 
+      <IndicatorCell
+        value={display.change24h}
+        formatted={formatPct(display.change24h)}
+        colorClass={display.change24h > 0 ? "text-[#39FF14]" : display.change24h < 0 ? "text-[#FF4B5C]" : "text-slate-600"}
+        widthClass={COL_WIDTHS.change}
       />
 
-      <IndicatorCell 
-        value={display.volume24h} 
-        formatted={formatVolume(display.volume24h)} 
-        colorClass="text-slate-500" 
-        widthClass={COL_WIDTHS.volume} 
+      <IndicatorCell
+        value={display.volume24h}
+        formatted={formatVolume(display.volume24h)}
+        colorClass="text-slate-500"
+        widthClass={COL_WIDTHS.volume}
       />
 
       {visibleCols.has('rsi1m') && (
@@ -991,27 +992,27 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('ema9') && (
-        <IndicatorCell 
-          value={display.ema9} 
-          formatted={(globalUseEma && display.ema9 != null) ? `$${formatPrice(display.ema9, entry.market)}` : '-'} 
-          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.ema} 
+        <IndicatorCell
+          value={display.ema9}
+          formatted={(globalUseEma && display.ema9 != null) ? `$${formatPrice(display.ema9, entry.market)}` : '-'}
+          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.ema}
           isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('ema21') && (
-        <IndicatorCell 
-          value={display.ema21} 
-          formatted={(globalUseEma && display.ema21 != null) ? `$${formatPrice(display.ema21, entry.market)}` : '-'} 
-          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.ema} 
+        <IndicatorCell
+          value={display.ema21}
+          formatted={(globalUseEma && display.ema21 != null) ? `$${formatPrice(display.ema21, entry.market)}` : '-'}
+          colorClass={globalUseEma ? "text-slate-300" : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.ema}
           isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('emaCross') && (
-        <IndicatorCell 
-          value={null} 
+        <IndicatorCell
+          value={null}
           formatted={display.emaCross === 'bullish' ? 'BULL' : display.emaCross === 'bearish' ? 'BEAR' : 'NEUTRAL'}
           colorClass={display.emaCross === 'bullish' ? "text-[#39FF14]" : display.emaCross === 'bearish' ? "text-[#FF4B5C]" : "text-slate-500"}
           widthClass={COL_WIDTHS.trend}
@@ -1020,8 +1021,8 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('macdHistogram') && (
-        <IndicatorCell 
-          value={display.macdHistogram} 
+        <IndicatorCell
+          value={display.macdHistogram}
           formatted={display.macdHistogram != null ? formatNum(display.macdHistogram, 4) : '-'}
           colorClass={display.macdHistogram != null ? (display.macdHistogram! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
           widthClass={COL_WIDTHS.macd}
@@ -1031,29 +1032,29 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('bbUpper') && (
-        <IndicatorCell 
-          value={display.bbUpper} 
-          formatted={(globalUseBb && display.bbUpper != null) ? `$${formatPrice(display.bbUpper, entry.market)}` : '-'} 
-          colorClass={globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.bb} 
+        <IndicatorCell
+          value={display.bbUpper}
+          formatted={(globalUseBb && display.bbUpper != null) ? `$${formatPrice(display.bbUpper, entry.market)}` : '-'}
+          colorClass={globalUseBb ? "text-[#FF4B5C]/70" : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.bb}
           isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('bbLower') && (
-        <IndicatorCell 
-          value={display.bbLower} 
-          formatted={(globalUseBb && display.bbLower != null) ? `$${formatPrice(display.bbLower, entry.market)}` : '-'} 
-          colorClass={globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.bb} 
+        <IndicatorCell
+          value={display.bbLower}
+          formatted={(globalUseBb && display.bbLower != null) ? `$${formatPrice(display.bbLower, entry.market)}` : '-'}
+          colorClass={globalUseBb ? "text-[#39FF14]/70" : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.bb}
           isSyncing={isSyncing}
         />
       )}
       {visibleCols.has('bbPosition') && (
-        <IndicatorCell 
-          value={display.bbPosition} 
-          formatted={(globalUseBb && display.bbPosition != null) ? formatNum(display.bbPosition) : '-'} 
-          colorClass={globalUseBb ? (display.bbPosition! < 0.2 ? "text-[#39FF14]" : display.bbPosition! > 0.8 ? "text-[#FF4B5C]" : "text-slate-400") : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.bb} 
+        <IndicatorCell
+          value={display.bbPosition}
+          formatted={(globalUseBb && display.bbPosition != null) ? formatNum(display.bbPosition) : '-'}
+          colorClass={globalUseBb ? (display.bbPosition! < 0.2 ? "text-[#39FF14]" : display.bbPosition! > 0.8 ? "text-[#FF4B5C]" : "text-slate-400") : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.bb}
           isSyncing={isSyncing}
         />
       )}
@@ -1107,11 +1108,11 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('vwapDiff') && (
-        <IndicatorCell 
-          value={display.vwapDiff} 
-          formatted={globalUseVwap && display.vwapDiff !== null ? formatPct(display.vwapDiff) : '-'} 
-          colorClass={globalUseVwap ? (display.vwapDiff! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.vwap} 
+        <IndicatorCell
+          value={display.vwapDiff}
+          formatted={globalUseVwap && display.vwapDiff !== null ? formatPct(display.vwapDiff) : '-'}
+          colorClass={globalUseVwap ? (display.vwapDiff! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.vwap}
           intensity={true}
           isSyncing={isSyncing}
         />
@@ -1123,11 +1124,11 @@ const ScreenerRow = memo(function ScreenerRow({
           const ratio = hasData ? display.curCandleSize! / display.avgBarSize1m! : null;
           const isTriggered = ratio !== null && ratio >= globalLongCandleThreshold;
           return (
-            <IndicatorCell 
-              value={null} 
-              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'} 
-              colorClass={isTriggered ? "text-amber-400" : ratio !== null ? "text-slate-600" : "text-slate-700/40"} 
-              widthClass={COL_WIDTHS.signal} 
+            <IndicatorCell
+              value={null}
+              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'}
+              colorClass={isTriggered ? "text-amber-400" : ratio !== null ? "text-slate-600" : "text-slate-700/40"}
+              widthClass={COL_WIDTHS.signal}
               intensity={isTriggered}
             />
           );
@@ -1140,11 +1141,11 @@ const ScreenerRow = memo(function ScreenerRow({
           const ratio = hasData ? display.curCandleVol! / display.avgVolume1m! : null;
           const isTriggered = ratio !== null && ratio >= globalVolumeSpikeThreshold;
           return (
-            <IndicatorCell 
-              value={null} 
-              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'} 
-              colorClass={isTriggered ? "text-[#39FF14]" : ratio !== null ? "text-slate-600" : "text-slate-700/40"} 
-              widthClass={COL_WIDTHS.signal} 
+            <IndicatorCell
+              value={null}
+              formatted={ratio !== null ? `${ratio.toFixed(1)}x` : '-'}
+              colorClass={isTriggered ? "text-[#39FF14]" : ratio !== null ? "text-slate-600" : "text-slate-700/40"}
+              widthClass={COL_WIDTHS.signal}
               intensity={isTriggered}
             />
           );
@@ -1152,32 +1153,32 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('momentum') && (
-        <IndicatorCell 
-          value={display.momentum} 
-          formatted={globalUseMomentum && display.momentum != null ? formatPct(display.momentum) : '-'} 
-          colorClass={globalUseMomentum ? (display.momentum! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"} 
-          widthClass={COL_WIDTHS.momentum} 
+        <IndicatorCell
+          value={display.momentum}
+          formatted={globalUseMomentum && display.momentum != null ? formatPct(display.momentum) : '-'}
+          colorClass={globalUseMomentum ? (display.momentum! > 0 ? "text-[#39FF14]" : "text-[#FF4B5C]") : "text-slate-700/40"}
+          widthClass={COL_WIDTHS.momentum}
           intensity={true}
           isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('atr') && (
-        <IndicatorCell 
-          value={display.atr} 
-          formatted={display.atr != null ? formatPrice(display.atr, entry.market) : '-'} 
-          colorClass="text-slate-500" 
-          widthClass={COL_WIDTHS.atr} 
+        <IndicatorCell
+          value={display.atr}
+          formatted={display.atr != null ? formatPrice(display.atr, entry.market) : '-'}
+          colorClass="text-slate-500"
+          widthClass={COL_WIDTHS.atr}
           isSyncing={isSyncing}
         />
       )}
 
       {visibleCols.has('adx') && (
-        <IndicatorCell 
-          value={display.adx} 
-          formatted={display.adx != null ? display.adx.toFixed(1) : '-'} 
-          colorClass={display.adx && display.adx >= 25 ? "text-[#39FF14]" : "text-slate-600"} 
-          widthClass={COL_WIDTHS.adx} 
+        <IndicatorCell
+          value={display.adx}
+          formatted={display.adx != null ? display.adx.toFixed(1) : '-'}
+          colorClass={display.adx && display.adx >= 25 ? "text-[#39FF14]" : "text-slate-600"}
+          widthClass={COL_WIDTHS.adx}
           intensity={true}
           isSyncing={isSyncing}
         />
@@ -1185,7 +1186,7 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('fundingRate') && (
         <td className={cn("px-3 py-3 text-center overflow-hidden", COL_WIDTHS.funding)}>
-          <FundingRateCellWithTooltip 
+          <FundingRateCellWithTooltip
             data={fundingRate ? {
               symbol: entry.symbol,
               rate: fundingRate.rate,
@@ -1203,7 +1204,7 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('orderFlow') && (
         <td className={cn("px-3 py-3 text-center overflow-hidden", COL_WIDTHS.flow)}>
-          <OrderFlowIndicator 
+          <OrderFlowIndicator
             data={orderFlowData ? {
               symbol: entry.symbol,
               pressure: orderFlowData.pressure as any,
@@ -1220,8 +1221,8 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('smartMoney') && (
-        <IndicatorCell 
-          value={smartMoneyScore?.score || null} 
+        <IndicatorCell
+          value={smartMoneyScore?.score || null}
           formatted={smartMoneyScore ? (smartMoneyScore.score > 0 ? `+${smartMoneyScore.score}` : `${smartMoneyScore.score}`) : '-'}
           colorClass={smartMoneyScore ? (smartMoneyScore.score >= 30 ? "text-[#39FF14]" : smartMoneyScore.score <= -30 ? "text-[#FF4B5C]" : "text-slate-500") : "text-slate-800"}
           widthClass={COL_WIDTHS.smart}
@@ -1421,7 +1422,7 @@ function SkeletonRows({ visibleCols }: { visibleCols: Set<string> }) {
             else if (id === 'orderFlow') width = COL_WIDTHS.flow;
             else if (id === 'smartMoney') width = COL_WIDTHS.smart;
             else if (id === 'strategy') width = COL_WIDTHS.signal;
-            
+
             // Skip core cols already handled above
             if (['rank', 'symbol', 'price', 'change24h', 'volume24h'].includes(id)) return null;
 
@@ -2077,7 +2078,7 @@ const ScreenerCard = memo(function ScreenerCard({
                 {formatVolume(display.volume24h)}
               </span>
             </div>
-            
+
             {fundingRate && (
               <div className="flex flex-col items-end">
                 <span className="text-[5px] font-black text-slate-600 uppercase leading-none mb-0.5">FUND</span>
@@ -2226,7 +2227,7 @@ export default function ScreenerDashboard() {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   });
   const [rsiPeriod, setRsiPeriod] = useState(14);
-  
+
   // Compute useAnimations with useMemo to avoid TDZ issues in production build
   const useAnimations = useMemo(() => !prefersReducedMotion && pairCount <= 300, [prefersReducedMotion, pairCount]);
   const [countdown, setCountdown] = useState(30);
@@ -2246,14 +2247,14 @@ export default function ScreenerDashboard() {
     toCount: null,
   });
   const [globalThresholdsEnabled, setGlobalThresholdsEnabled] = useState(false);
-  const [globalOverbought, setGlobalOverbought] = useState(90);
-  const [globalOversold, setGlobalOversold] = useState(15);
+  const [globalOverbought, setGlobalOverbought] = useState(80);
+  const [globalOversold, setGlobalOversold] = useState(20);
   const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
   const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(3.0);
   const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(5.0);
   const [globalVolatilityEnabled, setGlobalVolatilityEnabled] = useState(true);
   // ── Signal Tag Display Controls ──
-  const [globalShowSignalTags, setGlobalShowSignalTags] = useState(false);
+  const [globalShowSignalTags, setGlobalShowSignalTags] = useState(true);
   const [globalSignalThresholdMode, setGlobalSignalThresholdMode] = useState<'default' | 'custom'>('custom');
 
   // ── Indicator Feature Flags ──
@@ -2270,10 +2271,10 @@ export default function ScreenerDashboard() {
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
   const [selectedCoinForConfig, setSelectedCoinForConfig] = useState<string | null>(null);
-  
+
   // ── PWA Performance Monitoring ──
   const [lastGlobalUpdate, setLastGlobalUpdate] = useState(Date.now());
-  
+
   const fetchingRef = useRef(false);
   const activeFetchControllerRef = useRef<AbortController | null>(null);
   const fetchTokenRef = useRef(0);
@@ -2592,7 +2593,7 @@ export default function ScreenerDashboard() {
   const [visibleCols, setVisibleCols] = useState<Set<ColumnId>>(
     new Set(OPTIONAL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.id))
   );
-  
+
   const [showCorrelation, setShowCorrelation] = useState(false);
   const [showPortfolio, setShowPortfolio] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -2645,6 +2646,15 @@ export default function ScreenerDashboard() {
     postToWorker
   } = useLivePrices(symbolSet, liveThrottleMs);
 
+  // ── Institutional 2026 Optimization: Win Rate Symbol Registration ──
+  // Registers active symbols with the global provider to allow for automatic pruning of stale data.
+  const winRateContext = useWinRateContext();
+  useEffect(() => {
+    if (winRateContext && symbolSet.size > 0) {
+      winRateContext.setActiveSymbols(symbolSet);
+    }
+  }, [symbolSet, winRateContext]);
+
   // ── PWA Performance: Track last price update for live status indicator ──
   // Use a ref to avoid triggering re-renders on every tick.
   // Update state at 2s intervals max — the LiveStatusIndicator only needs ~1s precision.
@@ -2669,8 +2679,8 @@ export default function ScreenerDashboard() {
     update(); // Load immediately on mount
     const id = setInterval(update, 30_000);
     return () => clearInterval(id);
-  // getGlobalWinRate is a stable imported function — safe to omit from deps
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // getGlobalWinRate is a stable imported function — safe to omit from deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const syncStates = useCallback((p: any) => {
@@ -2735,22 +2745,22 @@ export default function ScreenerDashboard() {
         const macdRes = calculateMacd(closes, 12, 26, 9);
         const bbRes = calculateBollinger(closes, 20, 2);
         const stochRes = calculateStochRsi(closes, 14, 14, 3, 3);
-        
+
         // ── Institutional 2026 Optimization: Real-Time State Seeds ──
         const rsiState1m = calculateRsiWithState(closes.length >= 20 ? closes.slice(-20) : closes, 14);
         const rsiState5m = calculateRsiWithState(closes.length >= 20 ? closes.slice(-20) : closes, 14); // Fallback to 1m data for seed
         const rsiState15m = calculateRsiWithState(closes, 14);
         const rsiState1h = calculateRsiWithState(closes, 14);
         const rsiStateCustom = calculateRsiWithState(closes, rsiPeriod);
-        
+
         const ema9State = latestEmaWithState(closes, 9);
         const ema21State = latestEmaWithState(closes, 21);
         const macdState = calculateMacdWithState(closes, 12, 26, 9);
-        
+
         // Calculate Volatility Context immediately
         const recentCloses = closes.slice(-20);
-        const avgBarSize = recentCloses.length > 1 
-          ? recentCloses.reduce((acc, val, i) => i === 0 ? acc : acc + Math.abs(val - recentCloses[i-1]), 0) / (recentCloses.length - 1)
+        const avgBarSize = recentCloses.length > 1
+          ? recentCloses.reduce((acc, val, i) => i === 0 ? acc : acc + Math.abs(val - recentCloses[i - 1]), 0) / (recentCloses.length - 1)
           : 0.1;
 
         // Hardened Baseline Momentum & Confluence
@@ -3513,7 +3523,7 @@ export default function ScreenerDashboard() {
         });
         setShowBulkConfirmation(true);
         break;
-      
+
       case 'sound':
         setBulkActionConfig({
           type: 'sound',
@@ -3521,7 +3531,7 @@ export default function ScreenerDashboard() {
         });
         setShowBulkConfirmation(true);
         break;
-      
+
       case 'quietHours':
         setBulkActionConfig({
           type: 'quietHours',
@@ -3531,7 +3541,7 @@ export default function ScreenerDashboard() {
         });
         setShowBulkConfirmation(true);
         break;
-      
+
       case 'template':
         toast.info('Template selection coming soon');
         break;
@@ -3540,12 +3550,12 @@ export default function ScreenerDashboard() {
 
   const executeBulkAction = useCallback(async () => {
     if (!bulkActionConfig || selectedSymbols.size === 0) return;
-    
+
     setIsBulkProcessing(true);
-    
+
     try {
       const updates: Record<string, any> = {};
-      
+
       switch (bulkActionConfig.type) {
         case 'priority':
           updates.priority = bulkActionConfig.priority;
@@ -3559,7 +3569,7 @@ export default function ScreenerDashboard() {
           updates.quietHoursEnd = bulkActionConfig.quietHoursEnd;
           break;
       }
-      
+
       const response = await fetch('/api/config/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -3569,29 +3579,29 @@ export default function ScreenerDashboard() {
           updates
         })
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Bulk update failed');
       }
-      
+
       const result = await response.json();
-      
+
       toast.success(`Updated ${result.processed} symbols successfully`, {
         description: result.failed > 0 ? `${result.failed} symbols failed to update` : undefined
       });
-      
+
       // Refresh coin configs
       fetch(`/api/config?ts=${Date.now()}`, { cache: 'no-store' })
         .then(res => res.json())
         .then(json => setCoinConfigs(json))
         .catch(err => console.error('[screener] Failed to reload configs:', err));
-      
+
       setSelectedSymbols(new Set());
       setBulkMode(false);
       setShowBulkConfirmation(false);
       setBulkActionConfig(null);
-      
+
     } catch (error: any) {
       console.error('[bulk-action] Failed:', error);
       toast.error('Bulk action failed', {
@@ -3726,7 +3736,7 @@ export default function ScreenerDashboard() {
       if (json.meta && (json.meta as any).geoBlocked) {
         setGeoBlocked(true);
         setApiUnavailable(true);
-        
+
         // If we have cached data, keep showing it with a warning
         if (dataLenRef.current > 0) {
           toast.warning('API Geo-Blocked', {
@@ -3735,7 +3745,7 @@ export default function ScreenerDashboard() {
           });
           return; // Keep existing data
         }
-        
+
         throw new Error('All exchanges are geo-blocked in your region. Please use a VPN or try a different network.');
       }
 
@@ -3743,7 +3753,7 @@ export default function ScreenerDashboard() {
       if (json.data.length === 0 && json.meta) {
         if ((json.meta as any).apiUnavailable || (json.meta as any).error) {
           setApiUnavailable(true);
-          
+
           // If we have cached data, keep it
           if (dataLenRef.current > 0) {
             toast.warning('API Temporarily Unavailable', {
@@ -3752,7 +3762,7 @@ export default function ScreenerDashboard() {
             });
             return; // Keep existing data
           }
-          
+
           throw new Error((json.meta as any).error || 'Exchange APIs are temporarily unavailable');
         }
       }
@@ -3785,7 +3795,7 @@ export default function ScreenerDashboard() {
         // No cached data and no new data - show error
         throw new Error('No data available. Please check your network connection.');
       }
-      
+
       setLoading(false);
       setInitialLoad(false); // 🔥 NEW: Mark initial load complete
       const now = Date.now();
@@ -3868,10 +3878,10 @@ export default function ScreenerDashboard() {
         }
         return;
       }
-      
+
       // 🔥 NEW: Better error handling - keep cached data if available
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
-      
+
       if (dataLenRef.current === 0) {
         setError(errorMessage);
         setInitialLoad(false); // 🔥 NEW: Mark initial load complete even on error
@@ -4696,7 +4706,7 @@ export default function ScreenerDashboard() {
                     {alertsEnabled ? <Zap size={14} /> : <ZapOff size={14} />}
                   </button>
                   <button onClick={() => setShowGlobalSettings(true)} className="h-full px-3 rounded-2xl border border-white/10 bg-white/5 text-slate-500 hover:text-[#39FF14] hover:bg-[#39FF14]/5 transition-all" title="Institutional Interface Settings"><Settings size={14} /></button>
-                  
+
                   {/* Bulk Actions Button */}
                   <button
                     onClick={toggleBulkMode}
@@ -4710,10 +4720,10 @@ export default function ScreenerDashboard() {
                   >
                     {bulkMode ? <CheckSquare size={14} /> : <Square size={14} />}
                   </button>
-                  
+
                   {/* Global Win Rate Badge */}
                   <GlobalWinRateBadge />
-                  
+
                   <div className="relative h-full" ref={profileRef}>
                     <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="h-full w-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center hover:border-[#39FF14]/30 transition-all text-slate-500 hover:text-white group">
                       <UserIcon size={16} className="group-hover:scale-110 transition-transform" />
@@ -5319,20 +5329,20 @@ export default function ScreenerDashboard() {
                     <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-left tracking-widest whitespace-nowrap", COL_WIDTHS.rank)}>#</th>
                   )}
                   <th className={cn("px-2 py-3 text-[10px] font-bold text-slate-500 text-center uppercase tracking-widest", COL_WIDTHS.star)}>★</th>
-                  <SortHeader 
-                    label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="left" 
-                    widthClass={COL_WIDTHS.symbol} 
+                  <SortHeader
+                    label="Symbol" sortKey="symbol" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="left"
+                    widthClass={COL_WIDTHS.symbol}
                     stickyOffset={visibleCols.has('rank') ? 88 : 40}
                   />
-                  <SortHeader 
-                    label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" 
-                    widthClass={COL_WIDTHS.price} 
+                  <SortHeader
+                    label="Price" sortKey="price" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right"
+                    widthClass={COL_WIDTHS.price}
                     stickyOffset={visibleCols.has('rank') ? 88 + 160 : 40 + 160}
                   />
-                  
-                  <SortHeader 
-                    label="24h Chg" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" 
-                    widthClass={COL_WIDTHS.change} 
+
+                  <SortHeader
+                    label="24h Chg" sortKey="change24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right"
+                    widthClass={COL_WIDTHS.change}
                   />
                   <SortHeader label="Volume" sortKey="volume24h" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.volume} />
 
@@ -7435,27 +7445,27 @@ function GlobalSettingsModal({
                 setGlobalUseConfluence(true);
                 setGlobalUseDivergence(true);
                 setGlobalUseMomentum(true);
-                
+
                 // Reset RSI settings
                 setRsiPeriod(14);
                 setGlobalOverbought(70);
                 setGlobalOversold(30);
                 setGlobalThresholdsEnabled(false);
                 setGlobalThresholdTimeframes(['15m']);
-                
+
                 // Reset signal display
                 setGlobalShowSignalTags(true);
                 setGlobalSignalThresholdMode('default');
-                
+
                 // Reset volatility
                 setGlobalVolatilityEnabled(false);
                 setGlobalLongCandleThreshold(3);
                 setGlobalVolumeSpikeThreshold(3);
-                
+
                 // Reset performance
                 setRefreshInterval(3000);
                 setPairCount(100);
-                
+
                 toast.success('Settings reset to default values');
               }
             }}
@@ -7464,7 +7474,7 @@ function GlobalSettingsModal({
             <RefreshCcw size={14} />
             Reset to Default
           </button>
-          
+
           <button
             onClick={onClose}
             className="w-full bg-[#39FF14] text-black font-black uppercase tracking-[0.2em] py-5 rounded-3xl shadow-xl shadow-[#39FF14]/10 active:scale-95 transition-all text-xs"

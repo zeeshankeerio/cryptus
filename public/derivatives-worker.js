@@ -381,9 +381,9 @@ function connectWhaleStream() {
 
   const STREAM_KEY = 'whale';
   try {
-    // Combined stream: all top symbols in one WebSocket
+    // Combined stream: all top symbols in one WebSocket (Port 443 standard)
     const streams = WHALE_WATCH_SYMBOLS.map(s => `${s}@aggTrade`).join('/');
-    const url = `wss://stream.binance.com:9443/stream?streams=${streams}`;
+    const url = `wss://stream.binance.com/stream?streams=${streams}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -639,6 +639,45 @@ function startFlushing() {
   }, FLUSH_INTERVAL_MS);
 }
 
+/** Sends a full snapshot of current buffers to the main thread for instant UI hydration */
+function sendSnapshot() {
+  const now = Date.now();
+  
+  // Prepare order flow snapshot
+  const flowPayload = [];
+  orderFlowBuffer.forEach((flow, symbol) => {
+    const totalVol = flow.buyVol + flow.sellVol;
+    const ratio = totalVol > 0 ? flow.buyVol / totalVol : 0.5;
+    let pressure = 'neutral';
+    if (ratio > 0.65) pressure = 'strong-buy';
+    else if (ratio > 0.55) pressure = 'buy';
+    else if (ratio < 0.35) pressure = 'strong-sell';
+    else if (ratio < 0.45) pressure = 'sell';
+
+    flowPayload.push([symbol, {
+      symbol,
+      buyVolume1m: Math.round(flow.buyVol),
+      sellVolume1m: Math.round(flow.sellVol),
+      ratio: Math.round(ratio * 1000) / 1000,
+      pressure,
+      tradeCount1m: flow.tradeCount,
+      updatedAt: now
+    }]);
+  });
+
+  broadcast({
+    type: 'SNAPSHOT',
+    payload: {
+      fundingRates: Array.from(fundingBuffer.entries()),
+      liquidations: liquidationBuffer,
+      whaleAlerts: whaleBuffer,
+      orderFlow: flowPayload,
+      openInterest: Array.from(oiBuffer.entries()),
+      timestamp: now
+    }
+  });
+}
+
 // ── Lifecycle ────────────────────────────────────────────────────
 
 function start(symbols) {
@@ -663,6 +702,9 @@ function start(symbols) {
   startZombieWatchdog();
 
   broadcast({ type: 'CONNECTED' });
+  
+  // Send initial snapshot immediately if we have data
+  sendSnapshot();
 }
 
 /** Zombie connection watchdog - prevents silent death of WebSocket streams */
@@ -777,6 +819,12 @@ self.onmessage = function(e) {
         console.log('[deriv-worker] RESUME: Health check triggered priority resync');
         reconnectAll();
       }
+      // Always send current state on resume to ensure UI is in sync
+      sendSnapshot();
+      break;
+
+    case 'REQUEST_SNAPSHOT':
+      sendSnapshot();
       break;
 
     default:

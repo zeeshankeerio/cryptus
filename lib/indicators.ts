@@ -498,18 +498,18 @@ export function calculateConfluence(params: {
 
   checkRsi(params.rsi1m, 0.5);
   checkRsi(params.rsi5m, 1);
-  checkRsi(params.rsi15m, 1.5);
-  checkRsi(params.rsi1h, 2);
+  checkRsi(params.rsi15m, 2.0); // Institutional weight for 15m
+  checkRsi(params.rsi1h, 3.0);   // Institutional weight for 1h
 
   if (params.macdHistogram !== null) {
-    total += 1;
-    if (params.macdHistogram > 0) bullish += 1;
-    else bearish += 1;
+    total += 1.5;
+    if (params.macdHistogram > 0) bullish += 1.5;
+    else bearish += 1.5;
   }
   if (params.emaCross !== 'none') {
-    total += 1;
-    if (params.emaCross === 'bullish') bullish += 1;
-    else bearish += 1;
+    total += 1.5;
+    if (params.emaCross === 'bullish') bullish += 1.5;
+    else bearish += 1.5;
   }
   if (params.stochK !== null) {
     total += 1;
@@ -528,7 +528,18 @@ export function calculateConfluence(params: {
 
   if (total === 0) return { score: 0, label: 'No Data' };
 
-  const raw = ((bullish - bearish) / total) * 100;
+  let raw = ((bullish - bearish) / total) * 100;
+
+  // ── TFA Reward: Multi-Timeframe Institutional Alignment ──
+  // If 15m and 1h agree on direction, boost the confluence score by 10%
+  const is15mBullish = params.rsi15m !== null && params.rsi15m < 50;
+  const is1hBullish = params.rsi1h !== null && params.rsi1h < 50;
+  const is15mBearish = params.rsi15m !== null && params.rsi15m > 50;
+  const is1hBearish = params.rsi1h !== null && params.rsi1h > 50;
+
+  if (is15mBullish && is1hBullish && raw > 0) raw *= 1.15;
+  if (is15mBearish && is1hBearish && raw < 0) raw *= 1.15;
+
   const score = Math.round(Math.max(-100, Math.min(100, raw)));
 
   let label: string;
@@ -589,8 +600,6 @@ export function computeStrategyScore(params: {
   let score = 0;
   
   // ── Asset-Aware Volatility Calibration ──
-  // A 0.5% move in Forex is as significant as a 2.5% move in Crypto.
-  // We scale thresholds for low-volatility assets to ensure signals are actionable.
   let volatilityMultiplier = 1.0;
   if (params.market === 'Forex') volatilityMultiplier = 5.0;
   else if (params.market === 'Index' || params.market === 'Stocks') volatilityMultiplier = 2.5;
@@ -617,9 +626,9 @@ export function computeStrategyScore(params: {
   rsiScore(params.rsi1m, 0.5, '1m');
   rsiScore(params.rsi5m, 1, '5m');
   rsiScore(params.rsi15m, 1.5, '15m');
-  rsiScore(params.rsi1h, 2, '1h');
+  rsiScore(params.rsi1h, 2.5, '1h'); // Increased from 2.0
 
-  // MACD histogram (normalized as % of price for fair cross-asset comparison)
+  // MACD histogram
   if (params.macdHistogram !== null && params.price > 0 && enabled.macd !== false) {
     factors += 1.5;
     const hPct = (params.macdHistogram / params.price) * 100;
@@ -649,7 +658,6 @@ export function computeStrategyScore(params: {
     else if (params.stochK < 30) score += 40 * 1;
     else if (params.stochK > 80 && params.stochD > 80) { score -= 80 * 1; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); }
     else if (params.stochK > 70) score -= 40 * 1;
-    // K crossing above D = bullish
     if (params.stochK > params.stochD && params.stochK < 50) score += 20;
     else if (params.stochK < params.stochD && params.stochK > 50) score -= 20;
   }
@@ -663,71 +671,91 @@ export function computeStrategyScore(params: {
 
   // VWAP
   if (params.vwapDiff !== null && enabled.vwap !== false) {
-    factors += 0.5;
+    factors += 1.0; // Increased from 0.5
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
-    if (scaledVwapDiff < -2) { score += 40 * 0.5; if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); }
-    else if (scaledVwapDiff > 2) { score -= 40 * 0.5; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
+    if (scaledVwapDiff < -2) { score += 40 * 1.0; if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); }
+    else if (scaledVwapDiff > 2) { score -= 40 * 1.0; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
   }
 
   // Volume spike amplifies the signal
   if (params.volumeSpike && factors > 0) {
-    score *= 1.15;
-    reasons.push('Volume spike');
+    score *= 1.25; // Increased from 1.15
+    reasons.push('Institutional volume spike');
   }
 
   // ── Intelligence signals ──
 
-  // Multi-TF confluence (strong when indicators and timeframes agree)
+  // Multi-TF confluence
   if (params.confluence !== undefined && Math.abs(params.confluence) >= 20 && enabled.confluence !== false) {
-    factors += 2;
-    score += params.confluence * 2;
-    if (params.confluence >= 50) reasons.push('Strong multi-TF bullish');
-    else if (params.confluence >= 20) reasons.push('Multi-TF bullish');
-    else if (params.confluence <= -50) reasons.push('Strong multi-TF bearish');
-    else if (params.confluence <= -20) reasons.push('Multi-TF bearish');
+    factors += 2.5; // Increased from 2.0
+    score += params.confluence * 2.5; 
+    if (params.confluence >= 50) reasons.push('Institutional multi-TF confluence (Strong Bullish)');
+    else if (params.confluence >= 20) reasons.push('Multi-TF bullish alignment');
+    else if (params.confluence <= -50) reasons.push('Institutional multi-TF confluence (Strong Bearish)');
+    else if (params.confluence <= -20) reasons.push('Multi-TF bearish alignment');
   }
 
-  // RSI crossover (active reversal)
+  // RSI crossover
   if (params.rsiCrossover && params.rsiCrossover !== 'none' && enabled.rsi !== false) {
-    factors += 1.0;
+    factors += 1.5; // Increased from 1.0
     if (params.rsiCrossover === 'bullish_reversal') {
-      score += 60 * 1.0;
-      reasons.push('Bullish RSI reversal');
+      score += 70 * 1.5;
+      reasons.push('Bullish RSI reversal trend');
     } else {
-      score -= 60 * 1.0;
-      reasons.push('Bearish RSI reversal');
+      score -= 70 * 1.5;
+      reasons.push('Bearish RSI reversal trend');
     }
   }
 
-  // RSI divergence (powerful reversal signal)
+  // RSI divergence (Senior Factor - Increased to 3.0 weight)
   if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
-    factors += 2.0; // Increased weight for divergence
+    factors += 3.0; 
     if (params.rsiDivergence === 'bullish') {
-      score += 80 * 2.0;
-      reasons.push('Bullish divergence');
+      score += 90 * 3.0; // Higher internal score for divergence
+      reasons.push('H1 High-Confidence Bullish Divergence');
     } else {
-      score -= 80 * 2.0;
-      reasons.push('Bearish divergence');
+      score -= 90 * 3.0;
+      reasons.push('H1 High-Confidence Bearish Divergence');
     }
   }
 
-  // Momentum (ROC)
+  // Momentum
   if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum * volatilityMultiplier) > 0.5 && enabled.momentum !== false) {
     factors += 0.5;
     const scaledMomentum = params.momentum * volatilityMultiplier;
     const mScore = Math.max(-60, Math.min(60, scaledMomentum * 15));
     score += mScore * 0.5;
-    if (scaledMomentum > 2) reasons.push('Strong upward momentum');
-    else if (scaledMomentum < -2) reasons.push('Strong downward momentum');
+    if (scaledMomentum > 3) reasons.push('Strong institutional momentum (Up)');
+    else if (scaledMomentum < -3) reasons.push('Strong institutional momentum (Down)');
   }
 
-  // Final validation guard: if we have fewer than 2.5 significant factors, 
-  // do not issue a Strong signal. This prevents "lucky" single-indicator signals
-  // while still allowing strong divergence signals (weight 2.0) to fire.
-  let normalized = factors > 0 ? score / factors : 0;
-  if (factors < 2.5 && Math.abs(normalized) > 50) {
-    normalized = normalized * 0.7; // Dampen low-confidence signals
+  // ── TFA TREND GUARD ─────────────────────────────────────────────
+  // A "Strong Buy" should only be issued if the 1h trend is not extremely bearish.
+  // We boost score if 1h RSI confirms direction, dampen if it opposes.
+  if (params.rsi1h !== null) {
+    const is1hBullishTrend = params.rsi1h < 55;
+    const is1hBearishTrend = params.rsi1h > 45;
+    
+    // Bullish signal + Bullish trend boost
+    if (score > 0 && is1hBullishTrend) {
+      score *= 1.1; 
+      reasons.push('1h Trend-aligned (Bullish)');
+    }
+    // Bearish signal + Bearish trend boost
+    if (score < 0 && is1hBearishTrend) {
+      score *= 1.1;
+      reasons.push('1h Trend-aligned (Bearish)');
+    }
   }
+
+  // Final validation guard: normalized score
+  let normalized = factors > 0 ? score / factors : 0;
+  
+  // Dampen low-confidence signals (too few factors)
+  if (factors < 3.0 && Math.abs(normalized) > 50) {
+    normalized *= 0.65; 
+  }
+  
   normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;
 
   let signal: StrategySignal;

@@ -22,27 +22,29 @@ interface WinRateContextValue {
   lastUpdate: number;
   isRefreshing: boolean;
   refresh: () => void;
+  setActiveSymbols: (symbols: Set<string> | null) => void;
 }
 
 const WinRateContext = createContext<WinRateContextValue | null>(null);
 
 interface WinRateProviderProps {
   children: ReactNode;
-  activeSymbols?: Set<string>; // Optional: for automatic pruning
 }
 
-export function WinRateProvider({ children, activeSymbols }: WinRateProviderProps) {
+export function WinRateProvider({ children }: WinRateProviderProps) {
   const [stats, setStats] = useState<Map<string, WinRateStats>>(() => {
     const all = computeWinRateStats();
     return new Map(all.map(s => [s.symbol, s]));
   });
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeSymbols, setActiveSymbols] = useState<Set<string> | null>(null);
 
   const refresh = useCallback(() => {
     setIsRefreshing(true);
     
-    // Prune stale symbols if active symbols provided
+    // Prune stale symbols if active symbols are registered
+    // Expert strategy: Only prune when we have a clear definition of 'Active'
     if (activeSymbols && activeSymbols.size > 0) {
       pruneStaleSymbols(activeSymbols);
     }
@@ -61,9 +63,9 @@ export function WinRateProvider({ children, activeSymbols }: WinRateProviderProp
     return () => clearInterval(interval);
   }, [refresh]);
 
-  // Refresh when active symbols change (symbol added/removed)
+  // Refresh when active symbols registration changes
   useEffect(() => {
-    if (activeSymbols) {
+    if (activeSymbols && activeSymbols.size > 0) {
       refresh();
     }
   }, [activeSymbols, refresh]);
@@ -73,6 +75,7 @@ export function WinRateProvider({ children, activeSymbols }: WinRateProviderProp
     lastUpdate,
     isRefreshing,
     refresh,
+    setActiveSymbols,
   };
 
   return (
@@ -87,15 +90,11 @@ export function WinRateProvider({ children, activeSymbols }: WinRateProviderProp
  * 
  * Usage:
  * ```tsx
- * const { stats, refresh } = useWinRateContext();
- * const symbolStats = stats.get('BTCUSDT');
+ * const { stats, refresh, setActiveSymbols } = useWinRateContext();
  * ```
  */
 export function useWinRateContext() {
   const context = useContext(WinRateContext);
-  if (!context) {
-    throw new Error('useWinRateContext must be used within WinRateProvider');
-  }
   return context;
 }
 
@@ -108,6 +107,6 @@ export function useWinRateContext() {
  * ```
  */
 export function useSymbolWinRate(symbol: string): WinRateStats | null {
-  const { stats } = useWinRateContext();
-  return stats.get(symbol) || null;
+  const context = useWinRateContext();
+  return context ? (context.stats.get(symbol) || null) : null;
 }

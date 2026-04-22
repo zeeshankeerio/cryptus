@@ -37,7 +37,12 @@ interface SignalTrackerDashboardProps {
 export const SignalTrackerDashboard = memo(function SignalTrackerDashboard({
   className
 }: SignalTrackerDashboardProps) {
-  const { stats: statsMap, refresh, isRefreshing } = useWinRateContext();
+  const context = useWinRateContext();
+  
+  // Defensive check: if used outside WinRateProvider
+  if (!context) return null;
+  
+  const { stats: statsMap, refresh, isRefreshing } = context;
   const stats = useMemo(() => Array.from(statsMap.values()), [statsMap]);
   
   const [sortColumn, setSortColumn] = useState<SortColumn>('totalSignals');

@@ -18,7 +18,12 @@ import { cn } from '@/lib/utils';
  */
 
 export function GlobalWinRateBadge() {
-  const { lastUpdate } = useWinRateContext();
+  const context = useWinRateContext();
+  
+  // Defensive check: if used outside WinRateProvider, return null or a placeholder
+  if (!context) return null;
+  
+  const { lastUpdate } = context;
   const stats = getGlobalWinRate();
 
   // Calibrating state: need at least 10 evaluated signals (not just recorded)

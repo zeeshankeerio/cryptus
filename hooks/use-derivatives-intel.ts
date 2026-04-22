@@ -112,7 +112,19 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
       switch (type) {
         case 'CONNECTED':
           setIsConnected(true);
+          // Request snapshot immediately on connection to hydrate state
+          worker?.postMessage({ type: 'REQUEST_SNAPSHOT' });
           break;
+
+        case 'SNAPSHOT': {
+          const { fundingRates, liquidations, whaleAlerts, orderFlow, openInterest } = payload;
+          if (fundingRates) setFundingRates(new Map(fundingRates));
+          if (liquidations) setLiquidations(liquidations);
+          if (whaleAlerts) setWhaleAlerts(whaleAlerts);
+          if (orderFlow) setOrderFlow(new Map(orderFlow));
+          if (openInterest) setOpenInterest(new Map(openInterest));
+          break;
+        }
 
         case 'DISCONNECTED':
           setIsConnected(false);
@@ -251,6 +263,9 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
         type: 'UPDATE_SYMBOLS',
         payload: { symbols: Array.from(symbols) }
       });
+      // Also request a snapshot immediately since the worker is already running
+      // but our local hook state is empty
+      worker.postMessage({ type: 'REQUEST_SNAPSHOT' });
     }
 
     return () => {
