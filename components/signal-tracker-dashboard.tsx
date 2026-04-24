@@ -241,8 +241,10 @@ const GlobalStatsCard = memo(function GlobalStatsCard({
   symbolStats
 }: GlobalStatsCardProps) {
   const bestPerformer = useMemo(() => {
-    if (symbolStats.length === 0) return null;
-    return symbolStats.reduce((best, curr) =>
+    // Require minimum 5 signals for statistical significance
+    const qualified = symbolStats.filter(s => s.totalSignals >= 5);
+    if (qualified.length === 0) return null;
+    return qualified.reduce((best, curr) =>
       curr.winRate15m > best.winRate15m ? curr : best
     );
   }, [symbolStats]);

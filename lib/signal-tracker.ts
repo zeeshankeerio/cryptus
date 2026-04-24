@@ -13,7 +13,7 @@
  *
  * Accuracy notes:
  *   - Outcomes are evaluated at the FIRST price check AFTER the interval elapses.
- *   - Win threshold is 0.3% to filter out noise (crypto volatility).
+ *   - Win threshold is 0.5% to filter noise and account for real spreads/slippage.
  *   - Snapshots are capped at 500 to prevent localStorage bloat.
  */
 
@@ -162,33 +162,35 @@ export function evaluateOutcomes(
 
     const elapsed = now - snap.timestamp;
     const isBullish = snap.signal === 'strong-buy' || snap.signal === 'buy';
-    const priceChange = (currentPrice - snap.entryPrice) / snap.entryPrice;
     let changed = false;
 
     // 5m outcome — only set once, at the first check after 5m elapses
     if (snap.outcome5m === undefined && elapsed >= CHECK_INTERVALS['5m']) {
       snap.outcome5m = currentPrice;
+      const ret5m = (currentPrice - snap.entryPrice) / snap.entryPrice;
       snap.win5m = isBullish
-        ? priceChange >= WIN_THRESHOLD_PCT
-        : priceChange <= -WIN_THRESHOLD_PCT;
+        ? ret5m >= WIN_THRESHOLD_PCT
+        : ret5m <= -WIN_THRESHOLD_PCT;
       changed = true;
     }
 
     // 15m outcome
     if (snap.outcome15m === undefined && elapsed >= CHECK_INTERVALS['15m']) {
       snap.outcome15m = currentPrice;
+      const ret15m = (currentPrice - snap.entryPrice) / snap.entryPrice;
       snap.win15m = isBullish
-        ? priceChange >= WIN_THRESHOLD_PCT
-        : priceChange <= -WIN_THRESHOLD_PCT;
+        ? ret15m >= WIN_THRESHOLD_PCT
+        : ret15m <= -WIN_THRESHOLD_PCT;
       changed = true;
     }
 
     // 1h outcome
     if (snap.outcome1h === undefined && elapsed >= CHECK_INTERVALS['1h']) {
       snap.outcome1h = currentPrice;
+      const ret1h = (currentPrice - snap.entryPrice) / snap.entryPrice;
       snap.win1h = isBullish
-        ? priceChange >= WIN_THRESHOLD_PCT
-        : priceChange <= -WIN_THRESHOLD_PCT;
+        ? ret1h >= WIN_THRESHOLD_PCT
+        : ret1h <= -WIN_THRESHOLD_PCT;
       changed = true;
     }
 

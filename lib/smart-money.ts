@@ -212,15 +212,6 @@ export function computeAllSmartMoney(
 ): Map<string, SmartMoneyPressure> {
   const result = new Map<string, SmartMoneyPressure>();
 
-  console.log('[DEBUG] computeAllSmartMoney called:', {
-    symbolsCount: symbols.length,
-    fundingRatesSize: fundingRates.size,
-    liquidationsCount: liquidations.length,
-    whaleAlertsCount: whaleAlerts.length,
-    orderFlowSize: orderFlow.size,
-    sampleSymbols: symbols.slice(0, 3)
-  });
-
   for (const symbol of symbols) {
     const pressure = computeSmartMoneyPressure(
       symbol, fundingRates, liquidations, whaleAlerts, orderFlow
@@ -236,15 +227,6 @@ export function computeAllSmartMoney(
     }
   }
 
-  console.log('[DEBUG] computeAllSmartMoney result:', {
-    resultSize: result.size,
-    sampleEntries: Array.from(result.entries()).slice(0, 3).map(([sym, data]) => ({
-      symbol: sym,
-      score: data.score,
-      label: data.label,
-      components: data.components
-    }))
-  });
 
   return result;
 }

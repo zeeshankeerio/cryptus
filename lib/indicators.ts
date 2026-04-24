@@ -487,19 +487,23 @@ export function calculateConfluence(params: {
   let bearish = 0;
   let total = 0;
 
+  // Graduated RSI zone scoring — wider gradient for better signal quality
   const checkRsi = (rsi: number | null, w: number) => {
     if (rsi === null) return;
     total += w;
-    if (rsi < 30) bullish += w;
-    else if (rsi < 40) bullish += w * 0.4;
-    else if (rsi > 70) bearish += w;
-    else if (rsi > 60) bearish += w * 0.4;
+    // Deep oversold/overbought = full weight, approaching = partial
+    if (rsi <= 20) bullish += w;
+    else if (rsi <= 30) bullish += w * 0.8;
+    else if (rsi <= 40) bullish += w * 0.3;
+    else if (rsi >= 80) bearish += w;
+    else if (rsi >= 70) bearish += w * 0.8;
+    else if (rsi >= 60) bearish += w * 0.3;
   };
 
   checkRsi(params.rsi1m, 0.5);
   checkRsi(params.rsi5m, 1);
-  checkRsi(params.rsi15m, 2.0); // Institutional weight for 15m
-  checkRsi(params.rsi1h, 3.0);   // Institutional weight for 1h
+  checkRsi(params.rsi15m, 2.0);
+  checkRsi(params.rsi1h, 3.0);
 
   if (params.macdHistogram !== null) {
     total += 1.5;
@@ -514,15 +518,15 @@ export function calculateConfluence(params: {
   if (params.stochK !== null) {
     total += 1;
     if (params.stochK < 20) bullish += 1;
-    else if (params.stochK < 30) bullish += 0.5;
+    else if (params.stochK < 30) bullish += 0.6;
     else if (params.stochK > 80) bearish += 1;
-    else if (params.stochK > 70) bearish += 0.5;
+    else if (params.stochK > 70) bearish += 0.6;
   }
   if (params.bbPosition !== null) {
     total += 1;
-    if (params.bbPosition < 0.2) bullish += 1;
+    if (params.bbPosition < 0.15) bullish += 1;
     else if (params.bbPosition < 0.3) bullish += 0.5;
-    else if (params.bbPosition > 0.8) bearish += 1;
+    else if (params.bbPosition > 0.85) bearish += 1;
     else if (params.bbPosition > 0.7) bearish += 0.5;
   }
 

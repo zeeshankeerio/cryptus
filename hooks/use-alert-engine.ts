@@ -432,12 +432,20 @@ export function useAlertEngine(
             const liveStrategy = computeStrategyScore({ ...entry, price: live.price, enabledIndicators: enabledIndicatorsRef.current });
             const sKey = `${symbol}-STRAT`;
             const prevS = zoneState.current.get(sKey);
-            if (prevS !== undefined && prevS !== liveStrategy.signal && (liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'strong-sell')) {
+
+            // Record ALL directional signals for win-rate tracking (buy, sell, strong-buy, strong-sell)
+            // This provides comprehensive win-rate data instead of only tracking strong signals
+            if (prevS !== undefined && prevS !== liveStrategy.signal && liveStrategy.signal !== 'neutral') {
               const now = Date.now();
-              if (now - (lastTriggered.current.get(sKey) || 0) > COOLDOWN_MS) {
+              const isStrong = liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'strong-sell';
+              const isBuy = liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'buy';
+
+              // Always record for win-rate tracking (3-min dedup handled internally)
+              recordSignal(symbol, liveStrategy.signal, live.price);
+
+              // Only fire audible/visual alerts for STRONG signals (no noise for regular buy/sell)
+              if (isStrong && now - (lastTriggered.current.get(sKey) || 0) > COOLDOWN_MS) {
                 lastTriggered.current.set(sKey, now);
-                const isBuy = liveStrategy.signal === 'strong-buy';
-                recordSignal(symbol, isBuy ? 'strong-buy' : 'strong-sell', live.price);
                 toast[isBuy ? 'success' : 'error'](`${getSymbolAlias(symbol)} → ${isBuy?'🟢 BUY':'🔴 SELL'}`, { description: `Score: ${liveStrategy.score.toFixed(0)} @ $${formatPrice(live.price)}` });
                 playAlertSoundRef.current(false, (config.priority as any) ?? 'medium');
                 logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRATEGY', value: liveStrategy.score, price: live.price, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });

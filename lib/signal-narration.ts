@@ -41,7 +41,7 @@ function rsiZone(rsi: number | null): string | null {
   if (rsi <= 40) return 'approaching oversold';
   if (rsi >= 80) return 'deeply overbought';
   if (rsi >= 70) return 'overbought';
-  if (rsi >= 60) return 'approaching overbought';
+  if (rsi >= 65) return 'approaching overbought';
   return null; // Neutral - not interesting enough to narrate
 }
 
@@ -67,11 +67,21 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
 
   const oversoldCount = rsiValues.filter(r => r.val !== null && r.val <= 30).length;
   const overboughtCount = rsiValues.filter(r => r.val !== null && r.val >= 70).length;
+  const deepOversoldCount = rsiValues.filter(r => r.val !== null && r.val <= 20).length;
+  const deepOverboughtCount = rsiValues.filter(r => r.val !== null && r.val >= 80).length;
 
-  if (oversoldCount >= 2) {
+  if (deepOversoldCount >= 2) {
+    reasons.push(`📉 RSI deeply oversold across ${deepOversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= 20).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    bullishPoints += deepOversoldCount * 15;
+    totalPoints += deepOversoldCount * 15;
+  } else if (oversoldCount >= 2) {
     reasons.push(`📉 RSI oversold across ${oversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= 30).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
     bullishPoints += oversoldCount * 12;
     totalPoints += oversoldCount * 12;
+  } else if (deepOverboughtCount >= 2) {
+    reasons.push(`📈 RSI deeply overbought across ${deepOverboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= 80).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    bearishPoints += deepOverboughtCount * 15;
+    totalPoints += deepOverboughtCount * 15;
   } else if (overboughtCount >= 2) {
     reasons.push(`📈 RSI overbought across ${overboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= 70).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
     bearishPoints += overboughtCount * 12;
@@ -166,6 +176,38 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
       bearishPoints += 6;
     }
     totalPoints += 6;
+  }
+
+  // ── 9. ADX Trend Strength ──
+  if (entry.adx !== null && entry.adx > 0) {
+    if (entry.adx > 30) {
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)} - strong trend in play`);
+      totalPoints += 5;
+      // ADX doesn't add directional bias, but amplifies existing bias
+      if (bullishPoints > bearishPoints) bullishPoints += 5;
+      else if (bearishPoints > bullishPoints) bearishPoints += 5;
+    } else if (entry.adx < 18) {
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)} - choppy/ranging market, signals less reliable`);
+      totalPoints += 3;
+    }
+  }
+
+  // ── 10. Confluence Score ──
+  if (entry.confluence !== undefined && Math.abs(entry.confluence) >= 30) {
+    if (entry.confluence >= 50) {
+      reasons.push(`🎯 Strong multi-indicator confluence (${entry.confluence}) - high conviction`);
+      bullishPoints += 12;
+    } else if (entry.confluence >= 30) {
+      reasons.push(`🎯 Moderate bullish confluence (${entry.confluence})`);
+      bullishPoints += 6;
+    } else if (entry.confluence <= -50) {
+      reasons.push(`🎯 Strong bearish confluence (${entry.confluence}) - high conviction`);
+      bearishPoints += 12;
+    } else if (entry.confluence <= -30) {
+      reasons.push(`🎯 Moderate bearish confluence (${entry.confluence})`);
+      bearishPoints += 6;
+    }
+    totalPoints += 12;
   }
 
   // ── Compose Headline & Conviction ──

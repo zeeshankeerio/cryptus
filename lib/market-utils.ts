@@ -23,10 +23,15 @@ export function getMarketType(symbol: string): ScreenerEntry['market'] {
                   ['EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD', 'USDJPY', 'EURJPY', 'GBPJPY', 'CADJPY', 'AUDJPY'].includes(s);
   if (isForex) return 'Forex';
 
-  // Stocks / Indices (Yahoo + Aggressive Tech)
-  const isIndex = STOCKS_SYMBOLS.some(st => st.yahoo === s) || 
-                  ['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'SPY', 'QQQ', 'DIA', 'VIX', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'].includes(s);
+  // Index Detection (Market indices and broad ETFs)
+  const INDEX_TICKERS = ['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'SPY', 'QQQ', 'DIA', 'VIX'];
+  const isIndex = INDEX_TICKERS.includes(s);
   if (isIndex) return 'Index';
+
+  // Stocks Detection (Individual equities)
+  const STOCK_TICKERS = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'];
+  const isStock = STOCKS_SYMBOLS.some(st => st.yahoo === s) || STOCK_TICKERS.includes(s);
+  if (isStock) return 'Stocks';
 
   return 'Crypto';
 }
