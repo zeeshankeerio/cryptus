@@ -3327,7 +3327,7 @@ export default function ScreenerDashboard() {
       crypto: ['Crypto'],
       forex: ['Forex'],
       metals: ['Metal'],
-      stocks: ['Index']
+      stocks: ['Index', 'Stocks']
     };
     const targetMarkets = MARKET_MAP[activeAssetClass] || ['Crypto'];
     const tabData = processedData.filter(e => targetMarkets.includes(e.market));
@@ -4251,7 +4251,7 @@ export default function ScreenerDashboard() {
       crypto: ['Crypto'],
       forex: ['Forex'],
       metals: ['Metal'],
-      stocks: ['Index']
+      stocks: ['Index', 'Stocks']
     };
     const targetMarkets = marketMap[activeAssetClass] || ['Crypto'];
     items = items.filter(e => targetMarkets.includes(e.market));

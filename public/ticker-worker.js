@@ -763,8 +763,12 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     const sSym = t.s.toUpperCase();
     const isMetal = ['PAXGUSDT', 'XAUTUSDT', 'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD', 'GC=F', 'SI=F', 'PL=F', 'PA=F', 'HG=F'].some(s => sSym.includes(s));
     const isForex = ['EURUSDT', 'GBPUSDT', 'AUDUSDT', 'JPYUSDT', 'EURUSD', 'GBPUSD', 'AUDUSD', 'USDJPY', 'EURJPY', 'GBPJPY', 'CADJPY', 'AUDJPY', '=X'].some(s => sSym.includes(s));
-    const isIndex = ['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'SPY', 'QQQ', 'DIA', 'VIX', 'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'].some(s => sSym.includes(s));
-    const market = isMetal ? 'Metal' : isForex ? 'Forex' : isIndex ? 'Index' : 'Crypto';
+    const isIndex = ['SPX', 'NDAQ', 'DOW', 'FTSE', 'DAX', 'NKY', 'SPY', 'QQQ', 'DIA', 'VIX'].some(s => sSym.includes(s));
+    const isStock = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA'].some(s => sSym.includes(s));
+    
+    // Fallback: Check if it's in the STOCKS_SYMBOLS/FOREX_SYMBOLS lists? 
+    // Worker doesn't have them imported easily, but these hardcoded ones cover majors.
+    const market = isMetal ? 'Metal' : isForex ? 'Forex' : isIndex ? 'Index' : isStock ? 'Stocks' : 'Crypto';
 
     const strategyVolMult =
       (config.volumeSpikeThreshold != null && config.volumeSpikeThreshold > 0)
@@ -790,6 +794,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       rsiDivergence: state.rsiDivergence,
       rsiCrossover: state.rsiCrossover,
       market,
+      adx: state.adx,
       obThreshold: (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought,
       osThreshold: (config.oversoldThreshold != null && config.oversoldThreshold > 0) ? config.oversoldThreshold : globalOversold,
       globalLongCandleThreshold,
@@ -1613,25 +1618,32 @@ function computeWorkerStrategyScore(params) {
     vwap: true, confluence: true, divergence: true, momentum: true
   };
 
+  // ── Asset-Specific RSI Zone Calibration ──
+  let rsiDeepOS = 20, rsiOS = 30, rsiOB = 70, rsiDeepOB = 80;
+  if (params.market === 'Forex') {
+    rsiDeepOS = 25; rsiOS = 35; rsiOB = 65; rsiDeepOB = 75;
+  } else if (params.market === 'Metal' || params.market === 'Index' || params.market === 'Stocks') {
+    rsiDeepOS = 22; rsiOS = 32; rsiOB = 68; rsiDeepOB = 78;
+  }
+
   const ob = params.obThreshold || 70;
   const os = params.osThreshold || 30;
 
   const rsiScore = (val, weight) => {
     if (val === null || val === undefined || enabled.rsi === false) return;
     factors += weight;
-    // Institutional Grade Dynamic Thresholding
-    if (val <= (os - 10)) score += 100 * weight;
-    else if (val <= os) score += 70 * weight;
-    else if (val <= (os + 10)) score += 30 * weight;
-    else if (val >= (ob + 10)) score -= 100 * weight;
-    else if (val >= ob) score -= 70 * weight;
-    else if (val >= (ob - 10)) score -= 30 * weight;
+    if (val <= rsiDeepOS) score += 100 * weight;
+    else if (val <= rsiOS) score += 70 * weight;
+    else if (val <= 40) score += 30 * weight;
+    else if (val >= rsiDeepOB) score -= 100 * weight;
+    else if (val >= rsiOB) score -= 70 * weight;
+    else if (val >= 60) score -= 30 * weight;
   };
 
   rsiScore(params.rsi1m, 0.5);
   rsiScore(params.rsi5m, 1);
   rsiScore(params.rsi15m, 1.5);
-  rsiScore(params.rsi1h, 2);
+  rsiScore(params.rsi1h, 2.5); // Aligned with indicators.ts
 
   if (enabled.macd !== false && params.macdHistogram !== null && params.price > 0) {
     factors += 1.5;
@@ -1656,8 +1668,11 @@ function computeWorkerStrategyScore(params) {
     else if (params.stochK > 80 && params.stochD > 80) score -= 80 * 1;
     else if (params.stochK > 70) score -= 40 * 1;
 
-    if (params.stochK > params.stochD && params.stochK < 50) score += 20;
-    else if (params.stochK < params.stochD && params.stochK > 50) score -= 20;
+    // K/D Crossover Confirmation
+    if (params.stochK > params.stochD && params.stochK < 30) score += 35;
+    else if (params.stochK < params.stochD && params.stochK > 70) score -= 35;
+    else if (params.stochK > params.stochD && params.stochK < 50) score += 15;
+    else if (params.stochK < params.stochD && params.stochK > 50) score -= 15;
   }
 
   if (enabled.ema !== false && params.emaCross) {
@@ -1666,25 +1681,25 @@ function computeWorkerStrategyScore(params) {
   }
 
   if (enabled.vwap !== false && params.vwapDiff != null) {
-    factors += 0.5;
+    factors += 1.0; // Aligned with indicators.ts
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
-    if (scaledVwapDiff < -2) score += 40 * 0.5;
-    else if (scaledVwapDiff > 2) score -= 40 * 0.5;
+    if (scaledVwapDiff < -2) score += 40 * 1.0;
+    else if (scaledVwapDiff > 2) score -= 40 * 1.0;
   }
 
   if (enabled.confluence !== false && typeof params.confluence === 'number' && Math.abs(params.confluence) >= 20) {
-    factors += 2;
-    score += params.confluence * 2;
+    factors += 2.5; // Aligned with indicators.ts
+    score += params.confluence * 2.5;
   }
 
   if (enabled.divergence !== false && params.rsiDivergence && params.rsiDivergence !== 'none') {
     factors += 2.0;
-    score += (params.rsiDivergence === 'bullish' ? 80 : -80) * 2.0;
+    score += (params.rsiDivergence === 'bullish' ? 75 : -75) * 2.0; // Aligned with 75
   }
 
   if (enabled.rsi !== false && params.rsiCrossover && params.rsiCrossover !== 'none') {
-    factors += 1.0;
-    score += (params.rsiCrossover === 'bullish_reversal' ? 60 : -60) * 1.0;
+    factors += 1.5; // Aligned with indicators.ts
+    score += (params.rsiCrossover === 'bullish_reversal' ? 70 : -70) * 1.5;
   }
 
   if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum * volatilityMultiplier) > 0.5) {
@@ -1694,21 +1709,60 @@ function computeWorkerStrategyScore(params) {
     score += mScore * 0.5;
   }
 
-  if (params.volumeSpike && factors > 0) {
-    score *= 1.15;
+  if (params.volumeSpike) {
+    factors += 0.5;
+    const volBoost = score > 0 ? 30 : score < 0 ? -30 : 0;
+    score += volBoost * 0.5;
+  }
+
+  // ── TFA TREND GUARD ──
+  if (params.rsi1h !== null) {
+    const is1hBullishTrend = params.rsi1h < 45;
+    const is1hBearishTrend = params.rsi1h > 55;
+    if (score > 0 && is1hBullishTrend) score *= 1.15;
+    if (score < 0 && is1hBearishTrend) score *= 1.15;
+    if (score > 0 && is1hBearishTrend) score *= 0.70;
+    if (score < 0 && is1hBullishTrend) score *= 0.70;
+  }
+
+  // ── ADX MARKET CONTEXT ──
+  if (params.adx != null && params.adx > 0) {
+    if (params.adx < 20) score *= 0.75;
+    else if (params.adx > 30) score *= 1.10;
   }
 
   let normalized = factors > 0 ? score / factors : 0;
-  if (factors < 3 && Math.abs(normalized) > 50) {
-    normalized = normalized * 0.7; // Dampen low-confidence signals
+
+  // ── Minimum Evidence Guard ──
+  if (factors < 4.0) {
+    normalized *= 0.50;
+    if (factors < 2.5) {
+      normalized = Math.max(-15, Math.min(15, normalized));
+    }
+  } else if (factors < 5.0 && Math.abs(normalized) > 60) {
+    normalized *= 0.75;
   }
+
   normalized = Math.round(Math.max(-100, Math.min(100, normalized)));
 
+  // ── Multi-TF Agreement Gate ──
+  const rsiDirections = [
+    params.rsi1m != null ? (params.rsi1m < 45 ? 'buy' : params.rsi1m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi5m != null ? (params.rsi5m < 45 ? 'buy' : params.rsi5m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi15m != null ? (params.rsi15m < 45 ? 'buy' : params.rsi15m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi1h != null ? (params.rsi1h < 45 ? 'buy' : params.rsi1h > 55 ? 'sell' : 'neutral') : null
+  ].filter(d => d !== null);
+  const buyAgreement = rsiDirections.filter(d => d === 'buy').length;
+  const sellAgreement = rsiDirections.filter(d => d === 'sell').length;
+  const availableTFs = rsiDirections.length;
+  const hasMultiTFBuyAgreement = availableTFs >= 3 && buyAgreement >= 3;
+  const hasMultiTFSellAgreement = availableTFs >= 3 && sellAgreement >= 3;
+
   let signal = 'neutral';
-  if (normalized >= 50) signal = 'strong-buy';
-  else if (normalized >= 20) signal = 'buy';
-  else if (normalized <= -50) signal = 'strong-sell';
-  else if (normalized <= -20) signal = 'sell';
+  if (normalized >= 55 && hasMultiTFBuyAgreement) signal = 'strong-buy';
+  else if (normalized >= 25) signal = 'buy';
+  else if (normalized <= -55 && hasMultiTFSellAgreement) signal = 'strong-sell';
+  else if (normalized <= -25) signal = 'sell';
 
   return { score: normalized, signal };
 }
