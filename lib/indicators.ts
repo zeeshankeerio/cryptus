@@ -585,6 +585,7 @@ export function computeStrategyScore(params: {
   momentum?: number | null;
   rsiCrossover?: 'bullish_reversal' | 'bearish_reversal' | 'none';
   market?: 'Crypto' | 'Metal' | 'Forex' | 'Index' | 'Stocks';
+  adx?: number | null;
   enabledIndicators?: {
     rsi?: boolean;
     macd?: boolean;
@@ -610,23 +611,35 @@ export function computeStrategyScore(params: {
     rsi: true, macd: true, bb: true, stoch: true, ema: true, vwap: true, confluence: true, divergence: true, momentum: true
   };
 
+  // ── Asset-Specific RSI Zone Calibration ──
+  // Different asset classes have different RSI characteristics.
+  // Forex: RSI rarely hits extremes → use tighter zones (35/65)
+  // Metals/Indices: Moderate → use standard-tight (25/75)
+  // Crypto: High volatility → use wide zones (20/80) — default
+  let rsiDeepOS = 20, rsiOS = 30, rsiOB = 70, rsiDeepOB = 80;
+  if (params.market === 'Forex') {
+    rsiDeepOS = 25; rsiOS = 35; rsiOB = 65; rsiDeepOB = 75;
+  } else if (params.market === 'Metal' || params.market === 'Index' || params.market === 'Stocks') {
+    rsiDeepOS = 22; rsiOS = 32; rsiOB = 68; rsiDeepOB = 78;
+  }
+
   // RSI scoring (higher weight for longer timeframes)
   const rsiScore = (rsi: number | null, weight: number, tf: string) => {
     if (rsi === null || enabled.rsi === false) return;
     factors += weight;
-    if (rsi <= 20) { score += 100 * weight; reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) deep oversold`); }
-    else if (rsi <= 30) { score += 70 * weight; if (weight >= 1) reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) oversold`); }
+    if (rsi <= rsiDeepOS) { score += 100 * weight; reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) deep oversold`); }
+    else if (rsi <= rsiOS) { score += 70 * weight; if (weight >= 1) reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) oversold`); }
     else if (rsi <= 40) score += 30 * weight;
     else if (rsi <= 60) score += 0;
-    else if (rsi <= 70) score -= 30 * weight;
-    else if (rsi <= 80) { score -= 70 * weight; if (weight >= 1) reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) overbought`); }
+    else if (rsi <= rsiOB) score -= 30 * weight;
+    else if (rsi <= rsiDeepOB) { score -= 70 * weight; if (weight >= 1) reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) overbought`); }
     else { score -= 100 * weight; reasons.push(`RSI ${tf} (${rsi.toFixed(1)}) deep overbought`); }
   };
 
   rsiScore(params.rsi1m, 0.5, '1m');
   rsiScore(params.rsi5m, 1, '5m');
   rsiScore(params.rsi15m, 1.5, '15m');
-  rsiScore(params.rsi1h, 2.5, '1h'); // Increased from 2.0
+  rsiScore(params.rsi1h, 2.5, '1h');
 
   // MACD histogram
   if (params.macdHistogram !== null && params.price > 0 && enabled.macd !== false) {
@@ -651,15 +664,24 @@ export function computeStrategyScore(params: {
     else if (bp >= 0.75) score -= 40 * 1;
   }
 
-  // Stochastic RSI
+  // Stochastic RSI with K/D crossover confirmation
   if (params.stochK !== null && params.stochD !== null && enabled.stoch !== false) {
     factors += 1;
     if (params.stochK < 20 && params.stochD < 20) { score += 80 * 1; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) oversold`); }
     else if (params.stochK < 30) score += 40 * 1;
     else if (params.stochK > 80 && params.stochD > 80) { score -= 80 * 1; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); }
     else if (params.stochK > 70) score -= 40 * 1;
-    if (params.stochK > params.stochD && params.stochK < 50) score += 20;
-    else if (params.stochK < params.stochD && params.stochK > 50) score -= 20;
+    // K/D Crossover Confirmation: bullish cross (K > D) in oversold zone is high-conviction
+    if (params.stochK > params.stochD && params.stochK < 30) {
+      score += 35;
+      reasons.push('StochRSI bullish cross in oversold');
+    } else if (params.stochK < params.stochD && params.stochK > 70) {
+      score -= 35;
+      reasons.push('StochRSI bearish cross in overbought');
+    }
+    // Standard crossover in neutral zone (weaker signal)
+    else if (params.stochK > params.stochD && params.stochK < 50) score += 15;
+    else if (params.stochK < params.stochD && params.stochK > 50) score -= 15;
   }
 
   // EMA cross
@@ -677,10 +699,12 @@ export function computeStrategyScore(params: {
     else if (scaledVwapDiff > 2) { score -= 40 * 1.0; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
   }
 
-  // Volume spike amplifies the signal
-  if (params.volumeSpike && factors > 0) {
-    score *= 1.25; // Increased from 1.15
-    reasons.push('Institutional volume spike');
+  // Volume spike: additive factor (not multiplicative) to prevent inflating already-high scores
+  if (params.volumeSpike) {
+    factors += 0.5;
+    const volBoost = score > 0 ? 30 : score < 0 ? -30 : 0;
+    score += volBoost * 0.5;
+    if (volBoost !== 0) reasons.push('Volume spike confirms direction');
   }
 
   // ── Intelligence signals ──
@@ -707,15 +731,15 @@ export function computeStrategyScore(params: {
     }
   }
 
-  // RSI divergence (Senior Factor - Increased to 3.0 weight)
+  // RSI divergence (Rebalanced: weight 2.0, score 75 — significant but not dominant)
   if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
-    factors += 3.0; 
+    factors += 2.0; 
     if (params.rsiDivergence === 'bullish') {
-      score += 90 * 3.0; // Higher internal score for divergence
-      reasons.push('H1 High-Confidence Bullish Divergence');
+      score += 75 * 2.0;
+      reasons.push('Bullish RSI Divergence');
     } else {
-      score -= 90 * 3.0;
-      reasons.push('H1 High-Confidence Bearish Divergence');
+      score -= 75 * 2.0;
+      reasons.push('Bearish RSI Divergence');
     }
   }
 
@@ -729,41 +753,85 @@ export function computeStrategyScore(params: {
     else if (scaledMomentum < -3) reasons.push('Strong institutional momentum (Down)');
   }
 
-  // ── TFA TREND GUARD ─────────────────────────────────────────────
-  // A "Strong Buy" should only be issued if the 1h trend is not extremely bearish.
-  // We boost score if 1h RSI confirms direction, dampen if it opposes.
+  // ── TFA TREND GUARD (v2) ──────────────────────────────────────────
+  // Non-overlapping thresholds: <45 = bullish, >55 = bearish, 45-55 = neutral (no boost).
+  // Counter-trend signals receive a 30% penalty to filter noise.
   if (params.rsi1h !== null) {
-    const is1hBullishTrend = params.rsi1h < 55;
-    const is1hBearishTrend = params.rsi1h > 45;
+    const is1hBullishTrend = params.rsi1h < 45;  // Clear bullish: RSI below 45
+    const is1hBearishTrend = params.rsi1h > 55;  // Clear bearish: RSI above 55
     
-    // Bullish signal + Bullish trend boost
+    // Trend-aligned boost (15%)
     if (score > 0 && is1hBullishTrend) {
-      score *= 1.1; 
+      score *= 1.15; 
       reasons.push('1h Trend-aligned (Bullish)');
     }
-    // Bearish signal + Bearish trend boost
     if (score < 0 && is1hBearishTrend) {
-      score *= 1.1;
+      score *= 1.15;
       reasons.push('1h Trend-aligned (Bearish)');
+    }
+    // Counter-trend penalty (30% dampening)
+    if (score > 0 && is1hBearishTrend) {
+      score *= 0.70;
+      reasons.push('⚠ Counter-trend (1h bearish)');
+    }
+    if (score < 0 && is1hBullishTrend) {
+      score *= 0.70;
+      reasons.push('⚠ Counter-trend (1h bullish)');
+    }
+  }
+
+  // ── ADX MARKET CONTEXT ──────────────────────────────────────────
+  // ADX measures trend strength. <20 = choppy/ranging, >30 = strong trend.
+  // Dampen signals in choppy markets, amplify in trending markets.
+  if (params.adx !== undefined && params.adx !== null && params.adx > 0) {
+    if (params.adx < 20) {
+      score *= 0.75;
+      reasons.push('ADX choppy market (signals dampened)');
+    } else if (params.adx > 30) {
+      score *= 1.10;
+      reasons.push('ADX strong trend');
     }
   }
 
   // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
   
-  // Dampen low-confidence signals (too few factors)
-  if (factors < 3.0 && Math.abs(normalized) > 50) {
-    normalized *= 0.65; 
+  // ── Minimum Evidence Guard ──
+  // Require >= 4 factors for any non-neutral signal to prevent low-evidence noise.
+  if (factors < 4.0) {
+    normalized *= 0.50; // Aggressive dampening — insufficient evidence
+    if (factors < 2.5) {
+      normalized = Math.max(-15, Math.min(15, normalized)); // Force near-neutral
+    }
+  } else if (factors < 5.0 && Math.abs(normalized) > 60) {
+    normalized *= 0.75; // Moderate dampening for borderline evidence
   }
   
   normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;
 
+  // ── Multi-TF RSI Agreement Gate for Strong Signals ──
+  // Require at least 3 of 4 RSI timeframes to agree on direction for Strong.
+  // This prevents "Strong Buy" when only one timeframe is deeply oversold while others are neutral.
+  const rsiDirections = [
+    params.rsi1m !== null ? (params.rsi1m < 45 ? 'buy' : params.rsi1m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi5m !== null ? (params.rsi5m < 45 ? 'buy' : params.rsi5m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi15m !== null ? (params.rsi15m < 45 ? 'buy' : params.rsi15m > 55 ? 'sell' : 'neutral') : null,
+    params.rsi1h !== null ? (params.rsi1h < 45 ? 'buy' : params.rsi1h > 55 ? 'sell' : 'neutral') : null,
+  ].filter(d => d !== null);
+  const buyAgreement = rsiDirections.filter(d => d === 'buy').length;
+  const sellAgreement = rsiDirections.filter(d => d === 'sell').length;
+  const availableTFs = rsiDirections.length;
+  const hasMultiTFBuyAgreement = availableTFs >= 3 && buyAgreement >= 3;
+  const hasMultiTFSellAgreement = availableTFs >= 3 && sellAgreement >= 3;
+
   let signal: StrategySignal;
   let label: string;
-  if (normalized >= 50) { signal = 'strong-buy'; label = 'Strong Buy'; }
-  else if (normalized >= 20) { signal = 'buy'; label = 'Buy'; }
-  else if (normalized <= -50) { signal = 'strong-sell'; label = 'Strong Sell'; }
-  else if (normalized <= -20) { signal = 'sell'; label = 'Sell'; }
+  if (normalized >= 55 && hasMultiTFBuyAgreement) { signal = 'strong-buy'; label = 'Strong Buy'; }
+  else if (normalized >= 55) { signal = 'buy'; label = 'Buy'; reasons.push('Downgraded: insufficient TF agreement for Strong'); }
+  else if (normalized >= 25) { signal = 'buy'; label = 'Buy'; }
+  else if (normalized <= -55 && hasMultiTFSellAgreement) { signal = 'strong-sell'; label = 'Strong Sell'; }
+  else if (normalized <= -55) { signal = 'sell'; label = 'Sell'; reasons.push('Downgraded: insufficient TF agreement for Strong'); }
+  else if (normalized <= -25) { signal = 'sell'; label = 'Sell'; }
   else { signal = 'neutral'; label = 'Neutral'; }
 
   return { score: normalized, signal, label, reasons };
@@ -897,8 +965,8 @@ export function calculateADX(
  */
 export function deriveSignal(
   rsi: number | null,
-  overbought: number = 70,
-  oversold: number = 30
+  overbought: number = 80,
+  oversold: number = 20
 ): 'oversold' | 'overbought' | 'neutral' {
   if (rsi === null) return 'neutral';
   

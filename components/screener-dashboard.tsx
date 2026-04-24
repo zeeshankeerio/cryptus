@@ -725,6 +725,7 @@ const ScreenerRow = memo(function ScreenerRow({
       confluence: entry.confluence,
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
+      adx: entry.adx,
       enabledIndicators: {
         rsi: globalUseRsi,
         macd: globalUseMacd,
@@ -773,10 +774,10 @@ const ScreenerRow = memo(function ScreenerRow({
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
       strategyLabel: tick.strategyScore !== undefined
-        ? (tick.strategyScore >= 50 ? 'Strong Buy'
-          : tick.strategyScore >= 20 ? 'Buy'
-            : tick.strategyScore <= -50 ? 'Strong Sell'
-              : tick.strategyScore <= -20 ? 'Sell'
+        ? (tick.strategyScore >= 55 ? 'Strong Buy'
+          : tick.strategyScore >= 25 ? 'Buy'
+            : tick.strategyScore <= -55 ? 'Strong Sell'
+              : tick.strategyScore <= -25 ? 'Sell'
                 : 'Neutral')
         : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
@@ -1700,6 +1701,7 @@ const ScreenerCard = memo(function ScreenerCard({
       momentum: entry.momentum,
       rsiCrossover: entry.rsiCrossover,
       market: entry.market,
+      adx: entry.adx,
       enabledIndicators: {
         rsi: globalUseRsi,
         macd: globalUseMacd,
@@ -1759,10 +1761,10 @@ const ScreenerCard = memo(function ScreenerCard({
       strategyScore: tick.strategyScore ?? liveStrategy.score,
       strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
       strategyLabel: tick.strategyScore !== undefined
-        ? (tick.strategyScore >= 50 ? 'Strong Buy'
-          : tick.strategyScore >= 20 ? 'Buy'
-            : tick.strategyScore <= -50 ? 'Strong Sell'
-              : tick.strategyScore <= -20 ? 'Sell'
+        ? (tick.strategyScore >= 55 ? 'Strong Buy'
+          : tick.strategyScore >= 25 ? 'Buy'
+            : tick.strategyScore <= -55 ? 'Strong Sell'
+              : tick.strategyScore <= -25 ? 'Sell'
                 : 'Neutral')
         : liveStrategy.label,
       strategyReasons: liveStrategy.reasons,
@@ -2251,7 +2253,7 @@ export default function ScreenerDashboard() {
   const [globalOversold, setGlobalOversold] = useState(20);
   const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
   const [globalLongCandleThreshold, setGlobalLongCandleThreshold] = useState(3.0);
-  const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(5.0);
+  const [globalVolumeSpikeThreshold, setGlobalVolumeSpikeThreshold] = useState(3.0);
   const [globalVolatilityEnabled, setGlobalVolatilityEnabled] = useState(true);
   // ── Signal Tag Display Controls ──
   const [globalShowSignalTags, setGlobalShowSignalTags] = useState(true);
@@ -2935,6 +2937,7 @@ export default function ScreenerDashboard() {
           vwapDiff: merged.vwapDiff,
           volumeSpike: merged.volumeSpike,
           price: merged.price,
+          adx: merged.adx,
           enabledIndicators: {
             rsi: globalUseRsi,
             macd: globalUseMacd,

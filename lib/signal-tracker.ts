@@ -61,9 +61,9 @@ const CHECK_INTERVALS = {
   '1h':  60 * 60 * 1000,
 } as const;
 
-// Win threshold: price moved in signal direction by at least 0.3%
-// (0.1% was too tight — crypto noise easily exceeds that without a real signal)
-const WIN_THRESHOLD_PCT = 0.003;
+// Win threshold: price moved in signal direction by at least 0.5%
+// (0.3% was too tight — barely covers spreads + slippage in real trading)
+const WIN_THRESHOLD_PCT = 0.005;
 
 // ── In-memory cache to avoid reading localStorage on every render ──
 let _cache: SignalSnapshot[] | null = null;

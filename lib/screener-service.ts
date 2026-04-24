@@ -1412,6 +1412,8 @@ function buildEntry(
       rsiDivergence: stdRsiDivergence,
       rsiCrossover,
       momentum,
+      adx,
+      market: getMarketType(sym),
     });
 
     // Custom analysis (Isolated from strategy)

@@ -79,7 +79,7 @@ export function calculateRsiSeries(closes: number[], period = 14): number[] {
 }
 
 /** Detects if RSI recently crossed back inside from an extreme zone (Reversal). */
-export function detectRsiCrossover(rsiSeries: number[], upper = 70, lower = 30): 'bullish_reversal' | 'bearish_reversal' | 'none' {
+export function detectRsiCrossover(rsiSeries: number[], upper = 80, lower = 20): 'bullish_reversal' | 'bearish_reversal' | 'none' {
   if (rsiSeries.length < 3) return 'none';
   
   const curr = rsiSeries[rsiSeries.length - 1];
