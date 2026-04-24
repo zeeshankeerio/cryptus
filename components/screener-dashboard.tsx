@@ -3374,29 +3374,42 @@ export default function ScreenerDashboard() {
   }, [processedData, activeAssetClass]);
 
 
-  // ─── Feed Health Aggregation ─────────────────────────────────
-  const feedHealth = useMemo(() => {
-    const now = Date.now();
-    let activeFeeds = 0;
-    let staleFeeds = 0;
-    let totalFeeds = 0;
-    let oldestTickAge = 0;
+  // ─── Feed Health Aggregation (Debounced — 5s) ──────────────────
+  // PERF: Feed health is informational. Computing on every livePrices tick (3/sec)
+  // was wasteful. Now uses a ref-based debounce to recalculate at most once per 5s.
+  const feedHealthRef = useRef({ activeFeeds: 0, staleFeeds: 0, totalFeeds: 0, activePercent: 0, status: 'healthy' as 'healthy' | 'degraded' | 'critical', oldestTickAge: 0 });
+  const feedHealthTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [feedHealth, setFeedHealth] = useState(feedHealthRef.current);
 
-    livePrices.forEach((tick) => {
-      if (!tick.updatedAt) return;
-      totalFeeds++;
-      const age = now - tick.updatedAt;
-      if (age < 5000) activeFeeds++;
-      else if (age > 30000) staleFeeds++;
-      if (age > oldestTickAge) oldestTickAge = age;
-    });
+  useEffect(() => {
+    if (feedHealthTimerRef.current) return; // Already scheduled
+    feedHealthTimerRef.current = setTimeout(() => {
+      feedHealthTimerRef.current = null;
+      const now = Date.now();
+      let activeFeeds = 0, staleFeeds = 0, totalFeeds = 0, oldestTickAge = 0;
+      livePrices.forEach((tick) => {
+        if (!tick.updatedAt) return;
+        totalFeeds++;
+        const age = now - tick.updatedAt;
+        if (age < 5000) activeFeeds++;
+        else if (age > 30000) staleFeeds++;
+        if (age > oldestTickAge) oldestTickAge = age;
+      });
+      const activePercent = totalFeeds > 0 ? (activeFeeds / totalFeeds) * 100 : 0;
+      let status: 'healthy' | 'degraded' | 'critical' = 'healthy';
+      if (activePercent < 50 || staleFeeds > totalFeeds * 0.3) status = 'critical';
+      else if (activePercent < 80 || staleFeeds > 5) status = 'degraded';
+      const next = { activeFeeds, staleFeeds, totalFeeds, activePercent, status, oldestTickAge };
+      feedHealthRef.current = next;
+      setFeedHealth(next);
+    }, 5000);
 
-    const activePercent = totalFeeds > 0 ? (activeFeeds / totalFeeds) * 100 : 0;
-    let status: 'healthy' | 'degraded' | 'critical' = 'healthy';
-    if (activePercent < 50 || staleFeeds > totalFeeds * 0.3) status = 'critical';
-    else if (activePercent < 80 || staleFeeds > 5) status = 'degraded';
-
-    return { activeFeeds, staleFeeds, totalFeeds, activePercent, status, oldestTickAge };
+    return () => {
+      if (feedHealthTimerRef.current) {
+        clearTimeout(feedHealthTimerRef.current);
+        feedHealthTimerRef.current = null;
+      }
+    };
   }, [livePrices]);
 
   const indicatorReadyCount = useMemo(() => (

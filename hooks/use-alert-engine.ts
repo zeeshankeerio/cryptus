@@ -420,45 +420,30 @@ export function useAlertEngine(
             zoneState.current.set(stateKey, currentZone);
           });
 
-          // Strategy Shift — only compute if explicitly enabled for this symbol
+          // Strategy Shift — PERF: Removed main-thread computeStrategyScore() call.
+          // The worker already computes strategy scores and emits ALERT_TRIGGERED
+          // for strategy shifts. The main thread now only records signals for
+          // win-rate tracking using the strategy score from the live tick data.
           if (config?.alertOnStrategyShift) {
-            // Debounce: only evaluate strategy once per 500ms per symbol to avoid CPU spikes
-            const stratKey = `${symbol}-STRAT-EVAL`;
-            const lastEval = lastTriggered.current.get(stratKey) || 0;
-            const now2 = Date.now();
-            if (now2 - lastEval < 500) return; // Skip if evaluated recently
-            lastTriggered.current.set(stratKey, now2);
-
-            const liveStrategy = computeStrategyScore({ ...entry, price: live.price, enabledIndicators: enabledIndicatorsRef.current });
             const sKey = `${symbol}-STRAT`;
             const prevS = zoneState.current.get(sKey);
+            // Use the strategy signal already computed by the worker (from live tick)
+            const currentStrat = live.strategySignal || entry.strategySignal;
+            const currentScore = live.strategyScore ?? entry.strategyScore ?? 0;
 
-            // Record ALL directional signals for win-rate tracking (buy, sell, strong-buy, strong-sell)
-            // This provides comprehensive win-rate data instead of only tracking strong signals
-            if (prevS !== undefined && prevS !== liveStrategy.signal && liveStrategy.signal !== 'neutral') {
-              const now = Date.now();
-              const isStrong = liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'strong-sell';
-              const isBuy = liveStrategy.signal === 'strong-buy' || liveStrategy.signal === 'buy';
-
-              // Always record for win-rate tracking (3-min dedup handled internally)
-              recordSignal(symbol, liveStrategy.signal, live.price);
-
-              // Only fire audible/visual alerts for STRONG signals (no noise for regular buy/sell)
-              if (isStrong && now - (lastTriggered.current.get(sKey) || 0) > COOLDOWN_MS) {
-                lastTriggered.current.set(sKey, now);
-                toast[isBuy ? 'success' : 'error'](`${getSymbolAlias(symbol)} → ${isBuy?'🟢 BUY':'🔴 SELL'}`, { description: `Score: ${liveStrategy.score.toFixed(0)} @ $${formatPrice(live.price)}` });
-                playAlertSoundRef.current(false, (config.priority as any) ?? 'medium');
-                logAlertRef.current({ symbol, exchange: getExchange(), timeframe: 'STRATEGY', value: liveStrategy.score, price: live.price, type: isBuy ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL' });
-                triggerNativeRef.current(`${getSymbolAlias(symbol)} Strategy Shift`, `${isBuy?'Bullish':'Bearish'} signal @ $${formatPrice(live.price)}`);
-              }
+            // Record ALL directional signals for win-rate tracking
+            if (prevS !== undefined && prevS !== currentStrat && currentStrat !== 'neutral') {
+              recordSignal(symbol, currentStrat, live.price);
+              // Strong signal alerts are handled by the worker via ALERT_TRIGGERED
             }
-            zoneState.current.set(sKey, liveStrategy.signal);
+            zoneState.current.set(sKey, currentStrat);
           }
         });
 
-        // Win Rate Evaluation — improved timing (10s interval for better accuracy)
+        // Win Rate Evaluation — PERF: 30s interval (was 10s)
+        // 5m/15m/1h outcomes don't need 10s polling granularity
         const now = Date.now();
-        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 10000) {
+        if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30000) {
           lastWinRateEvalRef.current = now;
           const pm = new Map<string, number>();
           batch.forEach((l, s) => { if (l.price > 0) pm.set(s, l.price); });
@@ -470,7 +455,7 @@ export function useAlertEngine(
     const handleWorkerAlert = (e: Event) => {
       if (!enabledRef.current) return;
       const payload = (e as CustomEvent).detail;
-      const { symbol, exchange, timeframe, value, type } = payload;
+      const { symbol, exchange, timeframe, value, type, price } = payload;
       const config = coinConfigsRef.current[symbol];
       const isVol = type === 'LONG_CANDLE' || type === 'VOLUME_SPIKE';
       if (!config && ((isVol && !globalVolatilityEnabledRef.current) || (!isVol && !globalThresholdsEnabledRef.current))) return;
@@ -483,11 +468,26 @@ export function useAlertEngine(
         lastTriggered.current.set(aKey, now);
         alertCoordinator.setCooldown(cKey);
         const priority: AlertPriority = (config?.priority as AlertPriority) ?? 'medium';
-        const isPos = type === 'OVERSOLD' || type === 'STRATEGY_STRONG_BUY' || type === 'LONG_CANDLE';
-        toast[isPos ? 'success' : 'error'](`${getSymbolAlias(symbol)} ${timeframe} ${type}`, { description: `Value: ${value.toFixed(1)}` });
+        const isBuy = type === 'STRATEGY_STRONG_BUY';
+        const isSell = type === 'STRATEGY_STRONG_SELL';
+        const isPos = type === 'OVERSOLD' || isBuy || type === 'LONG_CANDLE';
+        
+        // Premium formatting for strategy alerts
+        let title = `${getSymbolAlias(symbol)} ${timeframe} ${type}`;
+        let description = `Value: ${value.toFixed(1)} @ $${formatPrice(price ?? 0)}`;
+
+        if (isBuy || isSell) {
+          title = `${getSymbolAlias(symbol)} → ${isBuy ? '🟢 BUY' : '🔴 SELL'}`;
+          description = `Institutional Strategy Signal [Score: ${value.toFixed(0)}] @ $${formatPrice(price ?? 0)}`;
+        } else if (type === 'OVERSOLD' || type === 'OVERBOUGHT') {
+          title = `${getSymbolAlias(symbol)} ${timeframe} ${type === 'OVERSOLD' ? '🛡️ OVERSOLD' : '🔥 OVERBOUGHT'}`;
+        }
+
+        toast[isPos ? 'success' : 'error'](title, { description });
+        
         playAlertSoundRef.current(isVol, priority);
-        logAlertRef.current({ symbol, exchange: exchange ?? getExchange(), timeframe, value, price: payload.price, type });
-        triggerNativeRef.current(`${getSymbolAlias(symbol)} Alert`, `${type} detected on ${timeframe}`);
+        logAlertRef.current({ symbol, exchange: exchange ?? getExchange(), timeframe, value, price: price ?? 0, type });
+        triggerNativeRef.current(title, description);
       }
     };
 

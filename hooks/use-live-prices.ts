@@ -152,8 +152,10 @@ class PriceTickEngine extends EventTarget {
         payload.forEach(([sym, tick]: [string, LiveTick]) => {
           this.prices.set(sym, tick);
           batch.set(sym, tick);
-          this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
         });
+        // PERF: Only dispatch the batch-level event.
+        // Per-symbol 'tick:${sym}' events are deferred to useSymbolPrice polling.
+        // This eliminates 2000+ CustomEvent instantiations/sec.
         this.dispatchEvent(new CustomEvent('ticks', { detail: batch }));
       } else if (type === 'WORKER_HEARTBEAT') {
         // Track worker liveness
@@ -219,18 +221,19 @@ class PriceTickEngine extends EventTarget {
       this.handleVisibility();
     }
     
-    // Method 4: Periodic heartbeat check (aggressive recovery for mobile)
+    // Method 4: Periodic heartbeat check (recovery for mobile)
+    // PERF: Reduced frequency from 5s to 15s. Worker-side unified health monitor
+    // already handles zombie/staleness detection every 10s.
     this.connectionCheckInterval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const lastTick = this.getLastTickTime();
         const silenceMs = Date.now() - lastTick;
-        // ANTI-FREEZE FIX: Reduced from 10s to 5s for faster detection
-        if (silenceMs > 5000) { // No ticks for 5s while visible
+        if (silenceMs > 15000) { // 15s threshold — worker handles 5s detection
           console.warn('[PriceEngine] Detected stale data while visible, forcing resume...');
           this.forceResume();
         }
       }
-    }, 5000); // Check every 5s
+    }, 15000); // 15s interval — reduced from 5s
 
     // ── Network Recovery Logic (PWA Critical) ──
     if (typeof window !== 'undefined') {
@@ -425,14 +428,14 @@ class PriceTickEngine extends EventTarget {
 
   private forceResume() {
     this.postToWorker({ type: 'RESUME' });
-    // Immediately flush cached data to UI
-    const warmBatch = new Map<string, LiveTick>();
-    this.prices.forEach((tick, sym) => {
-      warmBatch.set(sym, tick);
-      this.dispatchEvent(new CustomEvent(`tick:${sym}`, { detail: tick }));
-    });
-    if (warmBatch.size > 0) {
-      this.dispatchEvent(new CustomEvent('ticks', { detail: warmBatch }));
+    // PERF: Do NOT dispatch 100+ individual tick events on tab-focus.
+    // The worker's next flush cycle (250ms) will naturally push fresh data.
+    // Previous implementation caused a sudden burst of 100+ CustomEvents
+    // that blocked the main thread right when the browser is already
+    // under pressure from re-hydrating the tab.
+    // Instead, dispatch a single lightweight batch event from cache.
+    if (this.prices.size > 0) {
+      this.dispatchEvent(new CustomEvent('ticks', { detail: new Map(this.prices) }));
     }
   }
 
@@ -649,7 +652,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
         lastUpdate = now;
         pendingBatch.clear();
       }
-    }, 100); // 100ms flush — fast enough for real-time feel, avoids 50ms render storms
+    }, 300); // PERF: 300ms flush — limits React re-renders to ~3/sec (was 100ms = 10/sec)
 
     const handleWorkerMessage = (e: MessageEvent) => {
       if (!mountedRef.current) return;
@@ -719,17 +722,26 @@ export function useSymbolPrice(symbol: string, initialPrice: number = 0, enabled
   useEffect(() => {
     if (!enabled) return;
 
-    const handler = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      setTick(detail);
-    };
+    // PERF: Poll the engine cache at 300ms intervals instead of per-tick events.
+    // Previous approach dispatched one CustomEvent per symbol per flush (2000+/sec).
+    // This polling approach has zero event overhead and still provides <300ms latency.
+    let lastPrice: number | undefined;
+    const pollInterval = setInterval(() => {
+      const latest = engine.getLatest(symbol);
+      if (latest && latest.price !== lastPrice) {
+        lastPrice = latest.price;
+        setTick(latest);
+      }
+    }, 300);
 
-    engine.addEventListener(`tick:${symbol}`, handler);
-    // Grab latest once in case it updated during mount or while disabled
+    // Grab latest once on mount
     const latest = engine.getLatest(symbol);
-    if (latest) setTick(latest);
+    if (latest) {
+      lastPrice = latest.price;
+      setTick(latest);
+    }
 
-    return () => engine.removeEventListener(`tick:${symbol}`, handler);
+    return () => clearInterval(pollInterval);
   }, [symbol, enabled]);
 
   return tick;
