@@ -1358,3 +1358,122 @@ export function calculateFibonacciLevels(
     level786: round(swingHigh - range * 0.786),
   };
 }
+
+// ── Rolling ATR Average (for Regime Classification) ──────────────
+
+/**
+ * Compute the average ATR over a rolling lookback window.
+ * This is the `atrAvg` parameter required by `classifyRegime()` to distinguish
+ * trending vs volatile regimes. Without it, the ratio always defaults to 1.0
+ * which makes trending/volatile detection impossible.
+ *
+ * @param highs   - High price series
+ * @param lows    - Low price series
+ * @param closes  - Close price series
+ * @param atrPeriod - ATR smoothing period (default 14)
+ * @param lookback  - Number of ATR values to average (default 20)
+ */
+export function computeRollingAtrAverage(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  atrPeriod = 14,
+  lookback = 20,
+): number | null {
+  // Need enough data: atrPeriod bars for first ATR + lookback additional bars
+  if (highs.length < atrPeriod + lookback + 1) return null;
+
+  const atrSeries: number[] = [];
+  for (let i = highs.length - lookback; i < highs.length; i++) {
+    // Each window needs atrPeriod+1 bars (ATR requires previous close)
+    const slice_h = highs.slice(i - atrPeriod, i + 1);
+    const slice_l = lows.slice(i - atrPeriod, i + 1);
+    const slice_c = closes.slice(i - atrPeriod, i + 1);
+    const atr = calculateATR(slice_h, slice_l, slice_c, atrPeriod);
+    if (atr !== null) atrSeries.push(atr);
+  }
+
+  if (atrSeries.length === 0) return null;
+  return round(atrSeries.reduce((a, b) => a + b, 0) / atrSeries.length);
+}
+
+// ── Rolling BB Width Average (for Regime Classification) ─────────
+
+/**
+ * Compute the average Bollinger Band width (normalized by middle band) over
+ * a rolling lookback window. Required by `classifyRegime()` for squeeze detection.
+ *
+ * BB Width = (upper - lower) / middle
+ * A ratio < 0.8 of its average signals a BB Squeeze → imminent breakout.
+ *
+ * @param closes  - Close price series
+ * @param period  - Bollinger Band period (default 20)
+ * @param lookback - Number of BB width values to average (default 20)
+ */
+export function computeRollingBbWidthAverage(
+  closes: number[],
+  period = 20,
+  lookback = 20,
+): number | null {
+  if (closes.length < period + lookback) return null;
+
+  const widths: number[] = [];
+  for (let i = closes.length - lookback; i < closes.length; i++) {
+    if (i < period - 1) continue;
+    // Compute BB on the exact `period` candles ending at index i
+    const slice = closes.slice(i - period + 1, i + 1);
+    const bb = calculateBollinger(slice, period);
+    if (bb && bb.middle > 0) {
+      widths.push((bb.upper - bb.lower) / bb.middle);
+    }
+  }
+
+  if (widths.length === 0) return null;
+  return round(widths.reduce((a, b) => a + b, 0) / widths.length);
+}
+
+// ── CCI (Commodity Channel Index) ────────────────────────────────
+
+/**
+ * Commodity Channel Index: a momentum oscillator designed specifically for
+ * commodity and metals markets (hence "Commodity" in the name).
+ *
+ * Unlike RSI (bounded 0-100), CCI is unbounded:
+ *   > +200  →  Extreme overbought (strong trend, momentum buy)
+ *   +100 to +200 → Overbought / trend continuation
+ *   -100 to +100 → Neutral range
+ *   -100 to -200 → Oversold / trend continuation
+ *   < -200  →  Extreme oversold (strong trend, momentum sell)
+ *
+ * CCI crossovers of ±100 generate institutional-grade entry signals.
+ * Particularly effective for Gold, Silver, Oil, and Copper where trend
+ * persistence is higher than crypto. Standard institutional period: 20.
+ *
+ * Formula: CCI = (Typical Price - SMA(TP, n)) / (0.015 × MeanDeviation)
+ */
+export function calculateCCI(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  period = 20,
+): number | null {
+  if (highs.length < period || lows.length < period || closes.length < period) return null;
+
+  // Calculate Typical Prices for the period window
+  const typicalPrices: number[] = [];
+  for (let i = highs.length - period; i < highs.length; i++) {
+    typicalPrices.push((highs[i] + lows[i] + closes[i]) / 3);
+  }
+
+  // Mean of typical prices
+  const mean = typicalPrices.reduce((a, b) => a + b, 0) / period;
+
+  // Mean Deviation (not std dev — CCI specifically uses mean absolute deviation)
+  const meanDeviation = typicalPrices.reduce((a, b) => a + Math.abs(b - mean), 0) / period;
+
+  if (meanDeviation === 0) return 0;
+
+  const currentTP = typicalPrices[typicalPrices.length - 1];
+  // 0.015 is the standard Lambert constant that normalizes ~70-80% of values to ±100
+  return round((currentTP - mean) / (0.015 * meanDeviation));
+}

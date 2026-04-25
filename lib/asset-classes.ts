@@ -52,12 +52,21 @@ export const FOREX_SYMBOLS = [
 ];
 
 export const METALS_SYMBOLS = [
-  { yahoo: 'GC=F',   display: 'Gold (XAU)',     exchange: 'XAUUSDT', type: 'precious' },
-  { yahoo: 'SI=F',   display: 'Silver (XAG)',    exchange: 'XAGUSDT', type: 'precious' },
-  { yahoo: 'PL=F',   display: 'Platinum (XPT)',  exchange: null,      type: 'precious' },
-  { yahoo: 'PA=F',   display: 'Palladium (XPD)', exchange: null,      type: 'precious' },
-  { yahoo: 'HG=F',   display: 'Copper',          exchange: null,      type: 'industrial' },
-  { yahoo: 'ALI=F',  display: 'Aluminum',        exchange: null,      type: 'industrial' },
+  // ── Precious Metals ──────────────────────────────────────────────
+  { yahoo: 'GC=F',   display: 'Gold (XAU)',     exchange: 'XAUUSDT', type: 'precious'   as const },
+  // NOTE: Silver has NO Binance/Bybit equivalent (XAGUSDT does not exist). Yahoo-only.
+  { yahoo: 'SI=F',   display: 'Silver (XAG)',    exchange: null,      type: 'precious'   as const },
+  { yahoo: 'PL=F',   display: 'Platinum (XPT)',  exchange: null,      type: 'precious'   as const },
+  { yahoo: 'PA=F',   display: 'Palladium (XPD)', exchange: null,      type: 'precious'   as const },
+  // ── Industrial Metals ─────────────────────────────────────────────
+  { yahoo: 'HG=F',   display: 'Copper (HG)',     exchange: null,      type: 'industrial' as const },
+  { yahoo: 'ALI=F',  display: 'Aluminum',        exchange: null,      type: 'industrial' as const },
+  // ── Energy / Crude Oil ────────────────────────────────────────────
+  // Institutional benchmark: WTI & Brent are traded by the same desks as metals.
+  // Yahoo Finance provides reliable 5m/1h futures data for both.
+  { yahoo: 'CL=F',   display: 'WTI Crude Oil',   exchange: null,      type: 'energy'     as const },
+  { yahoo: 'BZ=F',   display: 'Brent Crude',      exchange: null,      type: 'energy'     as const },
+  { yahoo: 'NG=F',   display: 'Natural Gas',      exchange: null,      type: 'energy'     as const },
 ];
 
 export const STOCKS_SYMBOLS = [

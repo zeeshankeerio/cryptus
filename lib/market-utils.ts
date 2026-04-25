@@ -13,9 +13,22 @@ import {
 export function getMarketType(symbol: string): ScreenerEntry['market'] {
   const s = symbol.toUpperCase();
   
-  // Metal Detection (Yahoo + Binance/Bybit linear)
+  // Metal Detection (Yahoo + Binance/Bybit linear + Energy futures)
+  // All energy commodities (oil, gas) are classified as 'Metal' for RSI zone calibration
+  // (Metal zones: 22/32/68/78 — appropriate for low-volatility commodity futures)
   const isMetal = METALS_SYMBOLS.some(m => m.yahoo === s || m.exchange === s) || 
-                  ['PAXGUSDT', 'XAUTUSDT', 'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD', 'GC=F', 'SI=F', 'PL=F', 'PA=F', 'HG=F'].includes(s);
+                  [
+                    // Gold tokenized on-chain
+                    'PAXGUSDT', 'XAUTUSDT',
+                    // Spot/futures aliases
+                    'GOLD', 'SILVER', 'XAUUSD', 'XAGUSD',
+                    // Yahoo futures
+                    'GC=F', 'SI=F', 'PL=F', 'PA=F',
+                    // Industrial metals
+                    'HG=F', 'ALI=F',
+                    // Energy (crude oil, gas)
+                    'CL=F', 'BZ=F', 'NG=F',
+                  ].includes(s);
   if (isMetal) return 'Metal';
 
   // Forex Detection (Yahoo + Major Crosses)

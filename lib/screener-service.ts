@@ -9,6 +9,8 @@ import {
   calculateATR, calculateADX, deriveSignal,
   calculateOBV, calculateWilliamsR,
   computeRiskParameters, detectHiddenDivergence, calculateFibonacciLevels,
+  // 2026 Intelligence: Regime fix + Commodity Channel Index
+  computeRollingAtrAverage, computeRollingBbWidthAverage, calculateCCI,
 } from './indicators';
 import { classifyRegime } from './market-regime';
 import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
@@ -808,12 +810,34 @@ async function fetchWithRetry(
 /**
  * Yahoo Finance kline adapter for Global Indices.
  * Maps Yahoo JSON structure to standard BinanceKline format.
+ *
+ * ⚡ 2026 Metals Fix: Commodity futures (GC=F, SI=F, CL=F, BZ=F, etc.) do not
+ * maintain reliable 1m history on Yahoo Finance — they typically return only
+ * a few dozen candles which is insufficient for RSI(14), MACD(26), or Stoch(14).
+ * For metals/energy: use 5m interval (60 days available = ~17,000 candles).
  */
+
+// Symbols routed to 5m interval (commodity futures with sparse 1m data)
+const METALS_YAHOO_SYMBOLS = new Set([
+  'GC=F', 'SI=F', 'PL=F', 'PA=F',  // Precious metals
+  'HG=F', 'ALI=F',                  // Industrial metals
+  'CL=F', 'BZ=F', 'NG=F',           // Energy
+]);
+
 async function fetchYahooKlines(symbol: string, interval: string = '1m'): Promise<BinanceKline[]> {
   const yahooSym = YAHOO_MARKET_MAP[symbol] || symbol;
-  // interval mapping: 1m -> 1m, 1h -> 1h
-  const range = interval === '1h' ? '5d' : '1d';
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=${interval}&range=${range}`;
+
+  // ── Metals/Energy routing: 1m has too few candles for indicator computation ──
+  // Yahoo's 5m interval returns up to 60 days = ~17,280 candles (plenty for RSI/MACD/BB/Stoch)
+  const effectiveInterval = (interval === '1m' && METALS_YAHOO_SYMBOLS.has(symbol)) ? '5m' : interval;
+
+  // Range selection based on effective interval
+  let range: string;
+  if (effectiveInterval === '1h') range = '5d';
+  else if (effectiveInterval === '5m') range = '60d';
+  else range = '1d'; // 1m default
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=${effectiveInterval}&range=${range}`;
 
   try {
     debugLog(`[yahoo] Fetching ${interval} klines for ${symbol} (${yahooSym})`);
@@ -987,6 +1011,7 @@ async function fetchBybitKlines(symbol: string, interval: string, exchange: stri
  */
 async function fetchKlines(symbol: string, exchange: string = 'binance', signal?: AbortSignal): Promise<BinanceKline[]> {
   if (YAHOO_SYMBOLS.includes(symbol)) {
+    // Metals/energy use 5m routing (handled inside fetchYahooKlines)
     return fetchYahooKlines(symbol, '1m');
   }
   if (exchange.startsWith('bybit')) {
@@ -1411,16 +1436,28 @@ function buildEntry(
     // 2026 Intelligence: Fibonacci Retracement Levels
     const fibLevels = calculateFibonacciLevels(closes15m, 50);
 
-    // 2026 Intelligence: Market Regime Classification
+    // 2026 Intelligence: CCI (Commodity Channel Index)
+    // Critical for metals/energy — designed for commodity futures trending markets.
+    // Also used as a supplementary oscillator for crypto in ranging regimes.
+    const cci = calculateCCI(highs15m, lows15m, closes15m, 20);
+
+    // 2026 Intelligence: Market Regime Classification (FIXED)
+    // Previously hardcoded atrAvg=null and bbWidthAvg=null which permanently
+    // broke the trending/volatile distinction in classifyRegime().
     const bbWidth = (bb && bb.upper && bb.lower && bb.middle && bb.middle > 0)
       ? (bb.upper - bb.lower) / bb.middle
       : null;
+    // Rolling ATR average: needed to compute ATR ratio (current/avg) for regime detection
+    const atrAvgRolling = computeRollingAtrAverage(highs15m, lows15m, closes15m, 14, 20);
+    // Rolling BB width average: needed for BB squeeze/expansion detection
+    const bbWidthAvgRolling = computeRollingBbWidthAverage(closes15m, 20, 20);
+
     const regimeResult = classifyRegime({
       adx,
       atr,
-      atrAvg: null, // TODO: compute rolling ATR average for better regime detection
+      atrAvg: atrAvgRolling,       // ✅ Fixed: was always null
       bbWidth,
-      bbWidthAvg: null, // TODO: compute rolling BB width average
+      bbWidthAvg: bbWidthAvgRolling, // ✅ Fixed: was always null
       volumeSpike,
     });
 
@@ -1493,6 +1530,7 @@ function buildEntry(
       momentum,
       atr,
       adx,
+      cci,
       obvTrend: obvResult?.trend ?? 'none',
       williamsR,
       avgBarSize1m: calculateAvgBarSize(highs1m, lows1m, 20),

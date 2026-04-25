@@ -14,6 +14,7 @@
  */
 
 import type { ScreenerEntry } from './types';
+import { RSI_ZONES } from './defaults';
 
 // ── Output Types ─────────────────────────────────────────────────
 
@@ -34,15 +35,23 @@ export interface SignalNarration {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-function rsiZone(rsi: number | null): string | null {
+/**
+ * Get a human-readable zone description for an RSI value,
+ * calibrated to the asset class's volatility profile.
+ *
+ * Crypto: wide zones (20/30/70/80) — extreme oscillations are normal
+ * Metals/Forex: tighter zones (22-25/32-35/65-68/75-78) — commodity mean-reversion
+ */
+function rsiZone(rsi: number | null, market: ScreenerEntry['market'] = 'Crypto'): string | null {
   if (rsi === null) return null;
-  if (rsi <= 20) return 'deeply oversold';
-  if (rsi <= 30) return 'oversold';
-  if (rsi <= 40) return 'approaching oversold';
-  if (rsi >= 80) return 'deeply overbought';
-  if (rsi >= 70) return 'overbought';
-  if (rsi >= 65) return 'approaching overbought';
-  return null; // Neutral - not interesting enough to narrate
+  const zones = RSI_ZONES[market] ?? RSI_ZONES.Crypto;
+  if (rsi <= zones.deepOS) return 'deeply oversold';
+  if (rsi <= zones.os)     return 'oversold';
+  if (rsi <= zones.os + 10) return 'approaching oversold';
+  if (rsi >= zones.deepOB) return 'deeply overbought';
+  if (rsi >= zones.ob)     return 'overbought';
+  if (rsi >= zones.ob - 5) return 'approaching overbought';
+  return null; // Neutral — not interesting enough to narrate
 }
 
 function formatNum(n: number | null, decimals = 1): string {
@@ -67,44 +76,47 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
     volatility: false
   };
 
-  // ── 1. RSI Analysis (Multi-timeframe) ──
+  const market = entry.market ?? 'Crypto';
+  const zones = RSI_ZONES[market] ?? RSI_ZONES.Crypto;
+
   const rsiValues = [
     { label: '1m', val: entry.rsi1m },
     { label: '15m', val: entry.rsi15m },
     { label: '1h', val: entry.rsi1h },
   ].filter(r => r.val !== null);
 
-  const oversoldCount = rsiValues.filter(r => r.val !== null && r.val <= 30).length;
-  const overboughtCount = rsiValues.filter(r => r.val !== null && r.val >= 70).length;
-  const deepOversoldCount = rsiValues.filter(r => r.val !== null && r.val <= 20).length;
-  const deepOverboughtCount = rsiValues.filter(r => r.val !== null && r.val >= 80).length;
+  const oversoldCount     = rsiValues.filter(r => r.val !== null && r.val <= zones.os).length;
+  const overboughtCount   = rsiValues.filter(r => r.val !== null && r.val >= zones.ob).length;
+  const deepOversoldCount = rsiValues.filter(r => r.val !== null && r.val <= zones.deepOS).length;
+  const deepOverboughtCount = rsiValues.filter(r => r.val !== null && r.val >= zones.deepOB).length;
 
   if (deepOversoldCount >= 2) {
-    reasons.push(`📉 RSI deeply oversold across ${deepOversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= 20).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    reasons.push(`📉 RSI deeply oversold across ${deepOversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= zones.deepOS).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')}) — ${market === 'Metal' ? 'commodity demand zone' : 'strong reversal setup'}`);
     bullishPoints += deepOversoldCount * 15;
     totalPoints += deepOversoldCount * 15;
   } else if (oversoldCount >= 2) {
-    reasons.push(`📉 RSI oversold across ${oversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= 30).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    reasons.push(`📉 RSI oversold across ${oversoldCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val <= zones.os).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
     bullishPoints += oversoldCount * 12;
     totalPoints += oversoldCount * 12;
   } else if (deepOverboughtCount >= 2) {
-    reasons.push(`📈 RSI deeply overbought across ${deepOverboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= 80).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    reasons.push(`📈 RSI deeply overbought across ${deepOverboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= zones.deepOB).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')}) — ${market === 'Metal' ? 'commodity supply zone' : 'reversal risk elevated'}`);
     bearishPoints += deepOverboughtCount * 15;
     totalPoints += deepOverboughtCount * 15;
   } else if (overboughtCount >= 2) {
-    reasons.push(`📈 RSI overbought across ${overboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= 70).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
+    reasons.push(`📈 RSI overbought across ${overboughtCount} timeframes (${rsiValues.filter(r => r.val !== null && r.val >= zones.ob).map(r => `${r.label}: ${formatNum(r.val)}`).join(', ')})`);
     bearishPoints += overboughtCount * 12;
     totalPoints += overboughtCount * 12;
   } else if (entry.rsiCustom !== null) {
-    const zone = rsiZone(entry.rsiCustom);
+    const zone = rsiZone(entry.rsiCustom, market);
     if (zone) {
-      const isBullish = entry.rsiCustom <= 40;
+      const isBullish = entry.rsiCustom <= zones.os + 10;
       reasons.push(`${isBullish ? '📉' : '📈'} RSI(14) is ${zone} at ${formatNum(entry.rsiCustom)}`);
       if (isBullish) bullishPoints += 10; else bearishPoints += 10;
       totalPoints += 10;
       pillars.momentum = true;
     }
   }
+
 
   // ── 2. EMA Cross ──
   if (entry.emaCross === 'bullish') {
@@ -198,13 +210,14 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
   // ── 9. ADX Trend Strength ──
   if (entry.adx !== null && entry.adx > 0) {
     if (entry.adx > 30) {
-      reasons.push(`📐 ADX at ${formatNum(entry.adx)} - strong trend in play`);
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)} — strong trend confirmed, trend-following signals amplified`);
       totalPoints += 5;
-      // ADX doesn't add directional bias, but amplifies existing bias
+      // ADX confirms direction of the dominant bias — amplifies, doesn't create
+      // BUG FIX: was incorrectly adding to bullishPoints regardless of actual bias
       if (bullishPoints > bearishPoints) bullishPoints += 5;
-      else if (bearishPoints > bullishPoints) bullishPoints += 5;
+      else if (bearishPoints > bullishPoints) bearishPoints += 5; // ✅ Fixed
     } else if (entry.adx < 18) {
-      reasons.push(`📐 ADX at ${formatNum(entry.adx)} - choppy/ranging market, signals less reliable`);
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)} — choppy/ranging market, oscillator signals more reliable`);
       totalPoints += 3;
     }
     pillars.trend = true;
@@ -350,11 +363,101 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
   // ── 17. Fair Value Gap (FVG) & Momentum Gaps ──
   if (entry.regime?.regime === 'breakout' && entry.longCandle && entry.volumeSpike) {
     const direction = entry.candleDirection === 'bullish' ? 'Bullish' : 'Bearish';
-    reasons.push(`⚡ ${direction} Fair Value Gap (FVG) / Momentum Gap detected - rapid institutional execution in progress`);
+    reasons.push(`⚡ ${direction} Fair Value Gap (FVG) / Momentum Gap detected — rapid institutional execution in progress`);
     totalPoints += 12;
     if (entry.candleDirection === 'bullish') bullishPoints += 12;
     else if (entry.candleDirection === 'bearish') bearishPoints += 12;
     pillars.liquidity = true;
+  }
+
+  // ── 18. Metals / Energy Institutional Context ──────────────────────
+  // Asset-specific macroeconomic and commodity context. This section only
+  // activates for Metal-classified assets (Gold, Silver, Oil, Copper, etc.).
+  // Provides the 'why' behind the technical signal using commodity market economics.
+  if (market === 'Metal') {
+    const sym = entry.symbol?.toUpperCase() || '';
+    const isGold   = ['GC=F', 'XAUTUSDT', 'PAXGUSDT', 'XAUUSD', 'GOLD'].includes(sym);
+    const isSilver  = ['SI=F', 'XAGUSD', 'SILVER'].includes(sym);
+    const isOil     = ['CL=F', 'BZ=F'].includes(sym);
+    const isGas     = ['NG=F'].includes(sym);
+    const isCopper  = ['HG=F'].includes(sym);
+    const isBullish = bullishPoints > bearishPoints;
+    const isBearish = bearishPoints > bullishPoints;
+
+    // ── Gold: Safe-Haven / USD Inverse / Central Bank Demand ──
+    if (isGold) {
+      if (isBullish) {
+        reasons.push('🏅 Gold Macro Context: Bullish setups often coincide with USD weakness, elevated geopolitical risk, or inflation hedging demand. Monitor DXY for inverse confirmation.');
+      } else if (isBearish) {
+        reasons.push('🏅 Gold Macro Context: Bearish pressure may reflect USD strengthening or risk-on rotation. Central bank buying provides structural support — consider scaling entries.');
+      } else {
+        reasons.push('🏅 Gold Macro Context: Neutral consolidation — awaiting a catalyst (CPI, Fed policy, geopolitical event). Gold typically leads risk-off moves by 1-3 sessions.');
+      }
+      pillars.structure = true;
+    }
+
+    // ── Silver: Industrial Demand + Safe-Haven Hybrid ──
+    if (isSilver) {
+      if (isBullish) {
+        reasons.push('🥈 Silver Macro Context: Dual driver — safe-haven buying AND industrial demand (solar panels, electronics). Silver typically lags Gold then outperforms (higher beta).');
+      } else if (isBearish) {
+        reasons.push('🥈 Silver Macro Context: Industrial slowdown fears + USD strength can pressure Silver harder than Gold. Gold/Silver ratio expansion = bearish for Silver.');
+      }
+      pillars.structure = true;
+    }
+
+    // ── WTI / Brent Crude Oil: Supply-Demand Cycle ──
+    if (isOil) {
+      if (isBullish) {
+        reasons.push('🛢️ Oil Macro Context: Bullish oil signals driven by supply constraints (OPEC+ cuts), geopolitical risk premium, or demand recovery. Watch EIA inventory reports.');
+      } else if (isBearish) {
+        reasons.push('🛢️ Oil Macro Context: Bearish pressure from demand destruction fears, supply glut, or OPEC compliance concerns. Recession signals amplify oil drawdowns.');
+      } else {
+        reasons.push('🛢️ Oil Macro Context: Consolidation — oil markets balancing supply/demand. Breakout direction typically dictated by next OPEC+ meeting or US inventory data.');
+      }
+      pillars.structure = true;
+    }
+
+    // ── Natural Gas: Seasonal / Storage Cycle ──
+    if (isGas) {
+      reasons.push('⛽ Natural Gas Context: Highly seasonal — summer/winter storage cycles drive extreme moves. Check EIA storage reports for directional confirmation.');
+    }
+
+    // ── Copper: Economic Bellwether / "Dr. Copper" ──
+    if (isCopper) {
+      if (isBullish) {
+        reasons.push('🟤 Copper Macro: "Dr. Copper" bullish — industrial expansion signal. China PMI and construction data are primary catalysts for copper demand.');
+      } else if (isBearish) {
+        reasons.push('🟤 Copper Macro: Copper weakness signals industrial slowdown. Often a leading indicator of broader economic contraction 2-3 months ahead.');
+      }
+    }
+
+    // ── CCI (Commodity Channel Index) for all metals ──
+    // CCI was designed specifically for commodity markets and is more reliable
+    // for commodity futures than RSI due to its unbounded range and mean-reversion.
+    const cci = (entry as any).cci as number | null | undefined;
+    if (cci !== null && cci !== undefined) {
+      if (cci > 200) {
+        reasons.push(`📡 CCI at ${cci.toFixed(0)} — extreme overbought (commodity momentum peak). High reversal probability — consider profit-taking or tight trailing stops.`);
+        bearishPoints += 8; totalPoints += 8;
+      } else if (cci > 100) {
+        reasons.push(`📡 CCI at ${cci.toFixed(0)} — overbought zone. Trend likely intact but momentum may plateau. Watch for CCI crossover below +100 as exit signal.`);
+        bearishPoints += 4; totalPoints += 4;
+      } else if (cci < -200) {
+        reasons.push(`📡 CCI at ${cci.toFixed(0)} — extreme oversold (commodity demand spike zone). High mean-reversion probability — institutional buyers typically step in here.`);
+        bullishPoints += 8; totalPoints += 8;
+      } else if (cci < -100) {
+        reasons.push(`📡 CCI at ${cci.toFixed(0)} — oversold territory. Bullish entry zone — wait for CCI crossover above -100 to confirm reversal.`);
+        bullishPoints += 4; totalPoints += 4;
+      } else {
+        // CCI in neutral zone — add informational context only if near boundaries
+        if (Math.abs(cci) > 80) {
+          const dir = cci > 0 ? 'approaching overbought' : 'approaching oversold';
+          reasons.push(`📡 CCI at ${cci.toFixed(0)} — ${dir} boundary. Monitor for ±100 crossover entry signal.`);
+        }
+      }
+      pillars.momentum = true;
+    }
   }
 
   // ── Compose Headline & Conviction ──
@@ -381,23 +484,39 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
   let emoji: string;
 
   if (netBias > 25) {
-    if (conviction >= 80 && pillarCount >= 3) headline = 'Institutional Buy Setup - High Confluence';
-    else if (conviction >= 60) headline = 'Bullish Expansion - Strategy Confirmed';
-    else headline = 'Emerging Bullish Momentum';
+    if (conviction >= 80 && pillarCount >= 3) {
+      headline = market === 'Metal'
+        ? 'Institutional Commodity Buy — Demand Zone Confirmed'
+        : 'Institutional Buy Setup — High Confluence';
+    } else if (conviction >= 60) {
+      headline = market === 'Metal'
+        ? 'Bullish Commodity Setup Forming — Awaiting Confirmation'
+        : 'Bullish Expansion — Strategy Confirmed';
+    } else {
+      headline = 'Bullish Setup Forming — Awaiting Confirmation';
+    }
     emoji = conviction >= 70 ? '🟢🔥' : '🟢';
   } else if (netBias < -25) {
-    if (conviction >= 80 && pillarCount >= 3) headline = 'Institutional Sell Setup - High Confluence';
-    else if (conviction >= 60) headline = 'Bearish Distribution - Strategy Confirmed';
-    else headline = 'Bearish Pressure Building';
+    if (conviction >= 80 && pillarCount >= 3) {
+      headline = market === 'Metal'
+        ? 'Institutional Commodity Sell — Supply Zone Active'
+        : 'Institutional Sell Setup — High Confluence';
+    } else if (conviction >= 60) {
+      headline = market === 'Metal'
+        ? 'Bearish Commodity Distribution — Exit Longs'
+        : 'Bearish Distribution — Exit Longs, Monitor Shorts';
+    } else {
+      headline = 'Bearish Pressure Building — Confirm Before Entry';
+    }
     emoji = conviction >= 70 ? '🔴🔥' : '🔴';
   } else if (totalPoints > 40 || (pillarCount >= 2 && Math.abs(netBias) < 15)) {
-    headline = 'Equilibrium - Market Consolidation (HOLD)';
+    headline = 'Indecision Zone — Conflicting Signals, Risk Off';
     emoji = '🟡';
     if (reasons.length > 0 && !reasons.some(r => r.includes('HOLD'))) {
-      reasons.push('⚖️ Conflicting signals detected - neutral stance (HOLD) recommended until breakout');
+      reasons.push('⚖️ Conflicting signals detected — neutral stance recommended until price confirms direction');
     }
   } else {
-    headline = 'Technical Neutral - Awaiting Trigger (HOLD)';
+    headline = 'Market Equilibrium — No Edge, Stand Aside';
     emoji = '⚪';
   }
 
@@ -407,8 +526,10 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
   }
 
   // ── Compose Share Line ──
+  const assetPrefix = market === 'Metal' ? '🏅' : market === 'Forex' ? '💱' : '';
   const topReason = reasons[0]?.replace(/^[^\s]+\s/, '') || 'Neutral';
-  const shareLine = `${emoji} ${headline} | ${topReason} | Conviction: ${conviction}% (${convictionLabel})`;
+  const institutionalTag = conviction >= 80 && pillarCount >= 4 ? ' | ✅ Institutional Alignment Confirmed' : '';
+  const shareLine = `${assetPrefix}${emoji} ${headline} | ${topReason} | Conviction: ${conviction}% (${convictionLabel})${institutionalTag}`;
 
   return {
     headline,

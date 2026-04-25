@@ -105,6 +105,7 @@ export interface ScreenerEntry {
   } | null;
   // ── 2026 Intelligence: Fibonacci Levels ──
   fibLevels?: {
+
     swingHigh: number;
     swingLow: number;
     level236: number;

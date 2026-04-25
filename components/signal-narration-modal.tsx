@@ -37,7 +37,7 @@ export function SignalNarrationModal({
   narration,
   symbol,
   entry,
-  rsiPeriod = 15,
+  rsiPeriod = 14,
   smartMoneyScore,
   orderFlowData,
   fundingRate,
@@ -175,7 +175,15 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     <div className="flex items-center gap-3 mt-1.5 opacity-80 scale-90 origin-left">
                       <div className="flex items-center gap-1">
                         <span className="text-[7px] font-black text-slate-500 uppercase">Indic. Sync:</span>
-                        <span className="text-[9px] font-black text-blue-400">{entry?.confluence || 0}%</span>
+                        <span className={cn(
+                          "text-[9px] font-black",
+                          (entry?.confluence || 0) >= 50 ? "text-[#39FF14]" :
+                          (entry?.confluence || 0) >= 20 ? "text-emerald-400" :
+                          (entry?.confluence || 0) <= -50 ? "text-[#FF4B5C]" :
+                          (entry?.confluence || 0) <= -20 ? "text-orange-400" : "text-slate-400"
+                        )}>
+                          {entry?.confluenceLabel || (entry?.confluence !== undefined ? (entry.confluence > 0 ? 'Bullish' : entry.confluence < 0 ? 'Bearish' : 'Mixed') : 'N/A')}
+                        </span>
                       </div>
                       <div className="w-px h-2 bg-white/10" />
                       <div className="flex items-center gap-1">
@@ -478,8 +486,22 @@ Powered by Mindscape Analytics Signal Narration Engine™
                         <span className="text-slate-400 font-medium">Volatility (ATR)</span>
                         <div className="flex items-center gap-1.5">
                           <span className="text-[9px] font-mono text-slate-500">${entry?.atr?.toFixed(4) || '0.0000'}</span>
-                          <span className={cn("font-black uppercase", (entry?.atr || 0) > 0.02 ? "text-orange-400" : "text-emerald-400")}>
-                            {(entry?.atr || 0) > 0.02 ? 'High' : 'Normal'}
+                          <span className={cn("font-black uppercase", (() => {
+                            // Asset-class-aware ATR threshold
+                            // Crypto: 0.02 | Metals: 10.0 (absolute price units $5-50 range) | Forex: 0.005
+                            const threshold = entry?.market === 'Metal' ? 10.0
+                              : entry?.market === 'Forex' ? 0.005
+                              : entry?.market === 'Stocks' ? 2.0
+                              : 0.02;
+                            return (entry?.atr || 0) > threshold ? 'text-orange-400' : 'text-emerald-400';
+                          })())}>
+                            {(() => {
+                              const threshold = entry?.market === 'Metal' ? 10.0
+                                : entry?.market === 'Forex' ? 0.005
+                                : entry?.market === 'Stocks' ? 2.0
+                                : 0.02;
+                              return (entry?.atr || 0) > threshold ? 'High' : 'Normal';
+                            })()}
                           </span>
                         </div>
                       </div>
