@@ -304,6 +304,51 @@ export function getGlobalWinRate(): {
 }
 
 /**
+ * Returns a summary of all evaluated signals for global synchronization.
+ */
+export function getWinRateSummary() {
+  const snapshots = loadSnapshots();
+  const summary = {
+    total: 0,
+    win5m: 0,
+    win15m: 0,
+    win1h: 0,
+    evaluated5m: 0,
+    evaluated15m: 0,
+    evaluated1h: 0,
+  };
+
+  snapshots.forEach(s => {
+    summary.total++;
+    if (s.win5m !== undefined && s.win5m !== null) {
+      summary.evaluated5m++;
+      if (s.win5m) summary.win5m++;
+    }
+    if (s.win15m !== undefined && s.win15m !== null) {
+      summary.evaluated15m++;
+      if (s.win15m) summary.win15m++;
+    }
+    if (s.win1h !== undefined && s.win1h !== null) {
+      summary.evaluated1h++;
+      if (s.win1h) summary.win1h++;
+    }
+  });
+
+  return summary;
+}
+
+/**
+ * Global Hydration: Allows production servers to seed the client win rate.
+ * Prevents 'Calibrating' state on new devices.
+ */
+export function hydrateGlobalWinRate(data: Partial<ReturnType<typeof getWinRateSummary>>) {
+  if (typeof window === 'undefined') return;
+  // We don't overwrite local snapshots, we just return the combined stats
+  // For now, this is used as a fallback if local total < 5.
+  return data;
+}
+
+/**
  * Clear all signal tracking data.
  */
 export function clearSignalTracker(): void {

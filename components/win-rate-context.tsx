@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import { computeWinRateStats, pruneStaleSymbols, type WinRateStats } from '@/lib/signal-tracker';
+import { computeWinRateStats, pruneStaleSymbols, getWinRateSummary, type WinRateStats } from '@/lib/signal-tracker';
 
 /**
  * Win Rate Context Provider
@@ -17,8 +17,19 @@ import { computeWinRateStats, pruneStaleSymbols, type WinRateStats } from '@/lib
  * - Single source of truth for all win rate displays
  */
 
-interface WinRateContextValue {
+export interface GlobalWinRateData {
+  total: number;
+  win5m: number;
+  win15m: number;
+  win1h: number;
+  evaluated5m: number;
+  evaluated15m: number;
+  evaluated1h: number;
+}
+
+export interface WinRateContextValue {
   stats: Map<string, WinRateStats>;
+  globalData: GlobalWinRateData | null;
   lastUpdate: number;
   isRefreshing: boolean;
   refresh: () => void;
@@ -36,6 +47,7 @@ export function WinRateProvider({ children }: WinRateProviderProps) {
     const all = computeWinRateStats();
     return new Map(all.map(s => [s.symbol, s]));
   });
+  const [globalData, setGlobalData] = useState<GlobalWinRateData | null>(null);
   const [lastUpdate, setLastUpdate] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeSymbols, setActiveSymbols] = useState<Set<string> | null>(null);
@@ -57,9 +69,9 @@ export function WinRateProvider({ children }: WinRateProviderProps) {
     setTimeout(() => setIsRefreshing(false), 100);
   }, [activeSymbols]);
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh every 15 seconds
   useEffect(() => {
-    const interval = setInterval(refresh, 30000);
+    const interval = setInterval(refresh, 15000);
     return () => clearInterval(interval);
   }, [refresh]);
 
@@ -70,8 +82,40 @@ export function WinRateProvider({ children }: WinRateProviderProps) {
     }
   }, [activeSymbols, refresh]);
 
+  // ── Intelligence: Global Production Sync ──
+  // Ensures win rates work across all devices and sessions
+  useEffect(() => {
+    const syncGlobal = async () => {
+      try {
+        // 1. Push local results to aggregate
+        const summary = getWinRateSummary();
+        if (summary.total >= 3) {
+          await fetch('/api/signals/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(summary),
+          });
+        }
+
+        // 2. Hydrate global truth
+        const res = await fetch('/api/signals/sync');
+        const data = await res.json();
+        if (data && !data.calibrating) {
+          setGlobalData(data);
+        }
+      } catch (e) {
+        console.warn('[win-rate-sync] Failed to synchronize global state');
+      }
+    };
+
+    syncGlobal();
+    const id = setInterval(syncGlobal, 60000); // 1-minute global sync
+    return () => clearInterval(id);
+  }, []);
+
   const value: WinRateContextValue = {
     stats,
+    globalData,
     lastUpdate,
     isRefreshing,
     refresh,

@@ -46,7 +46,7 @@ import { useMarketData } from '@/hooks/use-market-data';
 import { toast } from 'sonner';
 import { notificationEngine } from '@/lib/notification-engine';
 import { getMarketType } from '@/lib/market-utils';
-import { getGlobalWinRate } from '@/lib/signal-tracker';
+import { getGlobalWinRate, recordSignal, evaluateOutcomes } from '@/lib/signal-tracker';
 
 // ─── Formatting helpers ────────────────────────────────────────
 
@@ -154,7 +154,7 @@ const COL_WIDTHS = {
   macd: "w-[95px] min-w-[95px]",
   bb: "w-[90px] min-w-[90px]",
   stoch: "w-[85px] min-w-[85px]",
-  signal: "w-[96px] min-w-[96px]",  // Increased from 90px to fit badge
+  signal: "w-[125px] min-w-[125px]",  // Expanded from 115px to guarantee Strategy label visibility
   edit: "w-[50px] min-w-[50px]",
   confluence: "w-[95px] min-w-[95px]",
   divergence: "w-[90px] min-w-[90px]",
@@ -435,8 +435,8 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { sig
     <>
       <span
         className={cn(
-          "inline-flex items-center justify-center gap-1 px-2 py-1 w-[72px]",
-          "text-[8px] font-black uppercase tracking-[0.08em] leading-none whitespace-nowrap overflow-hidden transition-all duration-200",
+          "inline-flex items-center justify-center gap-1.5 px-1.5 py-1 w-full max-w-[105px]",
+          "text-[9px] font-black uppercase tracking-tight leading-none whitespace-nowrap overflow-hidden transition-all duration-200",
           "rounded-lg border",
           style.bg, style.text, style.border,
           (narration || reasons?.length) && 'cursor-help active:scale-95'
@@ -854,16 +854,29 @@ const ScreenerRow = memo(function ScreenerRow({
   const prevSignal = useRef(display.strategySignal);
 
   useEffect(() => {
-    if (isVisible && prevSignal.current !== display.strategySignal) {
-      setIsFlash(true);
-      const timer = setTimeout(() => setIsFlash(false), 3000);
-      prevSignal.current = display.strategySignal;
-      return () => clearTimeout(timer);
-    }
     if (prevSignal.current !== display.strategySignal) {
-      prevSignal.current = display.strategySignal;
+      if (isVisible) {
+        setIsFlash(true);
+        const timer = setTimeout(() => setIsFlash(false), 3000);
+
+        // Intelligence: Record signal for Win Rate tracking if it's a strong signal
+        if (display.strategySignal === 'strong-buy' || display.strategySignal === 'strong-sell' ||
+          display.strategySignal === 'buy' || display.strategySignal === 'sell') {
+          recordSignal(entry.symbol, display.strategySignal as any, display.price);
+        }
+
+        prevSignal.current = display.strategySignal;
+        return () => clearTimeout(timer);
+      } else {
+        // Even if not visible, record the signal if it's new
+        if (display.strategySignal === 'strong-buy' || display.strategySignal === 'strong-sell' ||
+          display.strategySignal === 'buy' || display.strategySignal === 'sell') {
+          recordSignal(entry.symbol, display.strategySignal as any, display.price);
+        }
+        prevSignal.current = display.strategySignal;
+      }
     }
-  }, [display.strategySignal, isVisible]);
+  }, [display.strategySignal, display.price, entry.symbol, isVisible]);
 
   const stickyOffsetSym = bulkMode
     ? (visibleCols.has('rank') ? 132 : 84)  // Add 44px for checkbox
@@ -2708,13 +2721,39 @@ export default function ScreenerDashboard() {
   // Initialize with null to avoid TDZ issues, then load in useEffect
   const [globalWinRate, setGlobalWinRate] = useState<ReturnType<typeof getGlobalWinRate> | null>(null);
   useEffect(() => {
-    const update = () => setGlobalWinRate(getGlobalWinRate());
+    const update = () => {
+      // ── Institutional 2026 Optimization: Batch Win Rate Evaluation ──
+      // Evaluate outcomes for all pending signals using latest live prices
+      if (livePrices.size > 0) {
+        const prices = new Map<string, number>();
+        livePrices.forEach((tick, sym) => prices.set(sym, tick.price));
+        evaluateOutcomes(prices);
+      }
+      const localRate = getGlobalWinRate();
+      // ── Intelligence: Global Production Fallback ──
+      // If local device has < 10 signals (Calibrating), we blend in or promote global Redis stats
+      if (localRate.total < 10 && winRateContext?.globalData) {
+        const g = winRateContext.globalData;
+        const total = localRate.total + g.total;
+        setGlobalWinRate({
+          winRate5m:  Math.round(((localRate.winRate5m * localRate.evaluated5m / 100) + g.win5m)   / (localRate.evaluated5m + g.evaluated5m) * 100) || 0,
+          winRate15m: Math.round(((localRate.winRate15m * localRate.evaluated15m / 100) + g.win15m) / (localRate.evaluated15m + g.evaluated15m) * 100) || 0,
+          winRate1h:  Math.round(((localRate.winRate1h * localRate.evaluated1h / 100) + g.win1h)   / (localRate.evaluated1h + g.evaluated1h) * 100) || 0,
+          total,
+          evaluated5m:  localRate.evaluated5m + g.evaluated5m,
+          evaluated15m: localRate.evaluated15m + g.evaluated15m,
+          evaluated1h:  localRate.evaluated1h + g.evaluated1h,
+        });
+      } else {
+        setGlobalWinRate(localRate);
+      }
+    };
     update(); // Load immediately on mount
-    const id = setInterval(update, 30_000);
+    const id = setInterval(update, 15_000); // Increased frequency to 15s for better real-time feel
     return () => clearInterval(id);
     // getGlobalWinRate is a stable imported function — safe to omit from deps
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [livePrices]);
 
   const syncStates = useCallback((p: any) => {
     baseSyncStates({
@@ -5559,6 +5598,9 @@ export default function ScreenerDashboard() {
             narration={selectedNarration}
             entry={selectedNarrationEntry}
             rsiPeriod={rsiPeriod}
+            smartMoneyScore={smartMoney.get(selectedNarrationEntry.symbol)?.score}
+            orderFlowData={orderFlow.get(selectedNarrationEntry.symbol)}
+            fundingRate={fundingRates.get(selectedNarrationEntry.symbol)}
           />
         )}
       </AnimatePresence>

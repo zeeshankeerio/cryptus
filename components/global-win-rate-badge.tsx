@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { getGlobalWinRate } from '@/lib/signal-tracker';
 import { useWinRateContext } from './win-rate-context';
@@ -7,31 +8,38 @@ import { cn } from '@/lib/utils';
 
 /**
  * Global Win Rate Badge — system-wide signal accuracy display.
- *
- * Design decisions:
- * - Uses centralized context for efficient data refresh
- * - Uses native `title` tooltip to avoid z-index / overflow issues.
- * - Shows "Calibrating" when < 10 signals evaluated (not just recorded).
- * - No hover:scale-105 to avoid layout shift / overlap.
- * 
- * Performance: No individual refresh interval - data comes from WinRateContext
  */
 
 export function GlobalWinRateBadge() {
   const context = useWinRateContext();
   
-  // Defensive check: if used outside WinRateProvider, return null or a placeholder
   if (!context) return null;
   
-  const { lastUpdate } = context;
-  const stats = getGlobalWinRate();
+  const { globalData } = context;
+  const localStats = getGlobalWinRate();
+  
+  // ── Intelligence: Global Production Blending ──
+  // We use local stats but fallback to/blend with global Redis stats for 'Perfect' production consistency
+  const stats = useMemo(() => {
+    if (!globalData) return localStats;
+    
+    return {
+      winRate5m:  Math.round(((localStats.winRate5m * localStats.evaluated5m / 100) + globalData.win5m)   / (localStats.evaluated5m + globalData.evaluated5m) * 100) || 0,
+      winRate15m: Math.round(((localStats.winRate15m * localStats.evaluated15m / 100) + globalData.win15m) / (localStats.evaluated15m + globalData.evaluated15m) * 100) || 0,
+      winRate1h:  Math.round(((localStats.winRate1h * localStats.evaluated1h / 100) + globalData.win1h)   / (localStats.evaluated1h + globalData.evaluated1h) * 100) || 0,
+      total: localStats.total + globalData.total,
+      evaluated5m:  localStats.evaluated5m + globalData.evaluated5m,
+      evaluated15m: localStats.evaluated15m + globalData.evaluated15m,
+      evaluated1h:  localStats.evaluated1h + globalData.evaluated1h,
+    };
+  }, [localStats, globalData]);
 
   // Calibrating state: need at least 10 evaluated signals (not just recorded)
   const totalEvaluated = stats.evaluated5m + stats.evaluated15m + stats.evaluated1h;
   if (totalEvaluated < 10) {
     return (
       <div
-        title={`Signal Accuracy Tracker\n\nCalibrating system...\n${stats.total} signals recorded\n${totalEvaluated} evaluated\n\nWin rates will appear after 10+ signals are evaluated (5m/15m/1h).`}
+        title={`Signal Accuracy Tracker\n\nCalibrating system...\n${stats.total} signals recorded\n${totalEvaluated} evaluated\n\nWin rates will appear after 10+ signals are evaluated globally.`}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-700/40 bg-slate-800/30 text-slate-500 cursor-default"
       >
         <Activity size={13} className="opacity-60" />

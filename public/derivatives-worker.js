@@ -403,8 +403,12 @@ function connectWhaleStream() {
 
   const STREAM_KEY = 'whale';
   try {
-    // Combined stream: all top symbols in one WebSocket (Port 443 standard)
-    const streams = WHALE_WATCH_SYMBOLS.map(s => `${s}@aggTrade`).join('/');
+    // Combined stream: monitor top symbols + whatever the user is currently viewing
+    const activeSet = new Set([
+      ...WHALE_WATCH_SYMBOLS, 
+      ...Array.from(currentSymbols).map(s => s.toLowerCase())
+    ]);
+    const streams = Array.from(activeSet).slice(0, 100).map(s => `${s}@aggTrade`).join('/');
     const url = `wss://stream.binance.com/stream?streams=${streams}`;
     const ws = new WebSocket(url);
 
@@ -843,6 +847,15 @@ function updateSymbols(symbols) {
     } catch (e) {
       console.warn('[deriv-worker] Mutation subscription failed', e.message);
     }
+  }
+
+  // ── Intelligence: Whale Stream Resynchronization ──
+  // If any current symbol is missing from the whale stream, reconnect to add it.
+  // This ensures whale alerts work for ANY symbol the user views, not just the top 20.
+  const needsWhaleRefresh = Array.from(currentSymbols).some(s => !WHALE_WATCH_SYMBOLS.includes(s.toLowerCase()));
+  if (needsWhaleRefresh && isRunning) {
+    // Reconnect whale stream with the new symbols (throttled naturally by scheduleReconnect logic if needed)
+    connectWhaleStream();
   }
 }
 
