@@ -804,6 +804,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       rsiCrossover: state.rsiCrossover,
       market,
       adx: state.adx,
+      atr: state.atr,
+      obvTrend: state.obvTrend || 'none',
+      williamsR: state.williamsR != null ? state.williamsR : null,
       obThreshold: (config.overboughtThreshold != null && config.overboughtThreshold > 0) ? config.overboughtThreshold : globalOverbought,
       osThreshold: (config.oversoldThreshold != null && config.oversoldThreshold > 0) ? config.oversoldThreshold : globalOversold,
       globalLongCandleThreshold,
@@ -838,6 +841,8 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       avgBarSize1m: state.avgBarSize1m,
       avgVolume1m: state.avgVolume1m,
+      obvTrend: state.obvTrend || 'none',
+      williamsR: state.williamsR != null ? state.williamsR : null,
     });
 
     // ── Live Volatility Alerts (Long Candle & Volume Spike) ──
@@ -1620,8 +1625,9 @@ function computeWorkerStrategyScore(params) {
 
   let factors = 0;
   const enabled = params.enabledIndicators || {
-    rsi: true, macd: true, bb: true, stoch: true, ema: true, 
-    vwap: true, confluence: true, divergence: true, momentum: true
+    rsi: true, macd: true, bb: true, stoch: true, ema: true,
+    vwap: true, confluence: true, divergence: true, momentum: true,
+    obv: true, williamsR: true
   };
 
   // ── Asset-Specific RSI Zone Calibration ──
@@ -1649,13 +1655,21 @@ function computeWorkerStrategyScore(params) {
   rsiScore(params.rsi1m, 0.5);
   rsiScore(params.rsi5m, 1);
   rsiScore(params.rsi15m, 1.5);
-  rsiScore(params.rsi1h, 2.5); // Aligned with indicators.ts
+  rsiScore(params.rsi1h, 2.5);
 
+  // MACD — ATR-relative scaling (2026 fix: consistent across all price levels)
   if (enabled.macd !== false && params.macdHistogram !== null && params.price > 0) {
     factors += 1.5;
-    const hPct = (params.macdHistogram / params.price) * 100;
-    if (hPct > 0) score += Math.min(hPct * 200, 100) * 1.5;
-    else score += Math.max(hPct * 200, -100) * 1.5;
+    let macdNorm;
+    if (params.atr != null && params.atr > 0) {
+      macdNorm = Math.abs(params.macdHistogram) / params.atr;
+      macdNorm = Math.min(macdNorm * 80, 100);
+    } else {
+      const hPct = Math.abs(params.macdHistogram / params.price) * 100;
+      macdNorm = Math.min(hPct * 200, 100);
+    }
+    if (params.macdHistogram > 0) score += macdNorm * 1.5;
+    else score -= macdNorm * 1.5;
   }
 
   if (enabled.bb !== false && params.bbPosition !== null) {
@@ -1667,6 +1681,7 @@ function computeWorkerStrategyScore(params) {
     else if (bp >= 0.75) score -= 40 * 1;
   }
 
+  // StochRSI — 2026 fix: K/D crossover properly weighted with factors
   if (enabled.stoch !== false && params.stochK != null && params.stochD != null) {
     factors += 1;
     if (params.stochK < 20 && params.stochD < 20) score += 80 * 1;
@@ -1674,37 +1689,46 @@ function computeWorkerStrategyScore(params) {
     else if (params.stochK > 80 && params.stochD > 80) score -= 80 * 1;
     else if (params.stochK > 70) score -= 40 * 1;
 
-    // K/D Crossover Confirmation
-    if (params.stochK > params.stochD && params.stochK < 30) score += 35;
-    else if (params.stochK < params.stochD && params.stochK > 70) score -= 35;
-    else if (params.stochK > params.stochD && params.stochK < 50) score += 15;
-    else if (params.stochK < params.stochD && params.stochK > 50) score -= 15;
+    // K/D Crossover — properly increment factors to prevent inflation
+    if (params.stochK > params.stochD && params.stochK < 30) {
+      factors += 0.5;
+      score += 70 * 0.5;
+    } else if (params.stochK < params.stochD && params.stochK > 70) {
+      factors += 0.5;
+      score -= 70 * 0.5;
+    } else if (params.stochK > params.stochD && params.stochK < 50) {
+      factors += 0.25;
+      score += 60 * 0.25;
+    } else if (params.stochK < params.stochD && params.stochK > 50) {
+      factors += 0.25;
+      score -= 60 * 0.25;
+    }
   }
 
-  if (enabled.ema !== false && params.emaCross) {
+  if (enabled.ema !== false && params.emaCross && params.emaCross !== 'none') {
     factors += 1.5;
     score += (params.emaCross === 'bullish' ? 60 : -60) * 1.5;
   }
 
   if (enabled.vwap !== false && params.vwapDiff != null) {
-    factors += 1.0; // Aligned with indicators.ts
+    factors += 1.0;
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
     if (scaledVwapDiff < -2) score += 40 * 1.0;
     else if (scaledVwapDiff > 2) score -= 40 * 1.0;
   }
 
   if (enabled.confluence !== false && typeof params.confluence === 'number' && Math.abs(params.confluence) >= 20) {
-    factors += 2.5; // Aligned with indicators.ts
+    factors += 2.5;
     score += params.confluence * 2.5;
   }
 
   if (enabled.divergence !== false && params.rsiDivergence && params.rsiDivergence !== 'none') {
     factors += 2.0;
-    score += (params.rsiDivergence === 'bullish' ? 75 : -75) * 2.0; // Aligned with 75
+    score += (params.rsiDivergence === 'bullish' ? 75 : -75) * 2.0;
   }
 
   if (enabled.rsi !== false && params.rsiCrossover && params.rsiCrossover !== 'none') {
-    factors += 1.5; // Aligned with indicators.ts
+    factors += 1.5;
     score += (params.rsiCrossover === 'bullish_reversal' ? 70 : -70) * 1.5;
   }
 
@@ -1713,6 +1737,21 @@ function computeWorkerStrategyScore(params) {
     const scaledMomentum = params.momentum * volatilityMultiplier;
     const mScore = Math.max(-60, Math.min(60, scaledMomentum * 15));
     score += mScore * 0.5;
+  }
+
+  // OBV Volume Trend (2026 intelligence upgrade)
+  if (enabled.obv !== false && params.obvTrend && params.obvTrend !== 'none') {
+    factors += 1.5;
+    score += (params.obvTrend === 'bullish' ? 55 : -55) * 1.5;
+  }
+
+  // Williams %R (2026 intelligence upgrade)
+  if (enabled.williamsR !== false && params.williamsR != null) {
+    factors += 0.8;
+    if (params.williamsR <= -85) score += 80 * 0.8;
+    else if (params.williamsR <= -70) score += 45 * 0.8;
+    else if (params.williamsR >= -15) score -= 80 * 0.8;
+    else if (params.williamsR >= -30) score -= 45 * 0.8;
   }
 
   if (params.volumeSpike) {
@@ -1764,11 +1803,14 @@ function computeWorkerStrategyScore(params) {
   const hasMultiTFBuyAgreement = availableTFs >= 3 && buyAgreement >= 3;
   const hasMultiTFSellAgreement = availableTFs >= 3 && sellAgreement >= 3;
 
+  // 2026 Tuned Thresholds (aligned with indicators.ts)
   let signal = 'neutral';
-  if (normalized >= 55 && hasMultiTFBuyAgreement) signal = 'strong-buy';
-  else if (normalized >= 25) signal = 'buy';
-  else if (normalized <= -55 && hasMultiTFSellAgreement) signal = 'strong-sell';
-  else if (normalized <= -25) signal = 'sell';
+  if (normalized >= 50 && hasMultiTFBuyAgreement) signal = 'strong-buy';
+  else if (normalized >= 50) signal = 'buy'; // Downgraded from strong
+  else if (normalized >= 20) signal = 'buy';
+  else if (normalized <= -50 && hasMultiTFSellAgreement) signal = 'strong-sell';
+  else if (normalized <= -50) signal = 'sell'; // Downgraded from strong
+  else if (normalized <= -20) signal = 'sell';
 
   return { score: normalized, signal };
 }

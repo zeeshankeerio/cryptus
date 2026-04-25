@@ -6,17 +6,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { SignalNarration } from '@/lib/signal-narration';
+import type { ScreenerEntry } from '@/lib/types';
 
 /**
  * Signal Narration Modal - Displays institutional-grade signal analysis
  * Requirements: Requirement 12
  * Design: SignalNarrationModal component
- * 
- * Features:
- * - Displays headline, conviction %, emoji, and reasons
- * - "Copy Signal Brief" button with clipboard functionality
- * - Includes symbol detail page link in copied text
- * - Handles "No active signal" state for neutral signals
  */
 
 interface SignalNarrationModalProps {
@@ -24,6 +19,7 @@ interface SignalNarrationModalProps {
   onClose: () => void;
   narration: SignalNarration | null;
   symbol: string;
+  entry?: ScreenerEntry;
 }
 
 export function SignalNarrationModal({
@@ -31,18 +27,22 @@ export function SignalNarrationModal({
   onClose,
   narration,
   symbol,
+  entry,
 }: SignalNarrationModalProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopyBrief = async () => {
     if (!narration) return;
 
-    // Construct the institutional brief with symbol detail link
+    // Construct the institutional brief with symbol detail link and live metrics
     const symbolUrl = `${window.location.origin}/symbol/${symbol}`;
+    const priceText = entry ? `Current Price: $${entry.price?.toLocaleString()}\nRSI (15m): ${entry.rsi15m?.toFixed(1) || 'N/A'}` : '';
+
     const brief = `
 ${narration.emoji} ${narration.headline}
 
 Symbol: ${symbol}
+${priceText}
 Conviction: ${narration.conviction}% (${narration.convictionLabel})
 
 Analysis:
@@ -116,8 +116,25 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     <h2 className="text-xl font-black text-white leading-tight">
                       {narration?.headline || 'No Active Signal'}
                     </h2>
-                    <p className="text-sm font-bold text-slate-400 mt-1">
+                    <p className="text-sm font-bold text-slate-400 mt-1 flex items-center gap-2">
                       {symbol}
+                      {entry && (
+                        <>
+                          <span className="w-1 h-1 rounded-full bg-slate-800" />
+                          <span className="text-white font-mono tabular-nums">${entry.price?.toLocaleString()}</span>
+                          {entry.rsi15m !== null && (
+                            <>
+                              <span className="w-1 h-1 rounded-full bg-slate-800" />
+                              <span className={cn(
+                                "font-mono tabular-nums px-1.5 py-0.5 rounded text-[10px] bg-white/5",
+                                entry.rsi15m >= 70 ? 'text-[#FF4B5C]' : entry.rsi15m <= 30 ? 'text-[#39FF14]' : 'text-slate-400'
+                              )}>
+                                RSI: {entry.rsi15m.toFixed(1)}
+                              </span>
+                            </>
+                          )}
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>

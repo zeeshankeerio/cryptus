@@ -7,6 +7,7 @@ import {
   detectRsiDivergence, calculateROC, calculateConfluence,
   calculateAvgBarSize, calculateAvgVolume,
   calculateATR, calculateADX, deriveSignal,
+  calculateOBV, calculateWilliamsR,
 } from './indicators';
 import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
 import { getAllCoinConfigs, type CoinConfig } from './coin-config';
@@ -341,6 +342,8 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     open1m: null,
     volStart1m: null,
     longCandle: false,
+    obvTrend: 'none',
+    williamsR: null,
   };
 }
 
@@ -1395,6 +1398,11 @@ function buildEntry(
     const rsiSeries15m = calculateRsiSeries(closes15m, r15mP);
     const rsiCrossover = detectRsiCrossover(rsiSeries15m);
 
+    // 2026 Intelligence: OBV Volume Trend + Williams %R
+    const volumes15m = agg15m.map((c) => c.volume);
+    const obvResult = calculateOBV(closes15m, volumes15m);
+    const williamsR = calculateWilliamsR(highs15m, lows15m, closes15m);
+
     const strategy = computeStrategyScore({
       rsi1m,
       rsi5m,
@@ -1413,6 +1421,9 @@ function buildEntry(
       rsiCrossover,
       momentum,
       adx,
+      atr,
+      obvTrend: obvResult?.trend ?? 'none',
+      williamsR,
       market: getMarketType(sym),
     });
 
@@ -1460,6 +1471,8 @@ function buildEntry(
       momentum,
       atr,
       adx,
+      obvTrend: obvResult?.trend ?? 'none',
+      williamsR,
       avgBarSize1m: calculateAvgBarSize(highs1m, lows1m, 20),
       avgVolume1m: calculateAvgVolume(volumes1m, 20),
     };

@@ -47,6 +47,9 @@ export interface ScreenerEntry {
   // ── New: ATR & ADX ──
   atr: number | null;
   adx: number | null;
+  // ── New: OBV & Williams %R (2026 Intelligence Upgrade) ──
+  obvTrend: 'bullish' | 'bearish' | 'none';
+  williamsR: number | null;
   // ── New: Candle & Volume Detectors ──
   avgBarSize1m: number | null;
   avgVolume1m: number | null;

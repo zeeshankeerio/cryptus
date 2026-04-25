@@ -210,6 +210,40 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
     totalPoints += 12;
   }
 
+  // ── 11. OBV Volume Trend ──
+  if ((entry as any).obvTrend && (entry as any).obvTrend !== 'none') {
+    if ((entry as any).obvTrend === 'bullish') {
+      reasons.push('📈 OBV volume trend bullish - smart money accumulation detected');
+      bullishPoints += 8;
+    } else {
+      reasons.push('📉 OBV volume trend bearish - institutional distribution in progress');
+      bearishPoints += 8;
+    }
+    totalPoints += 8;
+  }
+
+  // ── 12. Williams %R ──
+  if ((entry as any).williamsR !== null && (entry as any).williamsR !== undefined) {
+    const wr = (entry as any).williamsR as number;
+    if (wr <= -85) {
+      reasons.push(`📊 Williams %R at ${formatNum(wr)} - deeply oversold, reversal probability elevated`);
+      bullishPoints += 7;
+      totalPoints += 7;
+    } else if (wr >= -15) {
+      reasons.push(`📊 Williams %R at ${formatNum(wr)} - deeply overbought, pullback risk elevated`);
+      bearishPoints += 7;
+      totalPoints += 7;
+    } else if (wr <= -70) {
+      reasons.push(`📊 Williams %R at ${formatNum(wr)} - approaching oversold territory`);
+      bullishPoints += 3;
+      totalPoints += 3;
+    } else if (wr >= -30) {
+      reasons.push(`📊 Williams %R at ${formatNum(wr)} - approaching overbought territory`);
+      bearishPoints += 3;
+      totalPoints += 3;
+    }
+  }
+
   // ── Compose Headline & Conviction ──
   const netBias = bullishPoints - bearishPoints;
   const maxPossible = Math.max(totalPoints, 1);

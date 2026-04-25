@@ -373,9 +373,7 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   );
 }
 
-function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry }) {
-  const [showNarrationModal, setShowNarrationModal] = useState(false);
-
+function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry; onViewNarration?: (entry: ScreenerEntry) => void }) {
   const config: Record<string, { bg: string; text: string; border: string; icon: string }> = {
     'strong-buy': {
       bg: 'bg-[#39FF14]/25',
@@ -409,7 +407,7 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
     },
   };
 
-  const style = config[signal];
+  const style = config[signal] || config.neutral;
 
   // Signal Narration Engine™ - generate rich explanations for non-neutral signals
   const narration = useMemo(() => {
@@ -438,10 +436,10 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
       <span
         className={cn(
           "inline-flex items-center justify-center gap-1 px-2.5 py-1 w-[96px]",
-          "text-[8px] font-black uppercase tracking-[0.08em] leading-none whitespace-nowrap",
-          "rounded-lg border transition-colors duration-200",
+          "text-[8px] font-black uppercase tracking-[0.08em] leading-none whitespace-nowrap overflow-hidden transition-all duration-200",
+          "rounded-lg border",
           style.bg, style.text, style.border,
-          (narration || reasons?.length) && 'cursor-help'
+          (narration || reasons?.length) && 'cursor-help active:scale-95'
         )}
         title={title}
         onClick={narration ? handleCopySignal : undefined}
@@ -452,28 +450,19 @@ function StrategyBadge({ signal, label, reasons, entry }: { signal: ScreenerEntr
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setShowNarrationModal(true);
+              onViewNarration?.(entry!);
             }}
-            className="ml-0.5 shrink-0 opacity-50 hover:opacity-100 transition-opacity"
+            className="ml-0.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity p-0.5 hover:bg-white/10 rounded"
             title="View detailed analysis"
           >
-            <Info size={9} />
+            <Info size={10} />
           </button>
         )}
       </span>
-
-      {/* Signal Narration Modal */}
-      {entry && (
-        <SignalNarrationModal
-          isOpen={showNarrationModal}
-          onClose={() => setShowNarrationModal(false)}
-          narration={narration}
-          symbol={entry.symbol}
-        />
-      )}
     </>
   );
 }
+
 
 function MarketBadge({ market }: { market: ScreenerEntry['market'] }) {
   if (!market || market === 'Crypto') return null;
@@ -595,6 +584,8 @@ const ScreenerRow = memo(function ScreenerRow({
   globalUseConfluence,
   globalUseDivergence,
   globalUseMomentum,
+  globalUseObv,
+  globalUseWilliamsR,
   globalVolatilityEnabled,
   globalLongCandleThreshold,
   globalVolumeSpikeThreshold,
@@ -604,7 +595,9 @@ const ScreenerRow = memo(function ScreenerRow({
   bulkMode,
   isSelected,
   onToggleSelection,
+  onViewNarration,
 }: {
+
   entry: ScreenerEntry;
   idx: number;
   watchlist: Set<string>;
@@ -630,6 +623,8 @@ const ScreenerRow = memo(function ScreenerRow({
   globalUseConfluence: boolean;
   globalUseDivergence: boolean;
   globalUseMomentum: boolean;
+  globalUseObv: boolean;
+  globalUseWilliamsR: boolean;
   globalVolatilityEnabled: boolean;
   globalLongCandleThreshold: number;
   globalVolumeSpikeThreshold: number;
@@ -639,7 +634,9 @@ const ScreenerRow = memo(function ScreenerRow({
   bulkMode?: boolean;
   isSelected?: boolean;
   onToggleSelection?: (symbol: string) => void;
+  onViewNarration: (entry: ScreenerEntry) => void;
 }) {
+
   const isStarred = watchlist.has(entry.symbol);
   const [isVisible, setIsVisible] = useState(false);
   const rowRef = useRef<HTMLTableRowElement>(null);
@@ -726,6 +723,9 @@ const ScreenerRow = memo(function ScreenerRow({
       rsiDivergence: entry.rsiDivergence,
       momentum: entry.momentum,
       adx: entry.adx,
+      atr: entry.atr,
+      obvTrend: (tick as any).obvTrend ?? entry.obvTrend ?? 'none',
+      williamsR: (tick as any).williamsR ?? entry.williamsR ?? null,
       enabledIndicators: {
         rsi: globalUseRsi,
         macd: globalUseMacd,
@@ -735,7 +735,9 @@ const ScreenerRow = memo(function ScreenerRow({
         vwap: globalUseVwap,
         confluence: globalUseConfluence,
         divergence: globalUseDivergence,
-        momentum: globalUseMomentum
+        momentum: globalUseMomentum,
+        obv: globalUseObv,
+        williamsR: globalUseWilliamsR,
       }
     });
     return {
@@ -1243,7 +1245,7 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('strategy') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} />
+          <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} onViewNarration={onViewNarration} />
         </td>
       )}
 
@@ -1477,13 +1479,13 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'bbUpper', label: 'BB Upper', group: 'Volatility', defaultVisible: false },
   { id: 'bbLower', label: 'BB Lower', group: 'Volatility', defaultVisible: false },
   { id: 'bbPosition', label: 'BB Pos', group: 'Volatility', defaultVisible: false },
-  { id: 'stochK', label: 'Stoch RSI', group: 'Momentum', defaultVisible: false },
-  { id: 'vwapDiff', label: 'VWAP %', group: 'Volume', defaultVisible: false },
+  { id: 'stochK', label: 'Stoch RSI', group: 'Momentum', defaultVisible: true },
+  { id: 'vwapDiff', label: 'VWAP %', group: 'Volume', defaultVisible: true },
   { id: 'confluence', label: 'Confluence', group: 'Intelligence', defaultVisible: true },
   { id: 'divergence', label: 'Div / Rev', group: 'Intelligence', defaultVisible: true },
-  { id: 'momentum', label: 'Momentum', group: 'Intelligence', defaultVisible: false },
+  { id: 'momentum', label: 'Momentum', group: 'Intelligence', defaultVisible: true },
   { id: 'atr', label: 'ATR', group: 'Volatility', defaultVisible: false },
-  { id: 'adx', label: 'ADX', group: 'Volatility', defaultVisible: false },
+  { id: 'adx', label: 'ADX', group: 'Volatility', defaultVisible: true },
   { id: 'longCandle', label: 'Long Candle', group: 'Volatility', defaultVisible: true },
   { id: 'volumeSpike', label: 'Vol Spike', group: 'Volatility', defaultVisible: true },
   { id: 'fundingRate', label: 'Funding', group: 'Derivatives', defaultVisible: true },
@@ -1580,12 +1582,15 @@ const ScreenerCard = memo(function ScreenerCard({
   globalUseConfluence,
   globalUseDivergence,
   globalUseMomentum,
+  globalUseObv,
+  globalUseWilliamsR,
   globalVolatilityEnabled,
   globalLongCandleThreshold,
   globalVolumeSpikeThreshold,
   fundingRate,
   orderFlowData,
   smartMoneyScore,
+  onViewNarration,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -1612,12 +1617,15 @@ const ScreenerCard = memo(function ScreenerCard({
   globalUseConfluence: boolean;
   globalUseDivergence: boolean;
   globalUseMomentum: boolean;
+  globalUseObv: boolean;
+  globalUseWilliamsR: boolean;
   globalVolatilityEnabled: boolean;
   globalLongCandleThreshold: number;
   globalVolumeSpikeThreshold: number;
   fundingRate: { rate: number; annualized: number } | null;
   orderFlowData: { ratio: number; pressure: string; buyVolume1m: number; sellVolume1m: number } | null;
   smartMoneyScore: { score: number; label: string } | null;
+  onViewNarration: (entry: ScreenerEntry) => void;
 }) {
   const isStarred = watchlist.has(entry.symbol);
 
@@ -1702,6 +1710,9 @@ const ScreenerCard = memo(function ScreenerCard({
       rsiCrossover: entry.rsiCrossover,
       market: entry.market,
       adx: entry.adx,
+      atr: entry.atr,
+      obvTrend: (tick as any).obvTrend ?? entry.obvTrend ?? 'none',
+      williamsR: (tick as any).williamsR ?? entry.williamsR ?? null,
       enabledIndicators: {
         rsi: globalUseRsi,
         macd: globalUseMacd,
@@ -1711,7 +1722,9 @@ const ScreenerCard = memo(function ScreenerCard({
         vwap: globalUseVwap,
         confluence: globalUseConfluence,
         divergence: globalUseDivergence,
-        momentum: globalUseMomentum
+        momentum: globalUseMomentum,
+        obv: globalUseObv,
+        williamsR: globalUseWilliamsR,
       }
     });
 
@@ -1925,7 +1938,8 @@ const ScreenerCard = memo(function ScreenerCard({
                     {globalUseRsi ? formatRsi(val as number) : '-'}
                   </span>
                 ) : col.id === 'strategy' ? (
-                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} />
+                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} onViewNarration={onViewNarration} />
+
                 ) : col.id === 'winRate' ? (
                   <WinRateBadge symbol={entry.symbol} className="scale-90 origin-center" />
                 ) : col.id === 'divergence' ? (
@@ -2248,7 +2262,7 @@ export default function ScreenerDashboard() {
     fromCount: null,
     toCount: null,
   });
-  const [globalThresholdsEnabled, setGlobalThresholdsEnabled] = useState(false);
+  const [globalThresholdsEnabled, setGlobalThresholdsEnabled] = useState(true);
   const [globalOverbought, setGlobalOverbought] = useState(80);
   const [globalOversold, setGlobalOversold] = useState(20);
   const [globalThresholdTimeframes, setGlobalThresholdTimeframes] = useState<string[]>(['1m', '5m', '15m', '1h']);
@@ -2269,10 +2283,17 @@ export default function ScreenerDashboard() {
   const [globalUseConfluence, setGlobalUseConfluence] = useState(true);
   const [globalUseDivergence, setGlobalUseDivergence] = useState(true);
   const [globalUseMomentum, setGlobalUseMomentum] = useState(true);
+  const [globalUseObv, setGlobalUseObv] = useState(true);
+  const [globalUseWilliamsR, setGlobalUseWilliamsR] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
   const [selectedCoinForConfig, setSelectedCoinForConfig] = useState<string | null>(null);
+  const [selectedNarrationEntry, setSelectedNarrationEntry] = useState<ScreenerEntry | null>(null);
+  const [showNarrationModal, setShowNarrationModal] = useState(false);
+
+  // ── Signal Narration Engine™ ──
+
 
   // ── PWA Performance Monitoring ──
   const [lastGlobalUpdate, setLastGlobalUpdate] = useState(Date.now());
@@ -2356,6 +2377,8 @@ export default function ScreenerDashboard() {
             if (prefs.globalUseConfluence !== undefined) setGlobalUseConfluence(prefs.globalUseConfluence);
             if (prefs.globalUseDivergence !== undefined) setGlobalUseDivergence(prefs.globalUseDivergence);
             if (prefs.globalUseMomentum !== undefined) setGlobalUseMomentum(prefs.globalUseMomentum);
+            if (prefs.globalUseObv !== undefined) setGlobalUseObv(prefs.globalUseObv);
+            if (prefs.globalUseWilliamsR !== undefined) setGlobalUseWilliamsR(prefs.globalUseWilliamsR);
             if (prefs.visibleColumns !== undefined) setVisibleCols(new Set(prefs.visibleColumns as ColumnId[]));
             if (prefs.refreshInterval !== undefined) setRefreshInterval(prefs.refreshInterval);
             if (prefs.pairCount !== undefined) setPairCount(prefs.pairCount);
@@ -2448,6 +2471,8 @@ export default function ScreenerDashboard() {
       loadFlag('crypto-rsi-global-use-confluence', setGlobalUseConfluence);
       loadFlag('crypto-rsi-global-use-divergence', setGlobalUseDivergence);
       loadFlag('crypto-rsi-global-use-momentum', setGlobalUseMomentum);
+      loadFlag('crypto-rsi-global-use-obv', setGlobalUseObv);
+      loadFlag('crypto-rsi-global-use-williamsr', setGlobalUseWilliamsR);
 
       setPreferencesSynced(true);
     };
@@ -2497,6 +2522,8 @@ export default function ScreenerDashboard() {
             if (payload.globalUseConfluence !== undefined) setGlobalUseConfluence(payload.globalUseConfluence);
             if (payload.globalUseDivergence !== undefined) setGlobalUseDivergence(payload.globalUseDivergence);
             if (payload.globalUseMomentum !== undefined) setGlobalUseMomentum(payload.globalUseMomentum);
+            if (payload.globalUseObv !== undefined) setGlobalUseObv(payload.globalUseObv);
+            if (payload.globalUseWilliamsR !== undefined) setGlobalUseWilliamsR(payload.globalUseWilliamsR);
           } else if (type === 'CONFIGS_UPDATED') {
             setCoinConfigs(payload);
           } else if (type === 'WATCHLIST_UPDATED') {
@@ -2799,7 +2826,8 @@ export default function ScreenerDashboard() {
           volumeSpike: false,
           market: resolvedMarket,
           enabledIndicators: {
-            rsi: true, ema: true, macd: true, bb: true, stoch: true, vwap: true
+            rsi: true, ema: true, macd: true, bb: true, stoch: true, vwap: true,
+            obv: true, williamsR: true,
           }
         });
 
@@ -2841,6 +2869,8 @@ export default function ScreenerDashboard() {
           rsiDivergence: 'none',
           volumeSpike: false,
           longCandle: false,
+          obvTrend: 'none' as const,
+          williamsR: null,
           rsiPeriodAtCreation: rsiPeriod,
           rsiState1m,
           rsiState5m,
@@ -2948,6 +2978,8 @@ export default function ScreenerDashboard() {
             confluence: globalUseConfluence,
             divergence: globalUseDivergence,
             momentum: globalUseMomentum,
+            obv: globalUseObv,
+            williamsR: globalUseWilliamsR,
           }
         });
         merged = {
@@ -3019,6 +3051,26 @@ export default function ScreenerDashboard() {
     globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalVolumeSpikeThreshold, globalLongCandleThreshold
   ]);
+
+  // ── Signal Narration Engine™ (Institutional Intelligence) ──
+  const handleViewNarration = useCallback((entry: ScreenerEntry) => {
+    setSelectedNarrationEntry(entry);
+    setShowNarrationModal(true);
+  }, []);
+
+  const selectedNarration = useMemo(() => {
+    if (!selectedNarrationEntry) return null;
+    return generateSignalNarration(selectedNarrationEntry);
+  }, [selectedNarrationEntry]);
+
+  // Intelligence: Maintain live data accuracy in the modal
+  useEffect(() => {
+    if (selectedNarrationEntry && showNarrationModal) {
+      const liveEntry = processedData.find(e => e.symbol === selectedNarrationEntry.symbol);
+      if (liveEntry) setSelectedNarrationEntry(liveEntry);
+    }
+  }, [processedData, showNarrationModal]);
+
 
   // Sync state to Background Worker for Instant Alerts (Debounced)
   useEffect(() => {
@@ -3098,7 +3150,9 @@ export default function ScreenerDashboard() {
           vwap: globalUseVwap,
           confluence: globalUseConfluence,
           divergence: globalUseDivergence,
-          momentum: globalUseMomentum
+          momentum: globalUseMomentum,
+          obv: globalUseObv,
+          williamsR: globalUseWilliamsR,
         }
       });
     }, 800);
@@ -3108,6 +3162,7 @@ export default function ScreenerDashboard() {
     processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker,
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
+    globalUseObv, globalUseWilliamsR,
     alertsEnabled, globalThresholdsEnabled, globalLongCandleThreshold,
     globalVolumeSpikeThreshold, globalVolatilityEnabled, globalShowSignalTags,
     globalSignalThresholdMode, globalOverbought, globalOversold
@@ -3139,6 +3194,8 @@ export default function ScreenerDashboard() {
           globalUseConfluence,
           globalUseDivergence,
           globalUseMomentum,
+          globalUseObv,
+          globalUseWilliamsR,
           visibleColumns: Array.from(visibleCols),
           refreshInterval,
           pairCount,
@@ -3183,6 +3240,8 @@ export default function ScreenerDashboard() {
         saveFlag('crypto-rsi-global-use-confluence', globalUseConfluence);
         saveFlag('crypto-rsi-global-use-divergence', globalUseDivergence);
         saveFlag('crypto-rsi-global-use-momentum', globalUseMomentum);
+        saveFlag('crypto-rsi-global-use-obv', globalUseObv);
+        saveFlag('crypto-rsi-global-use-williamsr', globalUseWilliamsR);
 
         // ── Broadcast to other tabs for seamless "Zero-Lag" sync ──
         syncChannelRef.current?.postMessage({ type: 'PREFS_UPDATED', payload: body });
@@ -3314,6 +3373,12 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-global-use-momentum', globalUseMomentum ? '1' : '0');
   }, [globalUseMomentum]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-obv', globalUseObv ? '1' : '0');
+  }, [globalUseObv]);
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-global-use-williamsr', globalUseWilliamsR ? '1' : '0');
+  }, [globalUseWilliamsR]);
 
   useEffect(() => {
     localStorage.setItem('crypto-rsi-global-volatility-enabled', globalVolatilityEnabled ? '1' : '0');
@@ -5306,12 +5371,15 @@ export default function ScreenerDashboard() {
                   globalUseConfluence={globalUseConfluence}
                   globalUseDivergence={globalUseDivergence}
                   globalUseMomentum={globalUseMomentum}
+                  globalUseObv={globalUseObv}
+                  globalUseWilliamsR={globalUseWilliamsR}
                   globalVolatilityEnabled={globalVolatilityEnabled}
                   globalLongCandleThreshold={globalLongCandleThreshold}
                   globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
                   fundingRate={fundingRates.get(entry.symbol) ? { rate: fundingRates.get(entry.symbol)!.rate, annualized: fundingRates.get(entry.symbol)!.annualized } : null}
                   orderFlowData={orderFlow.get(entry.symbol) ? { ratio: orderFlow.get(entry.symbol)!.ratio, pressure: orderFlow.get(entry.symbol)!.pressure, buyVolume1m: orderFlow.get(entry.symbol)!.buyVolume1m, sellVolume1m: orderFlow.get(entry.symbol)!.sellVolume1m } : null}
                   smartMoneyScore={smartMoney.get(entry.symbol) ? { score: smartMoney.get(entry.symbol)!.score, label: smartMoney.get(entry.symbol)!.label } : null}
+                  onViewNarration={handleViewNarration}
                 />
               ))}
             </>
@@ -5452,6 +5520,8 @@ export default function ScreenerDashboard() {
                         globalUseConfluence={globalUseConfluence}
                         globalUseDivergence={globalUseDivergence}
                         globalUseMomentum={globalUseMomentum}
+                        globalUseObv={globalUseObv}
+                        globalUseWilliamsR={globalUseWilliamsR}
                         globalVolatilityEnabled={globalVolatilityEnabled}
                         globalLongCandleThreshold={globalLongCandleThreshold}
                         globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
@@ -5461,6 +5531,7 @@ export default function ScreenerDashboard() {
                         bulkMode={bulkMode}
                         isSelected={selectedSymbols.has(entry.symbol)}
                         onToggleSelection={toggleSymbolSelection}
+                        onViewNarration={handleViewNarration}
                       />
                     ))}
                   </>
@@ -5470,6 +5541,20 @@ export default function ScreenerDashboard() {
           </div>
         </div>
       )}
+
+      {/* Signal Narration Modal Overlay */}
+      <AnimatePresence>
+        {showNarrationModal && selectedNarrationEntry && selectedNarration && (
+          <SignalNarrationModal
+            isOpen={showNarrationModal}
+            onClose={() => setShowNarrationModal(false)}
+            symbol={selectedNarrationEntry.symbol}
+            narration={selectedNarration}
+            entry={selectedNarrationEntry}
+          />
+        )}
+      </AnimatePresence>
+
       {!isMobile && (
         <footer className="mt-auto py-8 border-t border-white/5 bg-[#05080F]/50 backdrop-blur-sm relative z-10 w-full">
           <div className="w-full flex flex-col md:flex-row items-center justify-between gap-8 px-6 sm:px-10 opacity-60 hover:opacity-100 transition-opacity duration-500">
@@ -5600,6 +5685,7 @@ export default function ScreenerDashboard() {
           <GlobalSettingsModal
             onClose={() => setShowGlobalSettings(false)}
             visibleCols={visibleCols}
+            setVisibleCols={setVisibleCols}
             toggleCol={toggleCol}
             rsiPeriod={rsiPeriod}
             setRsiPeriod={setRsiPeriod}
@@ -5653,6 +5739,10 @@ export default function ScreenerDashboard() {
             setGlobalUseDivergence={setGlobalUseDivergence}
             globalUseMomentum={globalUseMomentum}
             setGlobalUseMomentum={setGlobalUseMomentum}
+            globalUseObv={globalUseObv}
+            setGlobalUseObv={setGlobalUseObv}
+            globalUseWilliamsR={globalUseWilliamsR}
+            setGlobalUseWilliamsR={setGlobalUseWilliamsR}
             isConnected={isConnected}
           />
         )}
@@ -6746,6 +6836,7 @@ function AlertHistoryPanel({ alerts, onClose, onClear }: { alerts: any[]; onClos
 function GlobalSettingsModal({
   onClose,
   visibleCols,
+  setVisibleCols,
   toggleCol,
   rsiPeriod,
   setRsiPeriod,
@@ -6799,10 +6890,15 @@ function GlobalSettingsModal({
   setGlobalUseDivergence,
   globalUseMomentum,
   setGlobalUseMomentum,
+  globalUseObv,
+  setGlobalUseObv,
+  globalUseWilliamsR,
+  setGlobalUseWilliamsR,
   isConnected
 }: {
   onClose: () => void;
   visibleCols: Set<string>;
+  setVisibleCols: (cols: Set<ColumnId>) => void;
   toggleCol: (id: ColumnId) => void;
   rsiPeriod: number;
   setRsiPeriod: (p: number) => void;
@@ -6856,6 +6952,10 @@ function GlobalSettingsModal({
   setGlobalUseDivergence: (v: boolean) => void;
   globalUseMomentum: boolean;
   setGlobalUseMomentum: (v: boolean) => void;
+  globalUseObv: boolean;
+  setGlobalUseObv: (v: boolean) => void;
+  globalUseWilliamsR: boolean;
+  setGlobalUseWilliamsR: (v: boolean) => void;
   isConnected: boolean;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
@@ -7057,7 +7157,9 @@ function GlobalSettingsModal({
                     { id: 'vwap', label: 'VWAP %', state: globalUseVwap, setter: setGlobalUseVwap, icon: <ShieldCheck size={10} /> },
                     { id: 'conf', label: 'Confluence', state: globalUseConfluence, setter: setGlobalUseConfluence, icon: <BrainCircuit size={10} /> },
                     { id: 'div', label: 'Divergence', state: globalUseDivergence, setter: setGlobalUseDivergence, icon: <Zap size={10} /> },
-                    { id: 'mom', label: 'Momentum', state: globalUseMomentum, setter: setGlobalUseMomentum, icon: <TrendingUp size={10} /> }
+                    { id: 'mom', label: 'Momentum', state: globalUseMomentum, setter: setGlobalUseMomentum, icon: <TrendingUp size={10} /> },
+                    { id: 'obv', label: 'OBV Trend', state: globalUseObv, setter: setGlobalUseObv, icon: <BarChart3 size={10} /> },
+                    { id: 'wr', label: 'Williams %R', state: globalUseWilliamsR, setter: setGlobalUseWilliamsR, icon: <Activity size={10} /> },
                   ].map(ind => (
                     <button
                       key={ind.id}
@@ -7450,8 +7552,8 @@ function GlobalSettingsModal({
           {/* Reset to Default Button */}
           <button
             onClick={() => {
-              if (confirm('Reset all settings to default values? This will:\n\n• Reset all indicator toggles to ON\n• Reset RSI period to 14\n• Reset thresholds to 70/30\n• Reset refresh interval to 3s\n• Reset pair count to 100\n• Keep your watchlist and alerts\n\nContinue?')) {
-                // Reset all indicators to default (all ON)
+              if (confirm('Reset all settings to institutional defaults?\n\n• All 11 strategy indicators → ON\n• RSI period → 14 (industry standard)\n• Thresholds → 80/20 (institutional grade)\n• Signal mode → Custom (expert)\n• Volatility detection → ON\n• Columns → Optimal trading set\n• Keep your watchlist and alerts\n\nContinue?')) {
+                // Reset all indicators to default (all ON — expert mode)
                 setGlobalUseRsi(true);
                 setGlobalUseMacd(true);
                 setGlobalUseBb(true);
@@ -7461,20 +7563,22 @@ function GlobalSettingsModal({
                 setGlobalUseConfluence(true);
                 setGlobalUseDivergence(true);
                 setGlobalUseMomentum(true);
+                setGlobalUseObv(true);
+                setGlobalUseWilliamsR(true);
 
-                // Reset RSI settings
+                // Reset RSI — institutional-grade 80/20 thresholds
                 setRsiPeriod(14);
-                setGlobalOverbought(70);
-                setGlobalOversold(30);
-                setGlobalThresholdsEnabled(false);
+                setGlobalOverbought(80);
+                setGlobalOversold(20);
+                setGlobalThresholdsEnabled(true);
                 setGlobalThresholdTimeframes(['15m']);
 
-                // Reset signal display
+                // Reset signal display — custom mode for accuracy
                 setGlobalShowSignalTags(true);
-                setGlobalSignalThresholdMode('default');
+                setGlobalSignalThresholdMode('custom');
 
-                // Reset volatility
-                setGlobalVolatilityEnabled(false);
+                // Reset volatility — enabled with balanced thresholds
+                setGlobalVolatilityEnabled(true);
                 setGlobalLongCandleThreshold(3);
                 setGlobalVolumeSpikeThreshold(3);
 
@@ -7482,7 +7586,13 @@ function GlobalSettingsModal({
                 setRefreshInterval(3000);
                 setPairCount(100);
 
-                toast.success('Settings reset to default values');
+                // Reset columns to optimal institutional trading set
+                const optimalCols = new Set(
+                  OPTIONAL_COLUMNS.filter(c => c.defaultVisible).map(c => c.id)
+                ) as Set<ColumnId>;
+                setVisibleCols(optimalCols);
+
+                toast.success('Settings reset to institutional defaults');
               }
             }}
             className="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white font-black uppercase tracking-[0.2em] py-4 rounded-2xl border border-white/5 hover:border-white/10 active:scale-95 transition-all text-xs flex items-center justify-center gap-2"
