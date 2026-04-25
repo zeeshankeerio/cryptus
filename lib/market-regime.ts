@@ -49,8 +49,38 @@ export function classifyRegime(params: {
   bbWidth: number | null;
   bbWidthAvg: number | null;
   volumeSpike: boolean;
+  // 2026 FIX: Add price momentum context for accurate regime classification
+  priceChange24h?: number | null;
+  volumeRatio?: number | null; // current volume / avg volume
 }): RegimeClassification {
-  const { adx, atr, atrAvg, bbWidth, bbWidthAvg, volumeSpike } = params;
+  const { adx, atr, atrAvg, bbWidth, bbWidthAvg, volumeSpike, priceChange24h, volumeRatio } = params;
+
+  // ── 2026 FIX: Momentum Override (HIGHEST PRIORITY) ──
+  // Extreme price moves (>20% in 24h) ALWAYS indicate trending/breakout, not ranging
+  // This prevents the bug where +42% moves are classified as "ranging"
+  if (priceChange24h !== null && priceChange24h !== undefined && Math.abs(priceChange24h) > 20) {
+    const direction = priceChange24h > 0 ? 'bullish' : 'bearish';
+    const magnitude = Math.abs(priceChange24h);
+    
+    // Check if this is a breakout (with volume) or just trending
+    if (volumeRatio !== null && volumeRatio !== undefined && volumeRatio > 2.0) {
+      // High volume + extreme move = BREAKOUT
+      const confidence = Math.min(95, 70 + Math.min(magnitude - 20, 25));
+      return {
+        regime: 'breakout',
+        confidence: Math.round(confidence),
+        details: `Extreme ${direction} breakout: ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(1)}% in 24h with ${volumeRatio.toFixed(1)}× volume confirmation`,
+      };
+    } else {
+      // Extreme move without volume = TRENDING (or low-volume pump)
+      const confidence = Math.min(85, 60 + Math.min(magnitude - 20, 25));
+      return {
+        regime: 'trending',
+        confidence: Math.round(confidence),
+        details: `Strong ${direction} trend: ${priceChange24h > 0 ? '+' : ''}${priceChange24h.toFixed(1)}% in 24h (monitor for exhaustion)`,
+      };
+    }
+  }
 
   // ── Data Sufficiency Check ──
   // Need at least ADX to make a meaningful classification

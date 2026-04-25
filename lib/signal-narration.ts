@@ -97,6 +97,51 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
 
   const tw = TF_WEIGHTS[tradingStyle] || TF_WEIGHTS.intraday;
 
+  // ── 2026 FIX: 24H Price Action Context (HIGHEST PRIORITY) ──
+  // This should be analyzed FIRST before other indicators
+  // A +42% move is MORE IMPORTANT than any RSI reading
+  if (entry.priceChange24h !== null && entry.priceChange24h !== undefined) {
+    const priceChange = entry.priceChange24h;
+    const absPriceChange = Math.abs(priceChange);
+    
+    if (absPriceChange > 50) {
+      // EXTREME move (>50%)
+      const emoji = priceChange > 0 ? '🚀' : '💥';
+      const direction = priceChange > 0 ? 'rallied' : 'crashed';
+      reasons.push(`${emoji} PARABOLIC MOVE: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h — extreme exhaustion risk, high reversal probability`);
+      totalPoints += 25;
+      // Extreme rally = bearish reversal signal (overbought exhaustion)
+      // Extreme crash = bullish reversal signal (oversold bounce)
+      if (priceChange > 0) bearishPoints += 25;
+      else bullishPoints += 25;
+      pillars.momentum = true;
+    } else if (absPriceChange > 30) {
+      // VERY STRONG move (30-50%)
+      const emoji = priceChange > 0 ? '🚀' : '📉';
+      const direction = priceChange > 0 ? 'surged' : 'plunged';
+      reasons.push(`${emoji} EXTREME MOMENTUM: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h — monitor for exhaustion signals`);
+      totalPoints += 20;
+      if (priceChange > 0) bearishPoints += 20;
+      else bullishPoints += 20;
+      pillars.momentum = true;
+    } else if (absPriceChange > 15) {
+      // STRONG move (15-30%)
+      const emoji = priceChange > 0 ? '📈' : '📉';
+      const direction = priceChange > 0 ? 'rallied' : 'declined';
+      reasons.push(`${emoji} Strong 24h momentum: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}% — ${priceChange > 0 ? 'overbought' : 'oversold'} risk building`);
+      totalPoints += 12;
+      if (priceChange > 0) bearishPoints += 12;
+      else bullishPoints += 12;
+      pillars.momentum = true;
+    } else if (absPriceChange > 5) {
+      // MODERATE move (5-15%)
+      reasons.push(`📊 24h change: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}% — moderate momentum`);
+      totalPoints += 5;
+      if (priceChange > 0) bearishPoints += 5;
+      else bullishPoints += 5;
+    }
+  }
+
   // Use style-based weighting for all timeframes
   rsiValues.forEach(r => {
     const v = r.val;
@@ -579,6 +624,12 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   let headline: string;
   let emoji: string;
 
+  // ── 2026 FIX: Context-Aware Headlines ──
+  // Add price action context to headlines for clarity
+  const priceChange24h = entry.priceChange24h ?? 0;
+  const isExtremeMove = Math.abs(priceChange24h) > 20;
+  const isParabolicMove = Math.abs(priceChange24h) > 40;
+
   // ── 20. Institutional Headline Pivot (Hard Accuracy Guard) ──
   // If RSI is at extreme levels, we override the netBias-based headline to prevent "False Bullish" signals.
   const rsiHigh = (entry.rsi1m ?? 0) > 75 && (entry.rsi5m ?? 0) > 70 && (entry.rsi15m ?? 0) > 65;
@@ -603,7 +654,16 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       emoji = '🟢';
     }
   } else if (netBias < -25) {
-    if (rsiLow && conviction < 90) {
+    // 2026 FIX: Add context for bearish signals after extreme bullish moves
+    if (isParabolicMove && priceChange24h > 40 && rsiHigh) {
+      headline = `Overbought Exhaustion After +${priceChange24h.toFixed(1)}% Rally — Pullback Risk Extreme`;
+      emoji = '🟡⚠️';
+      // Add clarification to reasons
+      reasons.unshift(`⚠️ CONTEXT: This is an EXHAUSTION warning, not institutional distribution. Price rallied ${priceChange24h.toFixed(1)}% in 24h and is deeply overbought.`);
+    } else if (isExtremeMove && priceChange24h > 20 && rsiHigh) {
+      headline = `Overextended Rally — Correction Signals Building After +${priceChange24h.toFixed(1)}% Move`;
+      emoji = '🟡⚠️';
+    } else if (rsiLow && conviction < 90) {
       headline = 'Deeply Oversold Condition — Reversal Potential Building';
       emoji = '🟡⚠️';
     } else if (conviction >= 80 && pillarCount >= 3) {

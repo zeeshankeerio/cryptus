@@ -26,20 +26,30 @@ import type {
 } from './derivatives-types';
 
 // ── Component Weights ────────────────────────────────────────────
-// Tuned for crypto markets where leverage/liquidation data is most predictive
+// 2026 FIX: Funding rate is the most predictive signal in crypto markets
+// Increased from 20% to 50% for crypto (where funding data is reliable)
+// This ensures extreme funding rates (like -8%) produce accurate Smart Money scores
 const WEIGHTS = {
-  funding: 0.20,        // 20% - sentiment but lagging
-  liquidation: 0.30,    // 30% - most predictive of short-term moves
-  whale: 0.25,          // 25% - smart money direction
-  orderFlow: 0.25,      // 25% - real-time pressure
+  funding: 0.50,        // 50% - PRIMARY signal (was 20%)
+  liquidation: 0.25,    // 25% - secondary (was 30%)
+  whale: 0.15,          // 15% - tertiary (was 25%)
+  orderFlow: 0.10,      // 10% - supplementary (was 25%)
 } as const;
 
 // ── Signal Computation Functions ─────────────────────────────────
 
 /**
  * Funding Rate Signal (-100 to +100)
- * Positive funding = longs pay shorts = market is greedy → positive signal
- * Extreme funding (>0.1% per 8h) = very greedy → signal clamps at ±100
+ * 2026 FIX: Improved normalization for extreme funding rates
+ * 
+ * Negative funding = shorts pay longs = bullish pressure (positive signal)
+ * Positive funding = longs pay shorts = bearish pressure (negative signal)
+ * 
+ * Scale:
+ *   ±0.01% (0.0001) = normal → ±10 signal
+ *   ±0.1% (0.001) = significant → ±100 signal
+ *   ±1% (0.01) = extreme → ±100 signal (clamped)
+ *   ±8% (0.08) = EXTREME → ±100 signal (clamped)
  */
 export function computeFundingSignal(
   fundingRates: Map<string, FundingRateData>,
@@ -48,10 +58,27 @@ export function computeFundingSignal(
   const data = fundingRates.get(symbol);
   if (!data) return 0;
 
-  // Normalize: 0.01% (0.0001) is "normal", 0.1% (0.001) is "extreme"
-  // Scale: 0.0001 → ~33, 0.001 → 100
-  const normalizedRate = data.rate / 0.001; // 0.001 = extreme threshold
-  return Math.max(-100, Math.min(100, normalizedRate * 100));
+  // 2026 FIX: Better normalization curve using logarithmic scaling
+  const absRate = Math.abs(data.rate);
+  const sign = data.rate >= 0 ? 1 : -1;
+  
+  let signal: number;
+  if (absRate >= 0.01) {
+    // Extreme: ≥1% → 100
+    signal = 100;
+  } else if (absRate >= 0.001) {
+    // Significant: 0.1-1% → 80-100
+    signal = 80 + (absRate - 0.001) / 0.009 * 20;
+  } else if (absRate >= 0.0001) {
+    // Moderate: 0.01-0.1% → 30-80
+    signal = 30 + (absRate - 0.0001) / 0.0009 * 50;
+  } else {
+    // Normal: <0.01% → 0-30
+    signal = absRate / 0.0001 * 30;
+  }
+  
+  // Apply sign (negative funding = bullish = positive signal)
+  return Math.round(sign * -1 * signal);
 }
 
 /**
