@@ -971,10 +971,10 @@ export function computeStrategyScore(params: {
   // Buy/Sell: >=20 (lowered from 25 — widens actionable zone while ADX/TFA filter noise)
   let signal: StrategySignal;
   let label: string;
-  if (normalized >= 50 && hasMultiTFBuyAgreement) { signal = 'strong-buy'; label = 'Strong Buy'; }
+  if (normalized >= 50 && hasMultiTFBuyAgreement) { signal = 'strong-buy'; label = 'S Buy'; }
   else if (normalized >= 50) { signal = 'buy'; label = 'Buy'; reasons.push('Downgraded: insufficient TF agreement for Strong'); }
   else if (normalized >= 20) { signal = 'buy'; label = 'Buy'; }
-  else if (normalized <= -50 && hasMultiTFSellAgreement) { signal = 'strong-sell'; label = 'Strong Sell'; }
+  else if (normalized <= -50 && hasMultiTFSellAgreement) { signal = 'strong-sell'; label = 'S Sell'; }
   else if (normalized <= -50) { signal = 'sell'; label = 'Sell'; reasons.push('Downgraded: insufficient TF agreement for Strong'); }
   else if (normalized <= -20) { signal = 'sell'; label = 'Sell'; }
   else { signal = 'neutral'; label = 'Neutral'; }

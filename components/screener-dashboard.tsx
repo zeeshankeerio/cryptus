@@ -338,14 +338,14 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
       text: 'text-[#39FF14]',
       border: 'border-[#39FF14]/50',
       dot: 'bg-[#39FF14]',
-      label: 'OVERSOLD',
+      label: 'O-SOLD',
     },
     overbought: {
       bg: 'bg-[#FF4B5C]/15',
       text: 'text-[#FF4B5C]',
       border: 'border-[#FF4B5C]/50',
       dot: 'bg-[#FF4B5C]',
-      label: 'OVERBOUGHT',
+      label: 'O-BOUGHT',
     },
     neutral: {
       bg: 'bg-slate-800/20',
@@ -361,7 +361,7 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
 
   return (
     <span className={cn(
-      "inline-flex items-center justify-center gap-1.5 px-2.5 py-1 w-[88px]",
+      "inline-flex items-center justify-center gap-1 px-2 py-1 w-[72px]",
       "text-[8px] font-black uppercase tracking-[0.1em] leading-none whitespace-nowrap",
       "rounded-lg border transition-colors duration-200",
       style.bg, style.text, style.border,
@@ -435,7 +435,7 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { sig
     <>
       <span
         className={cn(
-          "inline-flex items-center justify-center gap-1 px-2.5 py-1 w-[96px]",
+          "inline-flex items-center justify-center gap-1 px-2 py-1 w-[72px]",
           "text-[8px] font-black uppercase tracking-[0.08em] leading-none whitespace-nowrap overflow-hidden transition-all duration-200",
           "rounded-lg border",
           style.bg, style.text, style.border,
