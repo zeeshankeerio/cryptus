@@ -13,7 +13,7 @@ import {
   computeRollingAtrAverage, computeRollingBbWidthAverage, calculateCCI,
 } from './indicators';
 import { classifyRegime } from './market-regime';
-import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline } from './types';
+import type { ScreenerEntry, ScreenerResponse, BinanceTicker, BinanceKline, TradingStyle } from './types';
 import { getAllCoinConfigs, type CoinConfig } from './coin-config';
 import { getSymbolAlias } from './symbol-utils';
 import { validateKline } from './data-validator';
@@ -33,6 +33,7 @@ interface ScreenerOptions {
   search?: string;
   prioritySymbols?: string[]; // Viewport symbols to prioritise
   exchange?: string;
+  tradingStyle?: TradingStyle;
 }
 
 interface SmartTuningState {
@@ -67,10 +68,20 @@ const FETCH_HEADERS: HeadersInit = {
 const RSI_PERIOD = 14;
 const KLINE_LIMIT = 1000; // 1000 candles (Max API limit) - provides ~66 15m candles for accurate Wilder smoothing
 const KLINE_LIMIT_1H = 200; // 200 1h candles: Excellent Wilder stability for 1h RSI
+const KLINE_LIMIT_4H = 100; // 100 4h candles
+const KLINE_LIMIT_1D = 100; // 100 1d candles
 const BATCH_SIZE = 16;
 const FETCH_RETRY_COUNT = 2; // reduced for faster fail-over during spikes
 const MAX_KLINE_FETCH = 120; // cap kline fetches per cycle (rolling refresh)
 const KLINE_TIMEOUT_MS = 8000; // 8s per kline fetch to prevent death-spirals
+
+// ── Kline caches ──
+const kline1hCache = new LRUCache<string, { data: BinanceKline[]; ts: number }>(500);
+const KLINE_1H_CACHE_TTL = 300_000; // 5 min
+const kline4hCache = new LRUCache<string, { data: BinanceKline[]; ts: number }>(500);
+const KLINE_4H_CACHE_TTL = 1800_000; // 30 min (4h doesn't change fast)
+const kline1dCache = new LRUCache<string, { data: BinanceKline[]; ts: number }>(500);
+const KLINE_1D_CACHE_TTL = 3600_000; // 1 hour (1d changes very slowly)
 
 // ── Binance API Weight Tracking (Rate Limit Protection) ──
 let globalWeight = 0;
@@ -148,9 +159,6 @@ const RESULT_CACHE_MAX = 100;
 const resultCache = new LRUCache<string, { data: ScreenerResponse; count: number; smartMode: boolean; ts: number }>(RESULT_CACHE_MAX);
 const smartTuningByCount = new Map<number, SmartTuningState>();
 const trafficWarmLastRun = new Map<string, number>();
-
-const KLINE_1H_CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache for 1h baseline
-const kline1hCache = new Map<string, { data: BinanceKline[]; ts: number }>();
 
 function getResultCacheTtl(symbolCount: number): number {
   if (symbolCount >= 800) return 30_000;
@@ -317,7 +325,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     price: toNum(ticker.lastPrice, 0),
     change24h: toNum(ticker.priceChangePercent, 0),
     volume24h: volume24h,
-    rsi1m: null, rsi5m: null, rsi15m: null, rsi1h: null,
+    rsi1m: null, rsi5m: null, rsi15m: null, rsi1h: null, rsi4h: null, rsi1d: null,
     signal: 'neutral',
     ema9: null, ema21: null, emaCross: 'none',
     macdLine: null, macdSignal: null, macdHistogram: null,
@@ -329,7 +337,7 @@ function buildTickerOnlyEntry(sym: string, ticker: BinanceTicker, nowTs: number)
     confluence: 0, confluenceLabel: 'No Data', rsiDivergence: 'none',
     rsiDivergenceCustom: 'none',
     momentum: null, atr: null, adx: null, rsiState1m: null,
-    rsiState5m: null, rsiState15m: null, rsiState1h: null,
+    rsiState5m: null, rsiState15m: null, rsiState1h: null, rsiState4h: null, rsiState1d: null,
     ema9State: null, ema21State: null, macdFastState: null,
     macdSlowState: null, macdSignalState: null,
     rsiCustom: null, rsiStateCustom: null,
@@ -1045,19 +1053,73 @@ async function fetchKlines1h(symbol: string, exchange: string = 'binance', signa
   return res;
 }
 
+/**
+ * Fetch 4h klines for a single symbol.
+ */
+async function fetchKlines4h(symbol: string, exchange: string = 'binance', signal?: AbortSignal): Promise<BinanceKline[]> {
+  const cacheKey = `${exchange}:${symbol}`;
+  const cached = kline4hCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < KLINE_4H_CACHE_TTL) return cached.data;
+
+  let res: BinanceKline[];
+  if (YAHOO_SYMBOLS.includes(symbol)) {
+    res = await fetchYahooKlines(symbol, '4h');
+  } else if (exchange.startsWith('bybit')) {
+    res = await fetchBybitKlines(symbol, '240', exchange, signal);
+  } else {
+    res = await fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=4h&limit=${KLINE_LIMIT_4H}`, `4h candle for ${symbol}`, FETCH_RETRY_COUNT, signal);
+  }
+
+  if (res && res.length > 0) kline4hCache.set(cacheKey, { data: res, ts: Date.now() });
+  return res;
+}
 
 /**
- * Fetch both 1m and 1h klines in a single concurrent pass per symbol.
+ * Fetch 1d klines for a single symbol.
+ */
+async function fetchKlines1d(symbol: string, exchange: string = 'binance', signal?: AbortSignal): Promise<BinanceKline[]> {
+  const cacheKey = `${exchange}:${symbol}`;
+  const cached = kline1dCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < KLINE_1D_CACHE_TTL) return cached.data;
+
+  let res: BinanceKline[];
+  if (YAHOO_SYMBOLS.includes(symbol)) {
+    res = await fetchYahooKlines(symbol, '1d');
+  } else if (exchange.startsWith('bybit')) {
+    res = await fetchBybitKlines(symbol, 'D', exchange, signal);
+  } else {
+    res = await fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=1d&limit=${KLINE_LIMIT_1D}`, `1d candle for ${symbol}`, FETCH_RETRY_COUNT, signal);
+  }
+
+  if (res && res.length > 0) kline1dCache.set(cacheKey, { data: res, ts: Date.now() });
+  return res;
+}
+
+
+/**
+ * Fetch 1m, 1h, 4h, and 1d klines in a single concurrent pass per symbol.
  */
 async function fetchAllKlinesBatched(
   symbols: string[],
   exchange: string = 'binance',
   signal?: AbortSignal
-): Promise<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }[]> {
+): Promise<{ 
+  sym: string; 
+  res1m: PromiseSettledResult<BinanceKline[]>; 
+  res1h: PromiseSettledResult<BinanceKline[]>;
+  res4h: PromiseSettledResult<BinanceKline[]>;
+  res1d: PromiseSettledResult<BinanceKline[]>;
+}[]> {
   if (signal?.aborted) return [];
-  const results = new Array<{ sym: string; res1m: PromiseSettledResult<BinanceKline[]>; res1h: PromiseSettledResult<BinanceKline[]> }>(symbols.length);
-  // Greatly reduced concurrency for stability on Vercel/Cloud functions to avoid 429 Too Many Requests
-  const concurrency = Math.min(15, Math.max(4, Math.floor(symbols.length / 10)));
+  const results = new Array<{ 
+    sym: string; 
+    res1m: PromiseSettledResult<BinanceKline[]>; 
+    res1h: PromiseSettledResult<BinanceKline[]>;
+    res4h: PromiseSettledResult<BinanceKline[]>;
+    res1d: PromiseSettledResult<BinanceKline[]>;
+  }>(symbols.length);
+  // Greatly reduced concurrency for stability on Vercel/Cloud functions
+  const concurrency = Math.min(10, Math.max(2, Math.floor(symbols.length / 20)));
 
   let cursor = 0;
   const workers = Array.from({ length: Math.min(concurrency, symbols.length) }, async () => {
@@ -1066,19 +1128,18 @@ async function fetchAllKlinesBatched(
       if (idx >= symbols.length) return;
       const sym = symbols[idx];
 
-      // Fetch both in parallel for this symbol
-      const [res1m, res1h] = await Promise.allSettled([
+      const [res1m, res1h, res4h, res1d] = await Promise.allSettled([
         fetchKlines(sym, exchange, signal),
-        fetchKlines1h(sym, exchange, signal)
+        fetchKlines1h(sym, exchange, signal),
+        fetchKlines4h(sym, exchange, signal),
+        fetchKlines1d(sym, exchange, signal)
       ]);
 
-      // 🔥 Institutional Stagger Logic: Top 100 assets execute with zero-intentional lag
       if (symbols.length > 100 && idx >= 100) {
-        // Only stagger non-priority symbols to ensure the first results appear instantly
-        await new Promise(r => setTimeout(r, Math.random() * 80));
+        await new Promise(r => setTimeout(r, Math.random() * 100));
       }
 
-      results[idx] = { sym, res1m, res1h };
+      results[idx] = { sym, res1m, res1h, res4h, res1d };
     }
   });
 
@@ -1132,11 +1193,14 @@ function buildEntry(
   sym: string,
   klines1m: BinanceKline[],
   klines1h: BinanceKline[] | null,
+  klines4h: BinanceKline[] | null,
+  klines1d: BinanceKline[] | null,
   ticker: BinanceTicker | undefined,
   nowTs: number,
   rsiPeriod: number = 14,
   prevEntry?: ScreenerEntry,
   config?: CoinConfig,
+  tradingStyle?: TradingStyle,
 ): ScreenerEntry | null {
   try {
     const validKlines = klines1m.filter((k) => {
@@ -1205,6 +1269,22 @@ function buildEntry(
         rsi1h = calculateRsi(closes1h, r1hP);
       }
       debugLog(`[screener] ${sym}: 1h from aggregation: ${closes1h.length} candles (need ${r1hP + 1} for RSI), rsi1h=${rsi1h}`);
+    }
+
+    let rsi4h: number | null = null;
+    let rsiState4h = null;
+    if (klines4h && klines4h.length >= 15) {
+      const closes4h = klines4h.map(k => parseFloat(k[4]));
+      rsi4h = calculateRsi(closes4h, 14);
+      rsiState4h = calculateRsiWithState(closes4h, 14);
+    }
+
+    let rsi1d: number | null = null;
+    let rsiState1d = null;
+    if (klines1d && klines1d.length >= 15) {
+      const closes1d = klines1d.map(k => parseFloat(k[4]));
+      rsi1d = calculateRsi(closes1d, 14);
+      rsiState1d = calculateRsiWithState(closes1d, 14);
     }
 
     // Dynamic/Custom RSI (User Defined Period)
@@ -1466,6 +1546,8 @@ function buildEntry(
       rsi5m,
       rsi15m,
       rsi1h,
+      rsi4h,
+      rsi1d,
       macdHistogram: macdHistogramVal,
       bbPosition: bb?.position ?? null,
       stochK: stochRsi?.k ?? null,
@@ -1476,7 +1558,7 @@ function buildEntry(
       price,
       confluence: confluenceResult.score,
       rsiDivergence: stdRsiDivergence,
-      rsiCrossover,
+      rsiCrossover: rsiCrossover,
       momentum,
       adx,
       atr,
@@ -1484,7 +1566,8 @@ function buildEntry(
       williamsR,
       hiddenDivergence,
       market: getMarketType(sym),
-      regime: regimeResult.regime,
+      regime: regimeResult.regime as any,
+      tradingStyle,
     });
 
     // Custom analysis (Isolated from strategy)
@@ -1505,6 +1588,8 @@ function buildEntry(
       rsi15m,
       signal,
       rsi1h,
+      rsi4h,
+      rsi1d,
       ema9: ema9Val,
       ema21: ema21Val,
       emaCross,
@@ -1599,6 +1684,8 @@ function buildEntry(
       rsiState5m,
       rsiState15m,
       rsiState1h,
+      rsiState4h,
+      rsiState1d,
       ema9State: closes15m.length > 1 ? { ema: latestEma(closes15m.slice(0, -1), 9) ?? ema9Val! } : null,
       ema21State: closes15m.length > 1 ? { ema: latestEma(closes15m.slice(0, -1), 21) ?? ema21Val! } : null,
       macdFastState: ema12 !== null ? { ema: ema12 } : null,
@@ -1644,7 +1731,8 @@ function runRefresh(
   search?: string,
   prioritySymbols: string[] = [],
   exchange: string = 'binance',
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  tradingStyle: TradingStyle = 'intraday'
 ): Promise<ScreenerResponse> {
   const inflightKey = `${makeCacheKey(symbolCount, smartMode, rsiPeriod, exchange)}:${search || ''}:${prioritySymbols.join(',')}`;
   const existing = refreshInFlight.get(inflightKey);
@@ -1846,14 +1934,18 @@ function runRefresh(
 
     const klineResultBySymbol1m = new Map<string, PromiseSettledResult<BinanceKline[]>>();
     const klineResultBySymbol1h = new Map<string, PromiseSettledResult<BinanceKline[]>>();
+    const klineResultBySymbol4h = new Map<string, PromiseSettledResult<BinanceKline[]>>();
+    const klineResultBySymbol1d = new Map<string, PromiseSettledResult<BinanceKline[]>>();
     let failedCount = 0;
 
     if (symbolsToRefresh.length > 0) {
       const batchResults = await fetchAllKlinesBatched(symbolsToRefresh, exchange);
 
-      for (const { sym, res1m, res1h } of batchResults) {
+      for (const { sym, res1m, res1h, res4h, res1d } of batchResults) {
         klineResultBySymbol1m.set(sym, res1m);
         klineResultBySymbol1h.set(sym, res1h);
+        klineResultBySymbol4h.set(sym, res4h);
+        klineResultBySymbol1d.set(sym, res1d);
 
         if (res1m.status === 'rejected' && res1h.status === 'rejected') {
           failedCount++;
@@ -1898,8 +1990,12 @@ function runRefresh(
       if (res1m?.status === 'fulfilled') {
         const klines1m = res1m.value;
         const klines1h = res1h?.status === 'fulfilled' ? res1h.value : null;
+        const res4h = klineResultBySymbol4h.get(sym);
+        const klines4h = res4h?.status === 'fulfilled' ? res4h.value : null;
+        const res1d = klineResultBySymbol1d.get(sym);
+        const klines1d = res1d?.status === 'fulfilled' ? res1d.value : null;
 
-        debugLog(`[screener] ${sym}: Fetched ${klines1m?.length || 0} 1m klines, ${klines1h?.length || 0} 1h klines`);
+        debugLog(`[screener] ${sym}: Fetched ${klines1m?.length || 0} 1m, ${klines1h?.length || 0} 1h, ${klines4h?.length || 0} 4h, ${klines1d?.length || 0} 1d`);
 
         if (!klines1m || klines1m.length === 0) {
           debugWarn(`[screener] ${sym}: kline fetch returned empty array`);
@@ -1909,11 +2005,14 @@ function runRefresh(
             sym,
             klines1m,
             klines1h,
+            klines4h,
+            klines1d,
             ticker,
             nowTs,
             rsiPeriod,
             prevEntry,
             coinConfigs.get(sym),
+            tradingStyle,
           );
           if (entry) {
             debugLog(`[screener] ${sym}: Successfully built entry with indicators - rsi1m=${entry.rsi1m}, rsi5m=${entry.rsi5m}, rsi15m=${entry.rsi15m}, rsi1h=${entry.rsi1h}`);
@@ -2063,7 +2162,7 @@ export async function getScreenerData(
     }
 
     try {
-      const result = await runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, tryExchange, signal);
+      const result = await runRefresh(symbolCount, smartMode, rsiPeriod, options.search, options.prioritySymbols, tryExchange, signal, options.tradingStyle);
 
       if (result.data.length > 0) {
         // This exchange works - remember it for future requests

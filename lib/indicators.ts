@@ -9,7 +9,7 @@
 
 import { calculateRsiSeries } from './rsi';
 import { LRUCache } from './lru-cache';
-import { RSI_DEFAULTS, INDICATOR_DEFAULTS, STRATEGY_DEFAULTS, RSI_ZONES } from './defaults';
+import { RSI_DEFAULTS, INDICATOR_DEFAULTS, STRATEGY_DEFAULTS, RSI_ZONES, TF_WEIGHTS, type TradingStyle } from './defaults';
 import { getRegimeWeights, type MarketRegime } from './market-regime';
 
 function round(n: number): number {
@@ -658,6 +658,8 @@ export function computeStrategyScore(params: {
   rsi5m: number | null;
   rsi15m: number | null;
   rsi1h: number | null;
+  rsi4h: number | null;
+  rsi1d: number | null;
   macdHistogram: number | null;
   bbPosition: number | null;
   stochK: number | null;
@@ -681,6 +683,8 @@ export function computeStrategyScore(params: {
   hiddenDivergence?: 'hidden-bullish' | 'hidden-bearish' | 'none';
   /** Market regime for dynamic weight adjustment. */
   regime?: MarketRegime;
+  /** User's selected trading horizon for style-adaptive weighting. */
+  tradingStyle?: TradingStyle;
   enabledIndicators?: {
     rsi?: boolean;
     macd?: boolean;
@@ -698,15 +702,28 @@ export function computeStrategyScore(params: {
   let score = 0;
   
   // ── Regime-Aware Dynamic Weights ──
-  // When a regime is provided, dynamically scale indicator categories.
-  // This makes regime classification actionable rather than decorative.
   const rw = params.regime ? getRegimeWeights(params.regime) : { oscillators: 1.0, trend: 1.0, volume: 1.0, momentum: 1.0 };
+  
+  // ── Style-Aware Timeframe Weights ──
+  // Default to 'intraday' if not specified.
+  const tw = TF_WEIGHTS[params.tradingStyle || 'intraday'];
   
   // ── Asset-Aware Volatility Calibration ──
   let volatilityMultiplier = 1.0;
   if (params.market === 'Forex') volatilityMultiplier = 5.0;
   else if (params.market === 'Index' || params.market === 'Stocks') volatilityMultiplier = 2.5;
   else if (params.market === 'Metal') volatilityMultiplier = 1.5;
+
+  // ── Session-Aware Quality Multiplier ──
+  // Dampen signals outside peak liquidity hours for session-based markets.
+  let sessionQuality = 1.0;
+  if (params.market === 'Forex' || params.market === 'Metal') {
+    const hour = new Date().getUTCHours();
+    const isLondon = hour >= 8 && hour <= 16;
+    const isNY = hour >= 13 && hour <= 21;
+    if (!isLondon && !isNY) sessionQuality = 0.35; // Dead zone
+    else if (isLondon && isNY) sessionQuality = 1.2; // Peak overlap boost
+  }
   let factors = 0;
   const reasons: string[] = [];
   const enabled = params.enabledIndicators || INDICATOR_DEFAULTS;
@@ -731,10 +748,12 @@ export function computeStrategyScore(params: {
     else if (rsi > 55) score -= 30 * effectiveWeight;
   };
 
-  rsiScore(params.rsi1m, 0.5, '1m');
-  rsiScore(params.rsi5m, 1, '5m');
-  rsiScore(params.rsi15m, 1.5, '15m');
-  rsiScore(params.rsi1h, 2.5, '1h');
+  rsiScore(params.rsi1m, tw.rsi1m, '1m');
+  rsiScore(params.rsi5m, tw.rsi5m, '5m');
+  rsiScore(params.rsi15m, tw.rsi15m, '15m');
+  rsiScore(params.rsi1h, tw.rsi1h, '1h');
+  rsiScore(params.rsi4h, tw.rsi4h, '4h');
+  rsiScore(params.rsi1d, tw.rsi1d, '1d');
 
   // MACD histogram — ATR-relative scaling for consistent behavior across all price levels
   // 2026 fix: Price-relative scaling breaks on high/low priced assets.
@@ -750,22 +769,26 @@ export function computeStrategyScore(params: {
       macdNorm = Math.min(macdNorm * 80, 100); // Scale: 0.625 ATR → 50 points, 1.25 ATR → 100 points
     } else {
       // Fallback: percentage of price (legacy behavior, improved scaling)
-      const hPct = params.price > 0 ? Math.abs(params.macdHistogram / params.price) * 100 : 0;
-      macdNorm = Math.min(hPct * 200, 100);
+      const histogramWeight = tw.macd * trendW * sessionQuality;
+      const normHist = (params.macdHistogram / (params.atr || params.price * 0.005)) * 1000;
+      score += normHist * histogramWeight;
+      macdNorm = 0; // Prevent double add
     }
-    if (params.macdHistogram > 0) {
-      score += macdNorm * trendW;
-      if (macdNorm > 40) reasons.push('MACD bullish momentum');
-    } else {
-      score -= macdNorm * trendW;
-      if (macdNorm > 40) reasons.push('MACD bearish momentum');
+    if (macdNorm > 0) {
+      if (params.macdHistogram > 0) {
+        score += macdNorm * trendW;
+        if (macdNorm > 40) reasons.push('MACD bullish momentum');
+      } else {
+        score -= macdNorm * trendW;
+        if (macdNorm > 40) reasons.push('MACD bearish momentum');
+      }
     }
   }
 
   // Bollinger position — regime: oscillator weight (mean-reversion signal category)
   if (params.bbPosition != null && enabled.bb !== false) {
     factors += 1;
-    const bbW = 1.0 * rw.oscillators;
+    const bbW = 1.0 * rw.oscillators * sessionQuality;
     const bp = params.bbPosition;
     if (bp <= 0.1) { score += 80 * bbW; reasons.push(`Near lower BB (${bp.toFixed(2)})`); }
     else if (bp <= 0.25) score += 40 * bbW;
@@ -777,7 +800,7 @@ export function computeStrategyScore(params: {
   // 2026 fix: K/D crossover now properly adds to `factors` divisor to prevent score inflation
   if (params.stochK != null && params.stochD != null && enabled.stoch !== false) {
     factors += 1;
-    const stochW = 1.0 * rw.oscillators; // regime-scaled for stoch base
+    const stochW = 1.0 * rw.oscillators * sessionQuality; // regime-scaled for stoch base
     if (params.stochK < 20 && params.stochD < 20) { score += 80 * stochW; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) oversold`); }
     else if (params.stochK < 30) score += 40 * stochW;
     else if (params.stochK > 80 && params.stochD > 80) { score -= 80 * stochW; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); }
@@ -785,27 +808,27 @@ export function computeStrategyScore(params: {
     // K/D Crossover Confirmation — properly weighted with factors to prevent inflation
     if (params.stochK > params.stochD && params.stochK < 30) {
       factors += 0.5;
-      score += 70 * 0.5 * rw.oscillators; // regime-scaled
+      score += 70 * 0.5 * rw.oscillators * sessionQuality; // regime-scaled
       reasons.push('StochRSI bullish cross in oversold');
     } else if (params.stochK < params.stochD && params.stochK > 70) {
       factors += 0.5;
-      score -= 70 * 0.5 * rw.oscillators;
+      score -= 70 * 0.5 * rw.oscillators * sessionQuality;
       reasons.push('StochRSI bearish cross in overbought');
     }
     // Standard crossover in neutral zone (weaker signal)
     else if (params.stochK > params.stochD && params.stochK < 50) {
       factors += 0.25;
-      score += 60 * 0.25 * rw.oscillators;
+      score += 60 * 0.25 * rw.oscillators * sessionQuality;
     } else if (params.stochK < params.stochD && params.stochK > 50) {
       factors += 0.25;
-      score -= 60 * 0.25 * rw.oscillators;
+      score -= 60 * 0.25 * rw.oscillators * sessionQuality;
     }
   }
 
   // EMA cross — regime: trend weight
   if (params.emaCross !== 'none' && enabled.ema !== false) {
     factors += 1.5;
-    const trendW = 1.5 * rw.trend;
+    const trendW = 1.5 * rw.trend * sessionQuality;
     score += (params.emaCross === 'bullish' ? 60 : -60) * trendW;
     reasons.push(params.emaCross === 'bullish' ? 'Bullish EMA cross' : 'Bearish EMA cross');
   }
@@ -813,7 +836,7 @@ export function computeStrategyScore(params: {
   // VWAP — regime: volume weight
   if (params.vwapDiff !== null && enabled.vwap !== false) {
     factors += 1.0;
-    const volW = 1.0 * rw.volume;
+    const volW = 1.0 * rw.volume * sessionQuality;
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
     if (scaledVwapDiff < -2) { score += 40 * volW; if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); }
     else if (scaledVwapDiff > 2) { score -= 40 * volW; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
@@ -823,7 +846,7 @@ export function computeStrategyScore(params: {
   // Regime: volume weight
   if (params.volumeSpike) {
     factors += 0.5;
-    const volW = 0.5 * rw.volume;
+    const volW = 0.5 * rw.volume * sessionQuality;
     const volBoost = score > 0 ? 30 : score < 0 ? -30 : 0;
     score += volBoost * volW;
     if (volBoost !== 0) reasons.push('Volume spike confirms direction');
@@ -835,7 +858,7 @@ export function computeStrategyScore(params: {
   // Multi-TF confluence — regime: trend weight (confluence reflects cross-TF trend agreement)
   if (params.confluence !== undefined && Math.abs(params.confluence) >= 20 && enabled.confluence !== false) {
     factors += 2.5;
-    const confW = 2.5 * rw.trend;
+    const confW = 2.5 * rw.trend * sessionQuality;
     score += params.confluence * confW;
     if (params.confluence >= 50) reasons.push('Institutional multi-TF confluence (Strong Bullish)');
     else if (params.confluence >= 20) reasons.push('Multi-TF bullish alignment');
@@ -847,10 +870,10 @@ export function computeStrategyScore(params: {
   if (params.rsiCrossover && params.rsiCrossover !== 'none' && enabled.rsi !== false) {
     factors += 1.5; // Increased from 1.0
     if (params.rsiCrossover === 'bullish_reversal') {
-      score += 70 * 1.5;
+      score += 70 * 1.5 * sessionQuality;
       reasons.push('Bullish RSI reversal trend');
     } else {
-      score -= 70 * 1.5;
+      score -= 70 * 1.5 * sessionQuality;
       reasons.push('Bearish RSI reversal trend');
     }
   }
@@ -859,7 +882,7 @@ export function computeStrategyScore(params: {
   if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
     factors += 2.0; 
     if (params.rsiDivergence === 'bullish') {
-      score += 75 * 2.0;
+      score += 75 * 2.0 * sessionQuality;
       reasons.push('Bullish RSI Divergence');
     } else {
       score -= 75 * 2.0;

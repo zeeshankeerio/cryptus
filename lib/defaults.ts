@@ -109,3 +109,37 @@ export const INDICATOR_DEFAULTS = {
   obv: true,
   williamsR: true,
 } as const;
+
+// ── Trading Style & Timeframe Weights ───────────────────────────
+
+export type TradingStyle = 'scalping' | 'intraday' | 'swing' | 'position';
+
+export const TF_WEIGHTS: Record<TradingStyle, {
+  rsi1m: number;
+  rsi5m: number;
+  rsi15m: number;
+  rsi1h: number;
+  rsi4h: number;
+  rsi1d: number;
+  macd: number;
+  ema: number;
+  divergenceBonus: number;
+}> = {
+  scalping: {
+    rsi1m: 2.5, rsi5m: 2.0, rsi15m: 1.5, rsi1h: 0.3, rsi4h: 0.0, rsi1d: 0.0,
+    macd: 0.5, ema: 0.5, divergenceBonus: 0.5
+  },
+  intraday: {
+    rsi1m: 0.2, rsi5m: 0.8, rsi15m: 2.0, rsi1h: 2.5, rsi4h: 1.5, rsi1d: 0.0,
+    macd: 1.5, ema: 1.5, divergenceBonus: 1.0
+  },
+  swing: {
+    rsi1m: 0.0, rsi5m: 0.0, rsi15m: 0.3, rsi1h: 1.0, rsi4h: 3.0, rsi1d: 3.5,
+    macd: 2.0, ema: 2.0, divergenceBonus: 2.0
+  },
+  position: {
+    rsi1m: 0.0, rsi5m: 0.0, rsi15m: 0.0, rsi1h: 0.3, rsi4h: 2.0, rsi1d: 4.0,
+    macd: 1.5, ema: 2.5, divergenceBonus: 2.5
+  }
+};
+

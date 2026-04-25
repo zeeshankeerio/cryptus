@@ -26,7 +26,7 @@ import { BulkConfirmationDialog, type BulkActionConfig } from './bulk-confirmati
 import { useRouter, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
-import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter } from '@/lib/types';
+import type { ScreenerEntry, ScreenerResponse, SortKey, SortDir, SignalFilter, TradingStyle } from '@/lib/types';
 import type { LiquidationEvent } from '@/lib/derivatives-types';
 import { useLivePrices, useSymbolPrice } from '@/hooks/use-live-prices';
 import { useAlertEngine } from '@/hooks/use-alert-engine';
@@ -596,9 +596,9 @@ const ScreenerRow = memo(function ScreenerRow({
   bulkMode,
   isSelected,
   onToggleSelection,
+  tradingStyle,
   onViewNarration,
 }: {
-
   entry: ScreenerEntry;
   idx: number;
   watchlist: Set<string>;
@@ -635,6 +635,7 @@ const ScreenerRow = memo(function ScreenerRow({
   bulkMode?: boolean;
   isSelected?: boolean;
   onToggleSelection?: (symbol: string) => void;
+  tradingStyle: TradingStyle;
   onViewNarration: (entry: ScreenerEntry) => void;
 }) {
 
@@ -712,6 +713,9 @@ const ScreenerRow = memo(function ScreenerRow({
 
     const liveStrategy = computeStrategyScore({
       rsi1m, rsi5m, rsi15m, rsi1h,
+      rsi4h: entry.rsi4h,
+      rsi1d: entry.rsi1d,
+      tradingStyle,
       macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
       bbPosition,
       stochK: entry.stochK,
@@ -1607,6 +1611,7 @@ const ScreenerCard = memo(function ScreenerCard({
   fundingRate,
   orderFlowData,
   smartMoneyScore,
+  tradingStyle,
   onViewNarration,
 }: {
   entry: ScreenerEntry;
@@ -1642,6 +1647,7 @@ const ScreenerCard = memo(function ScreenerCard({
   fundingRate: { rate: number; annualized: number } | null;
   orderFlowData: { ratio: number; pressure: string; buyVolume1m: number; sellVolume1m: number } | null;
   smartMoneyScore: { score: number; label: string } | null;
+  tradingStyle: TradingStyle;
   onViewNarration: (entry: ScreenerEntry) => void;
 }) {
   const isStarred = watchlist.has(entry.symbol);
@@ -1713,6 +1719,8 @@ const ScreenerCard = memo(function ScreenerCard({
     const liveStrategy = computeStrategyScore({
 
       rsi1m, rsi5m, rsi15m, rsi1h,
+      rsi4h: entry.rsi4h,
+      rsi1d: entry.rsi1d,
       macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
       bbPosition,
       stochK: entry.stochK,
@@ -2292,6 +2300,7 @@ export default function ScreenerDashboard() {
   // ── Signal Tag Display Controls ──
   const [globalShowSignalTags, setGlobalShowSignalTags] = useState(true);
   const [globalSignalThresholdMode, setGlobalSignalThresholdMode] = useState<'default' | 'custom'>('custom');
+  const [tradingStyle, setTradingStyle] = useState<TradingStyle>('intraday');
 
   // ── Indicator Feature Flags ──
   const [globalUseRsi, setGlobalUseRsi] = useState(true);
@@ -2406,6 +2415,7 @@ export default function ScreenerDashboard() {
             if (prefs.showHeader !== undefined) setShowHeader(prefs.showHeader);
             if (prefs.rsiPeriod !== undefined) setRsiPeriod(prefs.rsiPeriod);
             if (prefs.soundEnabled !== undefined) setSoundEnabled(prefs.soundEnabled);
+            if (prefs.tradingStyle !== undefined) setTradingStyle(prefs.tradingStyle as TradingStyle);
           } finally {
             setTimeout(() => { isSyncingRef.current = false; }, 200);
           }
@@ -2493,6 +2503,9 @@ export default function ScreenerDashboard() {
       loadFlag('crypto-rsi-global-use-momentum', setGlobalUseMomentum);
       loadFlag('crypto-rsi-global-use-obv', setGlobalUseObv);
       loadFlag('crypto-rsi-global-use-williamsr', setGlobalUseWilliamsR);
+
+      const style = localStorage.getItem('crypto-rsi-trading-style');
+      if (style) setTradingStyle(style as TradingStyle);
 
       setPreferencesSynced(true);
     };
@@ -2861,6 +2874,8 @@ export default function ScreenerDashboard() {
           rsi5m: null,
           rsi15m: rsi14,
           rsi1h: null,
+          rsi4h: null,
+          rsi1d: null,
           emaCross,
           macdHistogram: macdRes?.histogram ?? 0,
           bbPosition: bbRes?.position ?? 0.5,
@@ -2883,7 +2898,7 @@ export default function ScreenerDashboard() {
           price: md.price,
           change24h: md.changePercent,
           volume24h: md.volume,
-          rsi1m, rsi5m: null, rsi15m: rsi14, rsi1h: null, rsiCustom: rsi14,
+          rsi1m, rsi5m: null, rsi15m: rsi14, rsi1h: null, rsi4h: null, rsi1d: null, rsiCustom: rsi14,
           ema9, ema21, emaCross,
           macdLine: macdRes?.macdLine ?? null,
           macdSignal: macdRes?.signalLine ?? null,
@@ -2923,6 +2938,8 @@ export default function ScreenerDashboard() {
           rsiState5m,
           rsiState15m,
           rsiState1h,
+          rsiState4h: null,
+          rsiState1d: null,
           rsiStateCustom,
           ema9State,
           ema21State,
@@ -3006,6 +3023,8 @@ export default function ScreenerDashboard() {
           rsi5m: merged.rsi5m,
           rsi15m: merged.rsi15m,
           rsi1h: merged.rsi1h,
+          rsi4h: merged.rsi4h,
+          rsi1d: merged.rsi1d,
           macdHistogram: merged.macdHistogram,
           bbPosition: merged.bbPosition,
           stochK: merged.stochK,
@@ -3028,7 +3047,8 @@ export default function ScreenerDashboard() {
             momentum: globalUseMomentum,
             obv: globalUseObv,
             williamsR: globalUseWilliamsR,
-          }
+          },
+          tradingStyle
         });
         merged = {
           ...merged,
@@ -3144,8 +3164,8 @@ export default function ScreenerDashboard() {
 
   const selectedNarration = useMemo(() => {
     if (!selectedNarrationEntry) return null;
-    return generateSignalNarration(selectedNarrationEntry);
-  }, [selectedNarrationEntry]);
+    return generateSignalNarration(selectedNarrationEntry, tradingStyle);
+  }, [selectedNarrationEntry, tradingStyle]);
 
   // Intelligence: Maintain live data accuracy in the modal
   useEffect(() => {
@@ -3237,7 +3257,8 @@ export default function ScreenerDashboard() {
           momentum: globalUseMomentum,
           obv: globalUseObv,
           williamsR: globalUseWilliamsR,
-        }
+        },
+        tradingStyle
       });
     }, 800);
 
@@ -3287,7 +3308,8 @@ export default function ScreenerDashboard() {
           showHeader,
           rsiPeriod,
           soundEnabled,
-          watchlist: Array.from(watchlist)
+          watchlist: Array.from(watchlist),
+          tradingStyle
         };
 
         await fetch('/api/user/preferences', {
@@ -3312,6 +3334,7 @@ export default function ScreenerDashboard() {
         localStorage.setItem('crypto-rsi-smart-mode', smartMode ? '1' : '0');
         localStorage.setItem('crypto-rsi-show-header', showHeader ? '1' : '0');
         localStorage.setItem('crypto-rsi-period', String(rsiPeriod));
+        localStorage.setItem('crypto-rsi-trading-style', tradingStyle);
         localStorage.setItem('crypto-rsi-visible-cols', JSON.stringify(Array.from(visibleCols)));
 
         const saveFlag = (key: string, val: boolean) => localStorage.setItem(key, val ? '1' : '0');
@@ -3854,7 +3877,7 @@ export default function ScreenerDashboard() {
 
       // The API natively resolves Yahoo symbols out of band, so we fetch EXACTLY the Crypto pair limit.
       const effectiveCount = Math.min(pairCount, entitlements.maxRecords || pairCount);
-      const url = `/api/screener?count=${effectiveCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}&ts=${Date.now()}`;
+      const url = `/api/screener?count=${effectiveCount}&smart=${smartMode ? '1' : '0'}&rsiPeriod=${rsiPeriod}&search=${encodeURIComponent(search)}&prioritySymbols=${encodeURIComponent(prioritySymbols)}&exchange=${exchange}&tradingStyle=${tradingStyle}&ts=${Date.now()}`;
 
       const res = await fetch(url, {
         signal: controller.signal,
@@ -5078,6 +5101,24 @@ export default function ScreenerDashboard() {
                 </button>
               </div>
 
+              {/* Trading Style Orchestrator */}
+              <div className="flex items-center bg-black/40 border border-white/5 rounded-xl p-0.5 h-full shadow-inner shrink-0">
+                {(['scalping', 'intraday', 'swing'] as TradingStyle[]).map((style) => (
+                  <button
+                    key={style}
+                    onClick={() => setTradingStyle(style)}
+                    className={cn(
+                      "h-full px-3 rounded-xl flex items-center gap-2 transition-all",
+                      tradingStyle === style
+                        ? "bg-[#39FF14]/10 text-[#39FF14] border border-[#39FF14]/20"
+                        : "text-slate-500 hover:text-slate-300 border border-transparent"
+                    )}
+                  >
+                    <span className="text-[7.5px] font-black uppercase tracking-wider">{style}</span>
+                  </button>
+                ))}
+              </div>
+
               <div className="flex-1 overflow-hidden h-full bg-black/30 border border-white/5 rounded-xl flex items-center px-4 relative">
                 <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#080F1B] to-transparent z-10" />
                 <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-[#080F1B] to-transparent z-10" />
@@ -5464,6 +5505,7 @@ export default function ScreenerDashboard() {
                   fundingRate={fundingRates.get(entry.symbol) ? { rate: fundingRates.get(entry.symbol)!.rate, annualized: fundingRates.get(entry.symbol)!.annualized } : null}
                   orderFlowData={orderFlow.get(entry.symbol) ? { ratio: orderFlow.get(entry.symbol)!.ratio, pressure: orderFlow.get(entry.symbol)!.pressure, buyVolume1m: orderFlow.get(entry.symbol)!.buyVolume1m, sellVolume1m: orderFlow.get(entry.symbol)!.sellVolume1m } : null}
                   smartMoneyScore={smartMoney.get(entry.symbol) ? { score: smartMoney.get(entry.symbol)!.score, label: smartMoney.get(entry.symbol)!.label } : null}
+                  tradingStyle={tradingStyle}
                   onViewNarration={handleViewNarration}
                 />
               ))}
@@ -5616,6 +5658,7 @@ export default function ScreenerDashboard() {
                         bulkMode={bulkMode}
                         isSelected={selectedSymbols.has(entry.symbol)}
                         onToggleSelection={toggleSymbolSelection}
+                        tradingStyle={tradingStyle}
                         onViewNarration={handleViewNarration}
                       />
                     ))}
@@ -5786,6 +5829,8 @@ export default function ScreenerDashboard() {
             canUseAlerts={entitlements.features.enableAlerts}
             canUseAdvancedIndicators={entitlements.features.enableAdvancedIndicators}
             canUseCustomSettings={entitlements.features.enableCustomSettings}
+            tradingStyle={tradingStyle}
+            setTradingStyle={setTradingStyle}
             onUpgrade={() => handleUpgradeRequired(200)}
             alertsEnabled={alertsEnabled}
             setAlertsEnabled={setAlertsEnabled}
@@ -6937,6 +6982,8 @@ function GlobalSettingsModal({
   canUseAlerts,
   canUseAdvancedIndicators,
   canUseCustomSettings,
+  tradingStyle,
+  setTradingStyle,
   onUpgrade,
   alertsEnabled,
   setAlertsEnabled,
@@ -6999,6 +7046,8 @@ function GlobalSettingsModal({
   canUseAlerts: boolean;
   canUseAdvancedIndicators: boolean;
   canUseCustomSettings: boolean;
+  tradingStyle: TradingStyle;
+  setTradingStyle: (v: TradingStyle) => void;
   onUpgrade: () => void;
   alertsEnabled: boolean;
   setAlertsEnabled: (v: boolean) => void;
@@ -7591,7 +7640,24 @@ function GlobalSettingsModal({
           <div className="h-px bg-white/5" />
 
           {/* Performance Settings */}
-          <section className="grid grid-cols-2 gap-6">
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="space-y-3">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Strategy Style</h3>
+              <div className="grid grid-cols-1 gap-1.5">
+                {(['scalping', 'intraday', 'swing'] as TradingStyle[]).map((style) => (
+                  <button
+                    key={style}
+                    onClick={() => setTradingStyle(style)}
+                    className={cn(
+                      "px-4 py-2.5 rounded-xl text-[10px] font-black border transition-all uppercase tracking-widest",
+                      tradingStyle === style ? "bg-[#39FF14]/10 text-[#39FF14] border-[#39FF14]/40" : "bg-white/5 border-white/5 text-slate-500"
+                    )}
+                  >
+                    {style}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="space-y-3">
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 ml-1">Refresh</h3>
               <div className="grid grid-cols-1 gap-1.5">

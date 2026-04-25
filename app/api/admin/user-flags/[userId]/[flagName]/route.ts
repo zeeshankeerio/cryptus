@@ -4,7 +4,7 @@ import { deleteUserFeatureFlag, type UserFeatureFlagName } from "@/lib/user-feat
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { userId: string; flagName: string } }
+  { params }: { params: Promise<{ userId: string; flagName: string }> }
 ) {
   try {
     const owner = await requireOwner();
@@ -12,7 +12,7 @@ export async function DELETE(
       return owner.error;
     }
 
-    const { userId, flagName } = params;
+    const { userId, flagName } = await params;
 
     // Delete the user feature flag
     await deleteUserFeatureFlag(userId, flagName as UserFeatureFlagName);

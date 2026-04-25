@@ -13,7 +13,7 @@
  * market narrative - similar to what a senior analyst would write in a morning brief.
  */
 
-import type { ScreenerEntry } from './types';
+import type { ScreenerEntry, TradingStyle } from './types';
 import { RSI_ZONES } from './defaults';
 
 // ── Output Types ─────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function formatNum(n: number | null, decimals = 1): string {
 
 // ── Core Narration Engine ────────────────────────────────────────
 
-export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
+export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: TradingStyle = 'intraday'): SignalNarration {
   const reasons: string[] = [];
   let bullishPoints = 0;
   let bearishPoints = 0;
@@ -84,6 +84,8 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
     { label: '5m',  val: entry.rsi5m },
     { label: '15m', val: entry.rsi15m },
     { label: '1h',  val: entry.rsi1h },
+    { label: '4h',  val: entry.rsi4h },
+    { label: '1d',  val: entry.rsi1d },
   ].filter(r => r.val !== null);
 
   const oversoldCount     = rsiValues.filter(r => r.val !== null && r.val <= zones.os).length;
@@ -571,6 +573,15 @@ export function generateSignalNarration(entry: ScreenerEntry): SignalNarration {
   const topReason = reasons[0]?.replace(/^[^\s]+\s/, '') || 'Neutral';
   const institutionalTag = conviction >= 80 && pillarCount >= 4 ? ' | ✅ Institutional Alignment Confirmed' : '';
   const shareLine = `${assetPrefix}${emoji} ${headline} | ${topReason} | Conviction: ${conviction}% (${convictionLabel})${institutionalTag}`;
+
+  // ── 19. Strategy Style Context (Institutional Transparency) ──
+  const styleLabel = tradingStyle.charAt(0).toUpperCase() + tradingStyle.slice(1);
+  const styleExplanation =
+    tradingStyle === 'scalping' ? 'weighted for ultra-fast 1m/5m momentum & volatility' :
+    tradingStyle === 'swing' ? 'weighted for 4h/1d macro trend stability' :
+    'balanced for 15m/1h intraday market structure';
+
+  reasons.unshift(`🛡️ Strategy Mode: ${styleLabel} — Indicators are ${styleExplanation}`);
 
   return {
     headline,

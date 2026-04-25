@@ -6,11 +6,12 @@ import Link from 'next/link';
 import { ChevronLeft, Zap, Target, TrendingUp, TrendingDown, Info } from 'lucide-react';
 
 interface SymbolPageProps {
-  params: { symbol: string };
+  params: Promise<{ symbol: string }>;
 }
 
 // Metadata generation for high-impact social cards and search visibility
-export async function generateMetadata({ params }: SymbolPageProps): Promise<Metadata> {
+export async function generateMetadata(props: SymbolPageProps): Promise<Metadata> {
+  const params = await props.params;
   const symbol = params.symbol.toUpperCase();
   const alias = getSymbolAlias(symbol);
   
@@ -31,7 +32,8 @@ export async function generateMetadata({ params }: SymbolPageProps): Promise<Met
   };
 }
 
-export default async function SymbolPage({ params }: SymbolPageProps) {
+export default async function SymbolPage(props: SymbolPageProps) {
+  const params = await props.params;
   const symbol = params.symbol.toUpperCase();
   const alias = getSymbolAlias(symbol);
 

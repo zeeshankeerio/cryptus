@@ -10,8 +10,10 @@ export interface ScreenerEntry {
   rsi5m: number | null;
   rsi15m: number | null;
   signal: 'oversold' | 'overbought' | 'neutral';
-  // ── New: 1h RSI ──
+  // ── New: 1h, 4h, 1d RSI ──
   rsi1h: number | null;
+  rsi4h: number | null;
+  rsi1d: number | null;
   // ── New: EMA cross ──
   ema9: number | null;
   ema21: number | null;
@@ -67,6 +69,8 @@ export interface ScreenerEntry {
   rsiState5m: { avgGain: number; avgLoss: number; lastClose: number } | null;
   rsiState15m: { avgGain: number; avgLoss: number; lastClose: number } | null;
   rsiState1h: { avgGain: number; avgLoss: number; lastClose: number } | null;
+  rsiState4h: { avgGain: number; avgLoss: number; lastClose: number } | null;
+  rsiState1d: { avgGain: number; avgLoss: number; lastClose: number } | null;
   // ── Indicator states for live shadowing ──
   ema9State: { ema: number } | null;
   ema21State: { ema: number } | null;
@@ -162,12 +166,23 @@ export type BinanceKline = [
 
 export type SortKey =
   | 'symbol' | 'price' | 'change24h' | 'volume24h'
-  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h'
+  | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsi4h' | 'rsi1d'
   | 'ema9' | 'ema21' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK' | 'vwapDiff' | 'volumeSpike'
   | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
   | 'confluence' | 'momentum' | 'atr' | 'adx' | 'longCandle'
   | 'fundingRate' | 'orderFlow' | 'smartMoney';
 
 export type SortDir = 'asc' | 'desc';
+export type TradingStyle = 'scalping' | 'intraday' | 'swing' | 'position';
+
+export interface ScreenerOptions {
+  smartMode?: boolean;
+  rsiPeriod?: number;
+  search?: string;
+  prioritySymbols?: string[];
+  exchange?: string;
+  tradingStyle?: TradingStyle;
+}
+
 export type SignalFilter = 'all' | 'oversold' | 'overbought' | 'neutral'
   | 'strong-buy' | 'buy' | 'sell' | 'strong-sell';

@@ -30,7 +30,9 @@ describe('Bug Condition Exploration - Variable Scope Error', () => {
       
       // Try to access them outside the block (will throw ReferenceError)
       return {
+        // @ts-expect-error Intentionally demonstrating scope error
         macdFastState: ema12 !== null ? { ema: ema12 } : null,
+        // @ts-expect-error Intentionally demonstrating scope error
         macdSlowState: ema26 !== null ? { ema: ema26 } : null,
       };
     };

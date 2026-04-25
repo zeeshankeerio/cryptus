@@ -13,7 +13,7 @@ type EffectiveFlags = {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
     const owner = await requireOwner();
@@ -24,7 +24,7 @@ export async function GET(
       );
     }
 
-    const { userId } = params;
+    const { userId } = await params;
 
     // Retrieve user-specific flags
     const userFlags = await getAllUserFeatureFlags(userId);

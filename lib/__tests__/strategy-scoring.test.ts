@@ -22,6 +22,8 @@ function baseParams(overrides: Partial<Parameters<typeof computeStrategyScore>[0
     rsi5m: 50,
     rsi15m: 50,
     rsi1h: 50,
+    rsi4h: 50,
+    rsi1d: 50,
     macdHistogram: null,
     bbPosition: null,
     stochK: null,
