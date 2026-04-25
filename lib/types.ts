@@ -49,6 +49,7 @@ export interface ScreenerEntry {
   // ── New: ATR & ADX ──
   atr: number | null;
   adx: number | null;
+  cci: number | null;
   // ── New: OBV & Williams %R (2026 Intelligence Upgrade) ──
   obvTrend: 'bullish' | 'bearish' | 'none';
   williamsR: number | null;
@@ -169,7 +170,7 @@ export type SortKey =
   | 'rsi1m' | 'rsi5m' | 'rsi15m' | 'rsi1h' | 'rsi4h' | 'rsi1d'
   | 'ema9' | 'ema21' | 'macdHistogram' | 'bbUpper' | 'bbLower' | 'bbPosition' | 'stochK' | 'vwapDiff' | 'volumeSpike'
   | 'strategyScore' | 'signal' | 'emaCross' | 'rsiDivergence'
-  | 'confluence' | 'momentum' | 'atr' | 'adx' | 'longCandle'
+  | 'confluence' | 'momentum' | 'atr' | 'adx' | 'cci' | 'longCandle'
   | 'fundingRate' | 'orderFlow' | 'smartMoney';
 
 export type SortDir = 'asc' | 'desc';

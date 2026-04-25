@@ -587,6 +587,7 @@ const ScreenerRow = memo(function ScreenerRow({
   globalUseMomentum,
   globalUseObv,
   globalUseWilliamsR,
+  globalUseCci,
   globalVolatilityEnabled,
   globalLongCandleThreshold,
   globalVolumeSpikeThreshold,
@@ -626,6 +627,7 @@ const ScreenerRow = memo(function ScreenerRow({
   globalUseMomentum: boolean;
   globalUseObv: boolean;
   globalUseWilliamsR: boolean;
+  globalUseCci: boolean;
   globalVolatilityEnabled: boolean;
   globalLongCandleThreshold: number;
   globalVolumeSpikeThreshold: number;
@@ -750,6 +752,7 @@ const ScreenerRow = memo(function ScreenerRow({
         momentum: globalUseMomentum,
         obv: globalUseObv,
         williamsR: globalUseWilliamsR,
+        cci: globalUseCci,
       }
     });
     return {
@@ -872,7 +875,7 @@ const ScreenerRow = memo(function ScreenerRow({
         // Intelligence: Record signal for Win Rate tracking if it's a strong signal
         if (display.strategySignal === 'strong-buy' || display.strategySignal === 'strong-sell' ||
           display.strategySignal === 'buy' || display.strategySignal === 'sell') {
-          recordSignal(entry.symbol, display.strategySignal as any, display.price);
+          recordSignal(entry.symbol, display.strategySignal as any, display.price, entry.market, entry.atr);
         }
 
         prevSignal.current = display.strategySignal;
@@ -881,7 +884,7 @@ const ScreenerRow = memo(function ScreenerRow({
         // Even if not visible, record the signal if it's new
         if (display.strategySignal === 'strong-buy' || display.strategySignal === 'strong-sell' ||
           display.strategySignal === 'buy' || display.strategySignal === 'sell') {
-          recordSignal(entry.symbol, display.strategySignal as any, display.price);
+          recordSignal(entry.symbol, display.strategySignal as any, display.price, entry.market, entry.atr);
         }
         prevSignal.current = display.strategySignal;
       }
@@ -1609,6 +1612,7 @@ const ScreenerCard = memo(function ScreenerCard({
   globalUseMomentum,
   globalUseObv,
   globalUseWilliamsR,
+  globalUseCci,
   globalVolatilityEnabled,
   globalLongCandleThreshold,
   globalVolumeSpikeThreshold,
@@ -1645,6 +1649,7 @@ const ScreenerCard = memo(function ScreenerCard({
   globalUseMomentum: boolean;
   globalUseObv: boolean;
   globalUseWilliamsR: boolean;
+  globalUseCci: boolean;
   globalVolatilityEnabled: boolean;
   globalLongCandleThreshold: number;
   globalVolumeSpikeThreshold: number;
@@ -1757,6 +1762,7 @@ const ScreenerCard = memo(function ScreenerCard({
         momentum: globalUseMomentum,
         obv: globalUseObv,
         williamsR: globalUseWilliamsR,
+        cci: globalUseCci,
       }
     });
 
@@ -2318,6 +2324,7 @@ export default function ScreenerDashboard() {
   const [globalUseMomentum, setGlobalUseMomentum] = useState(true);
   const [globalUseObv, setGlobalUseObv] = useState(true);
   const [globalUseWilliamsR, setGlobalUseWilliamsR] = useState(true);
+  const [globalUseCci, setGlobalUseCci] = useState(true);
   const [activeTab, setActiveTab] = useState<'home' | 'alerts' | 'watchlist' | 'settings'>('home');
   const [coinConfigs, setCoinConfigs] = useState<Record<string, any>>({});
   const coinConfigsRef = useRef<Record<string, any>>({});
@@ -2412,6 +2419,7 @@ export default function ScreenerDashboard() {
             if (prefs.globalUseMomentum !== undefined) setGlobalUseMomentum(prefs.globalUseMomentum);
             if (prefs.globalUseObv !== undefined) setGlobalUseObv(prefs.globalUseObv);
             if (prefs.globalUseWilliamsR !== undefined) setGlobalUseWilliamsR(prefs.globalUseWilliamsR);
+            if (prefs.globalUseCci !== undefined) setGlobalUseCci(prefs.globalUseCci);
             if (prefs.visibleColumns !== undefined) setVisibleCols(new Set(prefs.visibleColumns as ColumnId[]));
             if (prefs.refreshInterval !== undefined) setRefreshInterval(prefs.refreshInterval);
             if (prefs.pairCount !== undefined) setPairCount(prefs.pairCount);
@@ -2507,6 +2515,7 @@ export default function ScreenerDashboard() {
       loadFlag('crypto-rsi-global-use-momentum', setGlobalUseMomentum);
       loadFlag('crypto-rsi-global-use-obv', setGlobalUseObv);
       loadFlag('crypto-rsi-global-use-williamsr', setGlobalUseWilliamsR);
+      loadFlag('crypto-rsi-global-use-cci', setGlobalUseCci);
 
       const style = localStorage.getItem('crypto-rsi-trading-style');
       if (style) setTradingStyle(style as TradingStyle);
@@ -2561,6 +2570,7 @@ export default function ScreenerDashboard() {
             if (payload.globalUseMomentum !== undefined) setGlobalUseMomentum(payload.globalUseMomentum);
             if (payload.globalUseObv !== undefined) setGlobalUseObv(payload.globalUseObv);
             if (payload.globalUseWilliamsR !== undefined) setGlobalUseWilliamsR(payload.globalUseWilliamsR);
+            if (payload.globalUseCci !== undefined) setGlobalUseCci(payload.globalUseCci);
           } else if (type === 'CONFIGS_UPDATED') {
             setCoinConfigs(payload);
           } else if (type === 'WATCHLIST_UPDATED') {
@@ -2893,7 +2903,7 @@ export default function ScreenerDashboard() {
           market: resolvedMarket,
           enabledIndicators: {
             rsi: true, ema: true, macd: true, bb: true, stoch: true, vwap: true,
-            obv: true, williamsR: true,
+            obv: true, williamsR: true, cci: true,
           }
         });
 
@@ -2902,6 +2912,7 @@ export default function ScreenerDashboard() {
           price: md.price,
           change24h: md.changePercent,
           volume24h: md.volume,
+          cci: null,
           rsi1m, rsi5m: null, rsi15m: rsi14, rsi1h: null, rsi4h: null, rsi1d: null, rsiCustom: rsi14,
           ema9, ema21, emaCross,
           macdLine: macdRes?.macdLine ?? null,
@@ -3057,6 +3068,7 @@ export default function ScreenerDashboard() {
             momentum: globalUseMomentum,
             obv: globalUseObv,
             williamsR: globalUseWilliamsR,
+            cci: globalUseCci,
           },
           tradingStyle
         });
@@ -3508,6 +3520,10 @@ export default function ScreenerDashboard() {
   useEffect(() => {
     localStorage.setItem('crypto-rsi-global-volatility-enabled', globalVolatilityEnabled ? '1' : '0');
   }, [globalVolatilityEnabled]);
+
+  useEffect(() => {
+    localStorage.setItem('crypto-rsi-trading-style', tradingStyle);
+  }, [tradingStyle]);
 
   // ─── Real-time Stats Engine (Tab-Scoped) ──────────────────────
   // CRITICAL FIX: Stats are computed from the active asset class tab only,
@@ -4145,7 +4161,7 @@ export default function ScreenerDashboard() {
         setLoading(false);
       }
     }
-  }, [pairCount, smartMode, rsiPeriod, search, exchange, handleUpgradeRequired, entitlements.maxRecords, entitlements.availableRecordOptions, syncStates, watchlist]);
+  }, [pairCount, smartMode, rsiPeriod, search, exchange, tradingStyle, handleUpgradeRequired, entitlements.maxRecords, entitlements.availableRecordOptions, syncStates, watchlist]);
 
   // ── Stable ref so all async effects always call the latest fetchData
   // without adding `fetchData` to their dependency arrays (which causes race conditions).
@@ -5517,9 +5533,10 @@ export default function ScreenerDashboard() {
                   globalUseConfluence={globalUseConfluence}
                   globalUseDivergence={globalUseDivergence}
                   globalUseMomentum={globalUseMomentum}
-                  globalUseObv={globalUseObv}
-                  globalUseWilliamsR={globalUseWilliamsR}
-                  globalVolatilityEnabled={globalVolatilityEnabled}
+                        globalUseObv={globalUseObv}
+                        globalUseWilliamsR={globalUseWilliamsR}
+                        globalUseCci={globalUseCci}
+                        globalVolatilityEnabled={globalVolatilityEnabled}
                   globalLongCandleThreshold={globalLongCandleThreshold}
                   globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
                   fundingRate={fundingRates.get(entry.symbol) ? { rate: fundingRates.get(entry.symbol)!.rate, annualized: fundingRates.get(entry.symbol)!.annualized } : null}
@@ -5669,6 +5686,7 @@ export default function ScreenerDashboard() {
                         globalUseMomentum={globalUseMomentum}
                         globalUseObv={globalUseObv}
                         globalUseWilliamsR={globalUseWilliamsR}
+                        globalUseCci={globalUseCci}
                         globalVolatilityEnabled={globalVolatilityEnabled}
                         globalLongCandleThreshold={globalLongCandleThreshold}
                         globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
@@ -5898,6 +5916,8 @@ export default function ScreenerDashboard() {
             setGlobalUseObv={setGlobalUseObv}
             globalUseWilliamsR={globalUseWilliamsR}
             setGlobalUseWilliamsR={setGlobalUseWilliamsR}
+            globalUseCci={globalUseCci}
+            setGlobalUseCci={setGlobalUseCci}
             isConnected={isConnected}
           />
         )}
@@ -7051,6 +7071,8 @@ function GlobalSettingsModal({
   setGlobalUseObv,
   globalUseWilliamsR,
   setGlobalUseWilliamsR,
+  globalUseCci,
+  setGlobalUseCci,
   isConnected
 }: {
   onClose: () => void;
@@ -7115,6 +7137,8 @@ function GlobalSettingsModal({
   setGlobalUseObv: (v: boolean) => void;
   globalUseWilliamsR: boolean;
   setGlobalUseWilliamsR: (v: boolean) => void;
+  globalUseCci: boolean;
+  setGlobalUseCci: (v: boolean) => void;
   isConnected: boolean;
 }) {
   const { status: pushStatus, toggle: togglePush, isLoading: pushLoading } = usePushNotifications();
@@ -7319,6 +7343,7 @@ function GlobalSettingsModal({
                     { id: 'mom', label: 'Momentum', state: globalUseMomentum, setter: setGlobalUseMomentum, icon: <TrendingUp size={10} /> },
                     { id: 'obv', label: 'OBV Trend', state: globalUseObv, setter: setGlobalUseObv, icon: <BarChart3 size={10} /> },
                     { id: 'wr', label: 'Williams %R', state: globalUseWilliamsR, setter: setGlobalUseWilliamsR, icon: <Activity size={10} /> },
+                    { id: 'cci', label: 'CCI Trend', state: globalUseCci, setter: setGlobalUseCci, icon: <TrendingUp size={10} /> },
                   ].map(ind => (
                     <button
                       key={ind.id}
@@ -7728,7 +7753,7 @@ function GlobalSettingsModal({
           {/* Reset to Default Button */}
           <button
             onClick={() => {
-              if (confirm('Reset all settings to institutional defaults?\n\n• All 11 strategy indicators → ON\n• RSI period → 14 (industry standard)\n• Thresholds → 80/20 (institutional grade)\n• Signal mode → Custom (expert)\n• Volatility detection → ON (2.0x/2.5x)\n• Columns → Optimal trading set\n• Keep your watchlist and alerts\n\nContinue?')) {
+              if (confirm('Reset all settings to institutional defaults?\n\n• All 12 strategy indicators → ON\n• RSI period → 14 (industry standard)\n• Thresholds → 80/20 (institutional grade)\n• Signal mode → Custom (expert)\n• Volatility detection → ON (2.0x/2.5x)\n• Columns → Optimal trading set\n• Keep your watchlist and alerts\n\nContinue?')) {
                 // Reset all indicators to default (all ON — expert mode)
                 setGlobalUseRsi(true);
                 setGlobalUseMacd(true);
@@ -7741,6 +7766,7 @@ function GlobalSettingsModal({
                 setGlobalUseMomentum(true);
                 setGlobalUseObv(true);
                 setGlobalUseWilliamsR(true);
+                setGlobalUseCci(true);
 
                 // Reset RSI — institutional-grade 80/20 thresholds
                 setRsiPeriod(14);

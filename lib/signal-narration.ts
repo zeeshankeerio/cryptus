@@ -170,17 +170,27 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     pillars.momentum = true;
   }
 
-  // ── 6. RSI Divergence ──
+  // ── 6. RSI Divergence (Relevance-Gated) ──
+  // We use the 15m RSI (or 1m fallback) to check if the divergence is still relevant.
+  const currentRsi = entry.rsi15m ?? entry.rsi1m ?? 50;
   if (entry.rsiDivergence === 'bullish') {
-    reasons.push('🔄 Bullish RSI divergence detected - price making lower lows but RSI making higher lows');
-    bullishPoints += 18;
-    totalPoints += 18;
-    pillars.momentum = true;
+    if (currentRsi < 65) {
+      reasons.push('🔄 Bullish RSI divergence detected - price making lower lows but RSI making higher lows');
+      bullishPoints += 18;
+      totalPoints += 18;
+      pillars.momentum = true;
+    } else {
+      reasons.push('⌛ Bullish divergence detected but likely played out (RSI already overextended)');
+    }
   } else if (entry.rsiDivergence === 'bearish') {
-    reasons.push('🔄 Bearish RSI divergence detected - price making higher highs but RSI making lower highs');
-    bearishPoints += 18;
-    totalPoints += 18;
-    pillars.momentum = true;
+    if (currentRsi > 35) {
+      reasons.push('🔄 Bearish RSI divergence detected - price making higher highs but RSI making lower highs');
+      bearishPoints += 18;
+      totalPoints += 18;
+      pillars.momentum = true;
+    } else {
+      reasons.push('⌛ Bearish divergence detected but likely played out (RSI already oversold)');
+    }
   }
 
   // ── 7. Volume Spike ──
@@ -307,6 +317,52 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       reasons.push(`📊 Williams %R at ${formatNum(wr)} - approaching overbought territory`);
       bearishPoints += 3;
       totalPoints += 3;
+    }
+    pillars.momentum = true;
+  }
+
+  // ── 12b. CCI (Commodity Channel Index) ──
+  if (entry.cci !== null && entry.cci !== undefined) {
+    const cci = entry.cci;
+    const isCommodity = market === 'Metal' || market === 'Forex';
+    const ptsExtreme = isCommodity ? 14 : 8;
+    const ptsNormal = isCommodity ? 7 : 4;
+
+    if (cci >= 200) {
+      if (isCommodity) {
+        reasons.push(`📡 CCI at ${formatNum(cci)} — extreme overbought (commodity momentum peak). High reversal probability.`);
+      } else {
+        reasons.push(`📉 CCI at ${formatNum(cci)} - extreme overbought condition (Trend Exhaustion)`);
+      }
+      bearishPoints += ptsExtreme;
+      totalPoints += ptsExtreme;
+    } else if (cci >= 100) {
+      if (isCommodity) {
+        reasons.push(`📡 CCI at ${formatNum(cci)} — overbought zone. Trend likely intact but momentum may plateau.`);
+      } else {
+        reasons.push(`📉 CCI at ${formatNum(cci)} - entering overbought zone`);
+      }
+      bearishPoints += ptsNormal;
+      totalPoints += ptsNormal;
+    } else if (cci <= -200) {
+      if (isCommodity) {
+        reasons.push(`📡 CCI at ${formatNum(cci)} — extreme oversold (commodity demand spike zone). High mean-reversion probability.`);
+      } else {
+        reasons.push(`📈 CCI at ${formatNum(cci)} - extreme oversold condition (Trend Bottoming)`);
+      }
+      bullishPoints += ptsExtreme;
+      totalPoints += ptsExtreme;
+    } else if (cci <= -100) {
+      if (isCommodity) {
+        reasons.push(`📡 CCI at ${formatNum(cci)} — oversold territory. Bullish entry zone.`);
+      } else {
+        reasons.push(`📈 CCI at ${formatNum(cci)} - entering oversold zone`);
+      }
+      bullishPoints += ptsNormal;
+      totalPoints += ptsNormal;
+    } else if (isCommodity && Math.abs(cci) > 80) {
+      const dir = cci > 0 ? 'approaching overbought' : 'approaching oversold';
+      reasons.push(`📡 CCI at ${formatNum(cci)} — ${dir} boundary.`);
     }
     pillars.momentum = true;
   }
@@ -465,32 +521,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       }
     }
 
-    // ── CCI (Commodity Channel Index) for all metals ──
-    // CCI was designed specifically for commodity markets and is more reliable
-    // for commodity futures than RSI due to its unbounded range and mean-reversion.
-    const cci = (entry as any).cci as number | null | undefined;
-    if (cci !== null && cci !== undefined) {
-      if (cci > 200) {
-        reasons.push(`📡 CCI at ${cci.toFixed(0)} — extreme overbought (commodity momentum peak). High reversal probability — consider profit-taking or tight trailing stops.`);
-        bearishPoints += 8; totalPoints += 8;
-      } else if (cci > 100) {
-        reasons.push(`📡 CCI at ${cci.toFixed(0)} — overbought zone. Trend likely intact but momentum may plateau. Watch for CCI crossover below +100 as exit signal.`);
-        bearishPoints += 4; totalPoints += 4;
-      } else if (cci < -200) {
-        reasons.push(`📡 CCI at ${cci.toFixed(0)} — extreme oversold (commodity demand spike zone). High mean-reversion probability — institutional buyers typically step in here.`);
-        bullishPoints += 8; totalPoints += 8;
-      } else if (cci < -100) {
-        reasons.push(`📡 CCI at ${cci.toFixed(0)} — oversold territory. Bullish entry zone — wait for CCI crossover above -100 to confirm reversal.`);
-        bullishPoints += 4; totalPoints += 4;
-      } else {
-        // CCI in neutral zone — add informational context only if near boundaries
-        if (Math.abs(cci) > 80) {
-          const dir = cci > 0 ? 'approaching overbought' : 'approaching oversold';
-          reasons.push(`📡 CCI at ${cci.toFixed(0)} — ${dir} boundary. Monitor for ±100 crossover entry signal.`);
-        }
-      }
-      pillars.momentum = true;
-    }
+
   }
 
   // ── Compose Headline & Conviction ──
@@ -516,32 +547,47 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   let headline: string;
   let emoji: string;
 
+  // ── 20. Institutional Headline Pivot (Hard Accuracy Guard) ──
+  // If RSI is at extreme levels, we override the netBias-based headline to prevent "False Bullish" signals.
+  const rsiHigh = (entry.rsi1m ?? 0) > 75 && (entry.rsi5m ?? 0) > 70 && (entry.rsi15m ?? 0) > 65;
+  const rsiLow = (entry.rsi1m ?? 100) < 25 && (entry.rsi5m ?? 100) < 30 && (entry.rsi15m ?? 100) < 35;
+
   if (netBias > 25) {
-    if (conviction >= 80 && pillarCount >= 3) {
+    if (rsiHigh && conviction < 90) {
+      headline = 'Extended Market Condition — Pullback Risk Elevated';
+      emoji = '🟡⚠️';
+    } else if (conviction >= 80 && pillarCount >= 3) {
       headline = market === 'Metal'
         ? 'Institutional Commodity Buy — Demand Zone Confirmed'
         : 'Institutional Buy Setup — High Confluence';
+      emoji = conviction >= 70 ? '🟢🔥' : '🟢';
     } else if (conviction >= 60) {
       headline = market === 'Metal'
         ? 'Bullish Commodity Setup Forming — Awaiting Confirmation'
         : 'Bullish Expansion — Strategy Confirmed';
+      emoji = '🟢';
     } else {
       headline = 'Bullish Setup Forming — Awaiting Confirmation';
+      emoji = '🟢';
     }
-    emoji = conviction >= 70 ? '🟢🔥' : '🟢';
   } else if (netBias < -25) {
-    if (conviction >= 80 && pillarCount >= 3) {
+    if (rsiLow && conviction < 90) {
+      headline = 'Deeply Oversold Condition — Reversal Potential Building';
+      emoji = '🟡⚠️';
+    } else if (conviction >= 80 && pillarCount >= 3) {
       headline = market === 'Metal'
         ? 'Institutional Commodity Sell — Supply Zone Active'
         : 'Institutional Sell Setup — High Confluence';
+      emoji = conviction >= 70 ? '🔴🔥' : '🔴';
     } else if (conviction >= 60) {
       headline = market === 'Metal'
         ? 'Bearish Commodity Distribution — Exit Longs'
         : 'Bearish Distribution — Exit Longs, Monitor Shorts';
+      emoji = '🔴';
     } else {
       headline = 'Bearish Pressure Building — Confirm Before Entry';
+      emoji = '🔴';
     }
-    emoji = conviction >= 70 ? '🔴🔥' : '🔴';
   } else if (totalPoints > 40 || (pillarCount >= 2 && Math.abs(netBias) < 15)) {
     headline = 'Indecision Zone — Conflicting Signals, Risk Off';
     emoji = '🟡';

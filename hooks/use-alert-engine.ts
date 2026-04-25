@@ -433,7 +433,7 @@ export function useAlertEngine(
 
             // Record ALL directional signals for win-rate tracking
             if (prevS !== undefined && prevS !== currentStrat && currentStrat !== 'neutral') {
-              recordSignal(symbol, currentStrat, live.price);
+              recordSignal(symbol, currentStrat, live.price, entry.market, entry.atr);
               // Strong signal alerts are handled by the worker via ALERT_TRIGGERED
             }
             zoneState.current.set(sKey, currentStrat);

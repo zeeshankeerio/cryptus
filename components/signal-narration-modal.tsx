@@ -480,11 +480,15 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-slate-400 font-medium">Environment</span>
-                        <span className="font-black text-white">{entry?.regime?.regime || 'STABLE'}</span>
+                        <span className="font-black text-white">
+                          {(entry?.regime?.confidence ?? 0) === 0 ? 'ANALYZING' : (entry?.regime?.regime || 'STABLE').toUpperCase()}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-slate-400 font-medium">Confidence</span>
-                        <span className="font-black text-[#39FF14]">{entry?.regime?.confidence || 0}%</span>
+                        <span className="font-black text-[#39FF14]">
+                          {(entry?.regime?.confidence ?? 0) === 0 ? 'CALIBRATING' : `${entry?.regime?.confidence}%`}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="text-slate-400 font-medium">Trend Strength</span>

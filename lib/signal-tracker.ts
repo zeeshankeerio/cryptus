@@ -25,9 +25,12 @@ export interface SignalSnapshot {
   signal: 'strong-buy' | 'strong-sell' | 'buy' | 'sell';
   entryPrice: number;
   timestamp: number;
+  market?: string;
+  atr?: number | null;
   outcome5m?: number | null;
   outcome15m?: number | null;
   outcome1h?: number | null;
+  maxFavExcursion: number; // Max favorable move (%) during the window
   win5m?: boolean | null;
   win15m?: boolean | null;
   win1h?: boolean | null;
@@ -116,6 +119,8 @@ export function recordSignal(
   symbol: string,
   signal: SignalSnapshot['signal'],
   entryPrice: number,
+  market?: string,
+  atr?: number | null,
 ): string {
   const snapshots = loadSnapshots();
   const now = Date.now();
@@ -133,6 +138,9 @@ export function recordSignal(
     signal,
     entryPrice,
     timestamp: now,
+    market,
+    atr,
+    maxFavExcursion: 0,
     settled: false,
   };
 
@@ -164,33 +172,44 @@ export function evaluateOutcomes(
     const isBullish = snap.signal === 'strong-buy' || snap.signal === 'buy';
     let changed = false;
 
-    // 5m outcome — only set once, at the first check after 5m elapses
-    if (snap.outcome5m === undefined && elapsed >= CHECK_INTERVALS['5m']) {
+    // ── Volatility-Adaptive Win Threshold ──
+    // Institutional standard: 1.5 * ATR (or 0.5% min for stable assets)
+    // Forex is 0.15% (15 pips) min, Crypto is 1.0% min.
+    let threshold = WIN_THRESHOLD_PCT; // Default 0.5%
+    if (snap.market === 'Crypto') threshold = 0.01; // 1% min for Crypto
+    else if (snap.market === 'Forex') threshold = 0.0015; // 15 pips min for Forex
+    
+    if (snap.atr && snap.entryPrice > 0) {
+      const atrThreshold = (snap.atr / snap.entryPrice) * 1.5;
+      threshold = Math.max(threshold, atrThreshold);
+    }
+
+    // ── Track Max Favorable Excursion (MFE) ──
+    const currentRet = (currentPrice - snap.entryPrice) / snap.entryPrice;
+    const currentFav = isBullish ? currentRet : -currentRet;
+    if (currentFav > snap.maxFavExcursion) {
+      snap.maxFavExcursion = currentFav;
+      changed = true;
+    }
+
+    // 5m outcome — Evaluated at first check after 5m OR if MFE hits threshold
+    if (snap.outcome5m === undefined && (elapsed >= CHECK_INTERVALS['5m'] || snap.maxFavExcursion >= threshold)) {
       snap.outcome5m = currentPrice;
-      const ret5m = (currentPrice - snap.entryPrice) / snap.entryPrice;
-      snap.win5m = isBullish
-        ? ret5m >= WIN_THRESHOLD_PCT
-        : ret5m <= -WIN_THRESHOLD_PCT;
+      snap.win5m = snap.maxFavExcursion >= threshold;
       changed = true;
     }
 
     // 15m outcome
-    if (snap.outcome15m === undefined && elapsed >= CHECK_INTERVALS['15m']) {
+    if (snap.outcome15m === undefined && (elapsed >= CHECK_INTERVALS['15m'] || snap.maxFavExcursion >= threshold)) {
       snap.outcome15m = currentPrice;
-      const ret15m = (currentPrice - snap.entryPrice) / snap.entryPrice;
-      snap.win15m = isBullish
-        ? ret15m >= WIN_THRESHOLD_PCT
-        : ret15m <= -WIN_THRESHOLD_PCT;
+      snap.win15m = snap.maxFavExcursion >= threshold;
       changed = true;
     }
 
     // 1h outcome
-    if (snap.outcome1h === undefined && elapsed >= CHECK_INTERVALS['1h']) {
+    if (snap.outcome1h === undefined && (elapsed >= CHECK_INTERVALS['1h'] || snap.maxFavExcursion >= threshold)) {
       snap.outcome1h = currentPrice;
-      const ret1h = (currentPrice - snap.entryPrice) / snap.entryPrice;
-      snap.win1h = isBullish
-        ? ret1h >= WIN_THRESHOLD_PCT
-        : ret1h <= -WIN_THRESHOLD_PCT;
+      snap.win1h = snap.maxFavExcursion >= threshold;
       changed = true;
     }
 

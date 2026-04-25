@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getScreenerData } from '@/lib/screener-service';
 import { getSessionUser } from '@/lib/api-auth';
 import { resolveEntitlementsForUser } from '@/lib/entitlements';
+import type { TradingStyle } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -57,13 +58,14 @@ export async function GET(request: Request) {
     const smartMode = smart === null ? process.env.SMART_MODE_DEFAULT !== '0' : smart !== '0';
     const rsiPeriod = Math.min(Math.max(Number.isFinite(rawRsiPeriod) ? rawRsiPeriod : 14, 2), 50);
     const prioritySymbols = searchParams.get('prioritySymbols')?.split(',').filter(Boolean) ?? [];
+    const tradingStyle = (searchParams.get('tradingStyle') as TradingStyle) || 'intraday';
 
     // Session cache lookup — reduces Prisma load on 5-second pollers
     const sessionId = request.headers.get('cookie') ?? 'anon';
     const cachedSession = sessionCache.get(sessionId);
     const now = Date.now();
 
-    const fetchKey = `${rawCount}:${rsiPeriod}:${exchange}:${smartMode}:${search}:${prioritySymbols.join(',')}`;
+    const fetchKey = `${rawCount}:${rsiPeriod}:${exchange}:${smartMode}:${search}:${tradingStyle}:${prioritySymbols.join(',')}`;
     let fetchTask = pendingFetches.get(fetchKey);
 
     if (!fetchTask) {
@@ -71,7 +73,7 @@ export async function GET(request: Request) {
       // Pass the request signal directly to the service. If the user disconnects or 
       // the request times out, all upstream kline fetches are immediately aborted.
       const screenerPromise = getScreenerData(rawCount, { 
-        smartMode, rsiPeriod, search, prioritySymbols, exchange 
+        smartMode, rsiPeriod, search, prioritySymbols, exchange, tradingStyle 
       }, request.signal);
       
       fetchTask = screenerPromise

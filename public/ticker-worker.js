@@ -1680,8 +1680,18 @@ function computeWorkerStrategyScore(params) {
   const enabled = params.enabledIndicators || {
     rsi: true, macd: true, bb: true, stoch: true, ema: true,
     vwap: true, confluence: true, divergence: true, momentum: true,
-    obv: true, williamsR: true
+    obv: true, williamsR: true, cci: true
   };
+
+  // ── Session-Aware Quality Multiplier ──
+  let sessionQuality = 1.0;
+  if (params.market === 'Forex' || params.market === 'Metal') {
+    const hour = new Date().getUTCHours();
+    const isLondon = hour >= 8 && hour <= 16;
+    const isNY = hour >= 13 && hour <= 21;
+    if (!isLondon && !isNY) sessionQuality = 0.35; // Dead zone
+    else if (isLondon && isNY) sessionQuality = 1.2; // Peak overlap boost
+  }
 
   // ── Asset-Specific RSI Zone Calibration ──
   let rsiDeepOS = 20, rsiOS = 30, rsiOB = 70, rsiDeepOB = 80;
@@ -1697,7 +1707,7 @@ function computeWorkerStrategyScore(params) {
     if (weight === 0) return;
     
     const effectiveWeight = weight * rw.oscillators;
-    factors += weight; // Use raw weight for factor divisor consistency
+    factors += weight;
     if (val <= rsiDeepOS) score += 100 * effectiveWeight;
     else if (val <= rsiOS) score += 80 * effectiveWeight;
     else if (val >= rsiDeepOB) score -= 100 * effectiveWeight;
@@ -1716,7 +1726,7 @@ function computeWorkerStrategyScore(params) {
 
   // 2. MACD (Style-Adaptive + Regime-Aware)
   if (enabled.macd !== false && params.macdHistogram !== null && params.macdHistogram !== undefined) {
-    const macdWeight = tw.macd * rw.trend;
+    const macdWeight = tw.macd * rw.trend * sessionQuality;
     factors += tw.macd;
     let macdNorm;
     if (params.atr != null && params.atr > 0) {
@@ -1733,7 +1743,7 @@ function computeWorkerStrategyScore(params) {
 
   // 3. Bollinger position
   if (enabled.bb !== false && params.bbPosition !== null && params.bbPosition !== undefined) {
-    const bbW = 1.0 * rw.oscillators;
+    const bbW = 1.0 * rw.oscillators * sessionQuality;
     factors += 1.0;
     const bp = params.bbPosition;
     if (bp <= 0.1) score += 80 * bbW;
@@ -1744,14 +1754,13 @@ function computeWorkerStrategyScore(params) {
 
   // 4. StochRSI
   if (enabled.stoch !== false && params.stochK != null && params.stochD != null) {
-    const stochW = 1.0 * rw.oscillators;
+    const stochW = 1.0 * rw.oscillators * sessionQuality;
     factors += 1.0;
     if (params.stochK < 20 && params.stochD < 20) score += 80 * stochW;
     else if (params.stochK < 30) score += 40 * stochW;
     else if (params.stochK > 80 && params.stochD > 80) score -= 80 * stochW;
     else if (params.stochK > 70) score -= 40 * stochW;
 
-    // K/D Crossover
     if (params.stochK > params.stochD && params.stochK < 30) {
       factors += 0.5;
       score += 70 * 0.5 * stochW;
@@ -1761,16 +1770,16 @@ function computeWorkerStrategyScore(params) {
     }
   }
 
-  // 5. EMA cross (Style-Adaptive)
+  // 5. EMA cross
   if (params.emaCross !== 'none' && enabled.ema !== false) {
-    const emaWeight = tw.ema * rw.trend;
+    const emaWeight = tw.ema * rw.trend * sessionQuality;
     factors += tw.ema;
     score += (params.emaCross === 'bullish' ? 60 : -60) * emaWeight;
   }
 
   // 6. VWAP
   if (enabled.vwap !== false && params.vwapDiff != null) {
-    const volW = 1.0 * rw.volume;
+    const volW = 1.0 * rw.volume * sessionQuality;
     factors += 1.0;
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
     if (scaledVwapDiff < -2) score += 40 * volW;
@@ -1798,12 +1807,17 @@ function computeWorkerStrategyScore(params) {
     score += (params.rsiCrossover === 'bullish_reversal' ? 70 : -70) * 1.5;
   }
 
-  // 10. RSI divergence (Style-Adaptive)
+  // 10. RSI divergence
   if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
     const divWeight = tw.divergenceBonus;
-    factors += divWeight;
-    if (params.rsiDivergence === 'bullish') score += 75 * divWeight;
-    else score -= 75 * divWeight;
+    const mainRsi = params.rsi15m ?? params.rsi5m ?? params.rsi1m ?? 50;
+    if (params.rsiDivergence === 'bullish' && mainRsi < 65) {
+      factors += divWeight;
+      score += 75 * divWeight;
+    } else if (params.rsiDivergence === 'bearish' && mainRsi > 35) {
+      factors += divWeight;
+      score -= 75 * divWeight;
+    }
   }
 
   // 11. Momentum
@@ -1817,7 +1831,7 @@ function computeWorkerStrategyScore(params) {
 
   // 12. OBV trend
   if (enabled.obv !== false && params.obvTrend && params.obvTrend !== 'none') {
-    const volW = 1.5 * rw.volume;
+    const volW = 1.5 * rw.volume * sessionQuality;
     factors += 1.5;
     if (params.obvTrend === 'bullish') score += 55 * volW;
     else score -= 55 * volW;
@@ -1833,13 +1847,25 @@ function computeWorkerStrategyScore(params) {
     else if (params.williamsR >= -30) score -= 45 * oscW;
   }
 
-  // 14. Hidden divergence (continuation)
+  // 13b. CCI
+  if (params.cci !== null && params.cci !== undefined && (enabled.cci !== false || params.market === 'Metal' || params.market === 'Forex')) {
+    const cciBaseW = 1.2;
+    const marketW = (params.market === 'Metal' || params.market === 'Forex') ? 1.8 : 1.0;
+    const cciW = cciBaseW * marketW * rw.trend * sessionQuality;
+    factors += (cciBaseW * marketW);
+    if (params.cci >= 200) score -= 100 * cciW;
+    else if (params.cci >= 100) score -= 60 * cciW;
+    else if (params.cci <= -200) score += 100 * cciW;
+    else if (params.cci <= -100) score += 60 * cciW;
+  }
+
+  // 14. Hidden divergence
   if (params.hiddenDivergence && params.hiddenDivergence !== 'none' && enabled.divergence !== false) {
     const hiddenDivWeight = tw.divergenceBonus * 0.75;
     const hiddenW = hiddenDivWeight * rw.momentum;
     factors += hiddenDivWeight;
-    if (params.hiddenDivergence === 'hidden-bullish') score += 20 * volatilityMultiplier * hiddenW;
-    else score -= 20 * volatilityMultiplier * hiddenW;
+    if (params.hiddenDivergence === 'hidden-bullish') score += 20 * (volatilityMultiplier || 1) * hiddenW;
+    else score -= 20 * (volatilityMultiplier || 1) * hiddenW;
   }
 
   // ── TFA TREND GUARD ──
@@ -1866,14 +1892,26 @@ function computeWorkerStrategyScore(params) {
       if (smDir === scoreDir) score *= 1.15;
       else score *= 0.80;
     } else {
-      score += (smDir * 10) * volatilityMultiplier;
+      score += (smDir * 10) * (volatilityMultiplier || 1);
       factors += 1.0;
     }
   }
 
+  // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
+  
+  // ── Accuracy Pivot Guard (Institutional Sanity & Stop-Loss) ──
+  if (!params.volumeSpike) {
+    if (normalized > 40 && params.rsi1h !== null && params.rsi1h > 65) normalized *= 0.65;
+    else if (normalized < -40 && params.rsi1h !== null && params.rsi1h < 35) normalized *= 0.65;
+  }
 
-  // ── Evidence Guard ──
+  const rsiHighCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r > 75).length;
+  const rsiLowCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r < 25).length;
+  
+  if (normalized > 25 && rsiHighCount >= 2) normalized = Math.min(24, normalized * 0.4);
+  if (normalized < -25 && rsiLowCount >= 2) normalized = Math.max(-24, normalized * 0.4);
+
   if (factors < 4.0) {
     normalized *= 0.50;
     if (factors < 2.5) normalized = Math.max(-15, Math.min(15, normalized));
@@ -1881,7 +1919,7 @@ function computeWorkerStrategyScore(params) {
     normalized *= 0.75;
   }
 
-  normalized = Math.round(Math.max(-100, Math.min(100, normalized)));
+  normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;
 
   // ── Multi-TF Agreement Gate ──
   const rsiDirections = [

@@ -439,7 +439,8 @@ export function detectRsiDivergence(
     const prev = priceLows[priceLows.length - 2];
     const curr = priceLows[priceLows.length - 1];
     if (priceWindow[curr] < priceWindow[prev] && rsiWindow[curr] > rsiWindow[prev] + 1) {
-      return 'bullish';
+      // Relevance Gate: Bullish divergence is only actionable if the market isn't already overbought.
+      if (rsiWindow[rsiWindow.length - 1] < 60) return 'bullish';
     }
   }
 
@@ -449,7 +450,8 @@ export function detectRsiDivergence(
     const prev = priceHighs[priceHighs.length - 2];
     const curr = priceHighs[priceHighs.length - 1];
     if (priceWindow[curr] > priceWindow[prev] && rsiWindow[curr] < rsiWindow[prev] - 1) {
-      return 'bearish';
+      // Relevance Gate: Bearish divergence is only actionable if the market isn't already oversold.
+      if (rsiWindow[rsiWindow.length - 1] > 40) return 'bearish';
     }
   }
 
@@ -677,6 +679,7 @@ export function computeStrategyScore(params: {
   atr?: number | null;
   obvTrend?: 'bullish' | 'bearish' | 'none';
   williamsR?: number | null;
+  cci?: number | null;
   /** Smart Money Pressure Index score (-100 to +100). When significant, influences strategy direction. */
   smartMoneyScore?: number | null;
   /** Hidden divergence signal (continuation patterns). */
@@ -697,6 +700,7 @@ export function computeStrategyScore(params: {
     momentum?: boolean;
     obv?: boolean;
     williamsR?: boolean;
+    cci?: boolean;
   };
 }): StrategyResult {
   let score = 0;
@@ -915,6 +919,21 @@ export function computeStrategyScore(params: {
     }
   }
 
+  // ── CCI (Commodity Channel Index) ──
+  // Institutional standard for trend reversal and persistence.
+  // Regime: trend weight; weight increased for Metal/Forex.
+  if (params.cci !== null && params.cci !== undefined && (enabled.cci !== false || params.market === 'Metal' || params.market === 'Forex')) {
+    const cciBaseW = 1.2;
+    const marketW = (params.market === 'Metal' || params.market === 'Forex') ? 1.8 : 1.0;
+    const cciW = cciBaseW * marketW * rw.trend * sessionQuality;
+    factors += (cciBaseW * marketW);
+    
+    if (params.cci >= 200) { score -= 100 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) extreme overbought`); }
+    else if (params.cci >= 100) { score -= 60 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) overbought`); }
+    else if (params.cci <= -200) { score += 100 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) extreme oversold`); }
+    else if (params.cci <= -100) { score += 60 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) oversold`); }
+  }
+
   // ── Williams %R — Complementary Oscillator ──
   // Regime: oscillator weight applied
   if (params.williamsR !== null && params.williamsR !== undefined && enabled.williamsR !== false) {
@@ -1019,14 +1038,37 @@ export function computeStrategyScore(params: {
   // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
   
-  // Require minimum factors for any non-neutral signal to prevent low-evidence noise.
-  if (factors < STRATEGY_DEFAULTS.minFactorsForSignal) {
-    normalized *= 0.50; // Aggressive dampening — insufficient evidence
-    if (factors < 2.5) {
-      normalized = Math.max(-15, Math.min(15, normalized)); // Force near-neutral
+  // ── Accuracy Pivot Guard (Institutional Sanity & Stop-Loss) ──
+  // 1. TF-Resistance Guard: Dampen if fighting higher TF extremes without volume confirmation
+  if (!params.volumeSpike) {
+    if (normalized > 40 && params.rsi1h !== null && params.rsi1h > 65) {
+      normalized *= 0.65;
+      reasons.push('Score dampened: Overbought resistance on 1h TF');
+    } else if (normalized < -40 && params.rsi1h !== null && params.rsi1h < 35) {
+      normalized *= 0.65;
+      reasons.push('Score dampened: Oversold support on 1h TF');
     }
+  }
+
+  // 2. Overbought/Oversold Suppression: prevent "False Green" at peaks
+  const rsiHighCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r > 75).length;
+  const rsiLowCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r < 25).length;
+  
+  if (normalized > 25 && rsiHighCount >= 2) {
+    normalized = Math.min(24, normalized * 0.4);
+    reasons.push('⚠ Buy suppressed: extreme overbought state');
+  }
+  if (normalized < -25 && rsiLowCount >= 2) {
+    normalized = Math.max(-24, normalized * 0.4);
+    reasons.push('⚠ Sell suppressed: deeply oversold state');
+  }
+
+  // 3. Evidence Guard: Force neutrality for low-confidence data
+  if (factors < STRATEGY_DEFAULTS.minFactorsForSignal) {
+    normalized *= 0.50;
+    if (factors < 2.5) normalized = Math.max(-15, Math.min(15, normalized));
   } else if (factors < 5.0 && Math.abs(normalized) > 60) {
-    normalized *= 0.75; // Moderate dampening for borderline evidence
+    normalized *= 0.75;
   }
   
   normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;

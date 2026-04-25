@@ -79,9 +79,9 @@ export const STRATEGY_DEFAULTS = {
   /** Minimum factors required for non-neutral signal */
   minFactorsForSignal: 4.0,
   /** Score threshold for Strong Buy/Sell */
-  strongThreshold: 50,
+  strongThreshold: 60,
   /** Score threshold for Buy/Sell */
-  actionThreshold: 20,
+  actionThreshold: 25,
   /** Counter-trend penalty multiplier */
   counterTrendPenalty: 0.70,
   /** Trend-aligned boost multiplier */
@@ -108,6 +108,7 @@ export const INDICATOR_DEFAULTS = {
   momentum: true,
   obv: true,
   williamsR: true,
+  cci: true,
 } as const;
 
 // ── Trading Style & Timeframe Weights ───────────────────────────
