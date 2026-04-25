@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Copy, Check, ExternalLink } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { 
+  X, Copy, Check, ExternalLink, ShieldAlert, Target, TrendingUp, 
+  Activity, Zap, BarChart3, Info, AlertTriangle, Scale, Gauge 
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -12,7 +15,7 @@ import type { ScreenerEntry } from '@/lib/types';
 /**
  * Signal Narration Modal - Displays institutional-grade signal analysis
  * Requirements: Requirement 12
- * Design: SignalNarrationModal component
+ * Design: Institutional Surveillance Brief (2026 Redesign)
  */
 
 interface SignalNarrationModalProps {
@@ -38,9 +41,15 @@ export function SignalNarrationModal({
   const handleCopyBrief = async () => {
     if (!narration) return;
 
-    // Construct the institutional brief with symbol detail link and live metrics
     const symbolUrl = `${window.location.origin}/symbol/${symbol}`;
     const priceText = entry ? `Current Price: $${entry.price?.toLocaleString()}\nRSI (15m): ${entry.rsi15m?.toFixed(1) || 'N/A'}` : '';
+    
+    // Include risk params in brief if they exist
+    const riskText = entry?.riskParams ? `
+Risk/Reward: ${entry.riskParams.riskRewardRatio}:1
+Stop Loss: $${entry.riskParams.stopLoss.toLocaleString()}
+Take Profit 1: $${entry.riskParams.takeProfit1.toLocaleString()}
+    `.trim() : '';
 
     const brief = `
 ${narration.emoji} ${narration.headline}
@@ -48,11 +57,12 @@ ${narration.emoji} ${narration.headline}
 Symbol: ${symbol}
 ${priceText}
 Conviction: ${narration.conviction}% (${narration.convictionLabel})
+${riskText}
 
-Analysis:
-${narration.reasons.map((reason, idx) => `${idx + 1}. ${reason}`).join('\n')}
+Technical Analysis:
+${narration.reasons.map((reason, idx) => `• ${reason}`).join('\n')}
 
-View detailed chart: ${symbolUrl}
+View Chart: ${symbolUrl}
 
 ---
 Powered by Mindscape Analytics Signal Narration Engine™
@@ -61,15 +71,15 @@ Powered by Mindscape Analytics Signal Narration Engine™
     try {
       await navigator.clipboard.writeText(brief);
       setCopied(true);
-      toast.success('Signal brief copied to clipboard');
+      toast.success('Institutional brief copied');
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast.error('Failed to copy to clipboard');
+      toast.error('Failed to copy');
     }
   };
 
+  // ── Helpers ───────────────────────────────────────────────────
 
-  // Determine conviction color
   const getConvictionColor = (conviction: number) => {
     if (conviction >= 85) return 'text-[#39FF14]';
     if (conviction >= 65) return 'text-emerald-400';
@@ -78,7 +88,6 @@ Powered by Mindscape Analytics Signal Narration Engine™
     return 'text-slate-400';
   };
 
-  // Determine conviction background
   const getConvictionBg = (conviction: number) => {
     if (conviction >= 85) return 'bg-[#39FF14]/10 border-[#39FF14]/30';
     if (conviction >= 65) return 'bg-emerald-400/10 border-emerald-400/30';
@@ -87,173 +96,248 @@ Powered by Mindscape Analytics Signal Narration Engine™
     return 'bg-slate-400/10 border-slate-400/30';
   };
 
+  const getBiasColor = () => {
+    if (!narration) return 'bg-slate-500';
+    if (narration.headline.toLowerCase().includes('buy') || narration.emoji.includes('🟢')) return 'bg-[#39FF14]';
+    if (narration.headline.toLowerCase().includes('sell') || narration.emoji.includes('🔴')) return 'bg-[#FF4B5C]';
+    return 'bg-yellow-400';
+  };
+
+  const getBiasLabel = () => {
+    if (!narration) return 'NEUTRAL';
+    if (narration.headline.toLowerCase().includes('buy') || narration.emoji.includes('🟢')) return 'BULLISH BIAS';
+    if (narration.headline.toLowerCase().includes('sell') || narration.emoji.includes('🔴')) return 'BEARISH BIAS';
+    return 'CONSOLIDATION';
+  };
+
+  // ── Render ────────────────────────────────────────────────────
+
   return (
     <AnimatePresence>
       {isOpen && (
         <>
-          {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50"
           />
 
-          {/* Modal */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            initial={{ opacity: 0, scale: 0.98, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ type: 'spring', duration: 0.3 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl max-h-[90vh] overflow-y-auto bg-[#0A0F1B] border border-white/10 rounded-xl shadow-2xl z-50 p-6"
+            exit={{ opacity: 0, scale: 0.98, y: 10 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[95%] max-w-5xl max-h-[85vh] overflow-hidden bg-[#070B14] border border-white/10 rounded-2xl shadow-[0_0_50px_-12px_rgba(0,0,0,0.5)] z-50 flex flex-col"
           >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-6">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-3xl">{narration?.emoji || '⚪'}</span>
+            {/* Header: Surveillance Brief */}
+            <div className="relative border-b border-white/5 bg-gradient-to-r from-blue-500/5 to-transparent p-5">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="relative">
+                    <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-3xl bg-white/5 border border-white/10", 
+                      narration?.conviction && narration.conviction >= 85 && "shadow-[0_0_20px_-5px_rgba(57,255,20,0.4)] border-[#39FF14]/30"
+                    )}>
+                      {narration?.emoji || '⚪'}
+                    </div>
+                    {/* Animated Pulse for high conviction */}
+                    {narration?.conviction && narration.conviction >= 85 && (
+                      <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#39FF14] rounded-full animate-ping" />
+                    )}
+                  </div>
                   <div>
-                    <h2 className="text-xl font-black text-white leading-tight">
-                      {narration?.headline || 'No Active Signal'}
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-black tracking-[0.2em] text-blue-400 uppercase">Signal Narration Engine v2</span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-white/5 border border-white/10 text-[9px] font-bold text-slate-500 uppercase">Live Intelligence</span>
+                    </div>
+                    <h2 className="text-2xl font-black text-white tracking-tight leading-none">
+                      {narration?.headline || 'Analyzing Market Signals...'}
                     </h2>
-                    <p className="text-sm font-bold text-slate-400 mt-1 flex items-center gap-2">
-                      {symbol}
-                      {entry && (
-                        <>
-                          <span className="w-1 h-1 rounded-full bg-slate-800" />
-                          <span className="text-white font-mono tabular-nums">${entry.price?.toLocaleString()}</span>
-                          {entry.rsi15m !== null && (
-                            <>
-                              <span className="w-1 h-1 rounded-full bg-slate-800" />
-                              <span className={cn(
-                                "font-mono tabular-nums px-1.5 py-0.5 rounded text-[10px] bg-white/5",
-                                entry.rsi15m >= 70 ? 'text-[#FF4B5C]' : entry.rsi15m <= 30 ? 'text-[#39FF14]' : 'text-slate-400'
-                              )}>
-                                RSI: {entry.rsi15m.toFixed(1)}
-                              </span>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </p>
+                  </div>
+                </div>
+                <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full transition-colors text-slate-500 hover:text-white">
+                  <X size={24} strokeWidth={2.5} />
+                </button>
+              </div>
+
+              {/* Metrics Ribbon */}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-5">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Symbol</span>
+                  <span className="text-sm font-black text-white">{symbol}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Price</span>
+                  <span className="text-sm font-mono font-bold text-white">${entry?.price?.toLocaleString() || '-'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">24h Change</span>
+                  <span className={cn("text-sm font-mono font-bold", (entry?.change24h || 0) >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]")}>
+                    {(entry?.change24h || 0) >= 0 ? '+' : ''}{entry?.change24h?.toFixed(2)}%
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">RSI (15m)</span>
+                  <span className={cn("text-sm font-mono font-bold", 
+                    (entry?.rsi15m || 50) >= 70 ? "text-[#FF4B5C]" : (entry?.rsi15m || 50) <= 30 ? "text-[#39FF14]" : "text-slate-300"
+                  )}>
+                    {entry?.rsi15m?.toFixed(1) || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">ADX (Trend)</span>
+                  <span className="text-sm font-mono font-bold text-slate-300">{entry?.adx?.toFixed(1) || 'N/A'}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Bias</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className={cn("w-1.5 h-1.5 rounded-full", getBiasColor())} />
+                    <span className="text-[10px] font-black text-white uppercase tracking-tighter">{getBiasLabel()}</span>
                   </div>
                 </div>
               </div>
-              <button
-                onClick={onClose}
-                className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-              >
-                <X size={20} className="text-slate-400" />
-              </button>
             </div>
 
-            {narration ? (
-              <>
-                {/* Conviction Score */}
-                <div className={cn(
-                  "flex items-center justify-between p-4 rounded-lg border mb-6",
-                  getConvictionBg(narration.conviction)
-                )}>
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">
-                      Conviction Level
-                    </p>
-                    <p className={cn(
-                      "text-2xl font-black tabular-nums",
-                      getConvictionColor(narration.conviction)
-                    )}>
-                      {narration.conviction}%
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className={cn(
-                      "text-lg font-black uppercase tracking-wide",
-                      getConvictionColor(narration.conviction)
-                    )}>
-                      {narration.convictionLabel}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      {narration.conviction >= 85 ? 'Institutional Grade' :
-                       narration.conviction >= 65 ? 'High Confidence' :
-                       narration.conviction >= 45 ? 'Moderate Confidence' :
-                       narration.conviction >= 25 ? 'Low Confidence' :
-                       'Speculative'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Analysis Reasons */}
-                <div className="mb-6">
-                  <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400 mb-3">
+            {/* Main Content Area */}
+            <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+              {/* Left Column: Analysis (65%) */}
+              <div className="flex-[0.65] p-6 border-r border-white/5 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-slate-500">
+                    <BarChart3 size={14} className="text-blue-400" />
                     Technical Analysis
                   </h3>
-                  <div className="space-y-3">
-                    {narration.reasons.map((reason, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-start gap-3 p-3 bg-white/[0.02] border border-white/5 rounded-lg hover:bg-white/[0.04] transition-colors"
-                      >
-                        <span className="text-lg font-black text-slate-600 tabular-nums shrink-0">
-                          {idx + 1}.
-                        </span>
-                        <p className="text-sm text-slate-300 leading-relaxed">
-                          {reason}
-                        </p>
-                      </div>
-                    ))}
+                  <div className={cn("px-2 py-0.5 rounded border text-[9px] font-black uppercase tracking-widest", getConvictionBg(narration?.conviction || 0))}>
+                    {narration?.conviction}% Conviction
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex items-center gap-3">
+                <div className="space-y-2.5">
+                  {narration?.reasons.map((reason, idx) => (
+                    <div 
+                      key={idx} 
+                      className="group flex items-start gap-4 p-3.5 bg-white/[0.01] border border-white/5 rounded-xl hover:bg-white/[0.03] hover:border-white/10 transition-all duration-200"
+                    >
+                      <div className="w-6 h-6 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-[10px] font-black text-blue-400 shrink-0 group-hover:scale-110 transition-transform">
+                        {idx + 1}
+                      </div>
+                      <p className="text-[13px] text-slate-300 leading-relaxed font-medium pt-0.5">
+                        {reason}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Right Column: Strategy & Context (35%) */}
+              <div className="flex-[0.35] bg-black/20 p-6 overflow-y-auto custom-scrollbar flex flex-col gap-6">
+                {/* Risk/Reward Card */}
+                {entry?.riskParams ? (
+                  <div className="bg-[#0D121F] border border-white/10 rounded-2xl p-5 shadow-inner">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+                        <Scale size={12} className="text-emerald-400" />
+                        Risk Parameters
+                      </h4>
+                      <div className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black">
+                        {entry.riskParams.riskRewardRatio}:1 R/R
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-end border-b border-white/5 pb-2">
+                        <div>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Take Profit 1 (Target)</p>
+                          <p className="text-base font-black text-[#39FF14] font-mono leading-none mt-1">${entry.riskParams.takeProfit1.toLocaleString()}</p>
+                        </div>
+                        <Target size={18} className="text-[#39FF14]/40" />
+                      </div>
+                      <div className="flex justify-between items-end">
+                        <div>
+                          <p className="text-[9px] font-black text-slate-500 uppercase tracking-tighter">Stop Loss (Invalidation)</p>
+                          <p className="text-base font-black text-[#FF4B5C] font-mono leading-none mt-1">${entry.riskParams.stopLoss.toLocaleString()}</p>
+                        </div>
+                        <ShieldAlert size={18} className="text-[#FF4B5C]/40" />
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="bg-white/[0.02] border border-dashed border-white/10 rounded-2xl p-6 text-center">
+                    <AlertTriangle size={24} className="text-slate-600 mx-auto mb-2" />
+                    <p className="text-[10px] font-bold text-slate-500 uppercase">Calculating Risk Levels...</p>
+                  </div>
+                )}
+
+                {/* Market Context Card */}
+                <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-5">
+                  <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5 mb-4">
+                    <Activity size={12} className="text-blue-400" />
+                    Market Regime
+                  </h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-slate-400">Environment</span>
+                      <span className="px-2 py-0.5 rounded-lg bg-blue-500/10 text-blue-300 text-[10px] font-black uppercase">
+                        {entry?.regime?.regime || 'STABLE'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-slate-400">Regime Conf.</span>
+                      <span className="text-[11px] font-black text-white uppercase">{entry?.regime?.confidence || 0}%</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-slate-400">Volatility</span>
+                      <span className={cn("text-[11px] font-black uppercase", 
+                        (entry?.atr || 0) > 0.02 ? "text-orange-400" : "text-emerald-400"
+                      )}>
+                        {(entry?.atr || 0) > 0.02 ? 'High' : 'Normal'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="mt-auto space-y-3">
+                  <button
+                    onClick={() => setIsChartOpen(true)}
+                    className="w-full group relative overflow-hidden flex items-center justify-center gap-2.5 px-4 py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-black text-xs uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                    <TrendingUp size={16} />
+                    View Interactive Chart
+                  </button>
                   <button
                     onClick={handleCopyBrief}
                     className={cn(
-                      "flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-sm transition-all",
+                      "w-full flex items-center justify-center gap-2.5 px-4 py-3.5 border-2 rounded-xl font-black text-xs uppercase tracking-[0.1em] transition-all active:scale-[0.98]",
                       copied
-                        ? "bg-[#39FF14]/20 border-2 border-[#39FF14]/40 text-[#39FF14]"
-                        : "bg-white/5 border-2 border-white/10 text-white hover:bg-white/10 hover:border-white/20"
+                        ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]"
+                        : "bg-white/5 border-white/10 text-slate-300 hover:bg-white/10 hover:text-white"
                     )}
                   >
-                    {copied ? (
-                      <>
-                        <Check size={16} />
-                        Copied!
-                      </>
-                    ) : (
-                      <>
-                        <Copy size={16} />
-                        Copy Signal Brief
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setIsChartOpen(true)}
-                    className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 border-2 border-white/10 rounded-lg font-bold text-sm text-white hover:bg-white/10 hover:border-white/20 transition-all"
-                  >
-                    <ExternalLink size={16} />
-                    View Chart
+                    {copied ? <Check size={16} strokeWidth={3} /> : <Copy size={16} />}
+                    {copied ? 'Brief Copied' : 'Institutional Brief'}
                   </button>
                 </div>
-
-                {/* Footer */}
-                <div className="mt-6 pt-4 border-t border-white/5">
-                  <p className="text-xs text-slate-500 text-center">
-                    Powered by Mindscape Analytics Signal Narration Engine™
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-slate-400 text-sm">
-                  No active signal detected. All indicators are within normal ranges.
-                </p>
               </div>
-            )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-white/5 bg-black/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#39FF14] animate-pulse" />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Surveillance Active</span>
+              </div>
+              <p className="text-[9px] font-black text-slate-600 uppercase tracking-[0.2em]">
+                Powered by Mindscape Analytics Signal Narration Engine™
+              </p>
+              <div className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500">
+                <Gauge size={10} />
+                CONF: {narration?.conviction || 0}%
+              </div>
+            </div>
           </motion.div>
 
-          {/* Full Screen Chart Modal */}
           <ChartModal
             isOpen={isChartOpen}
             onClose={() => setIsChartOpen(false)}
