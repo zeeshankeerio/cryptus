@@ -32,6 +32,14 @@ interface SignalNarrationModalProps {
   tradingStyle?: TradingStyle;
 }
 
+interface MetricConfig {
+  label: string;
+  value: string | React.ReactNode;
+  color: string;
+  priority: 'critical' | 'secondary' | 'tertiary';
+  dot?: boolean;
+}
+
 export function SignalNarrationModal({
   isOpen,
   onClose,
@@ -123,6 +131,66 @@ Powered by Mindscape Analytics Signal Narration Engine™
     return 'CONSOLIDATION';
   };
 
+  // Helper functions for dynamic metric coloring
+  const getRSIColor = (rsi: number | undefined): string => {
+    if (!rsi) return 'text-slate-300';
+    if (rsi >= 70) return 'text-[#FF4B5C]';
+    if (rsi <= 30) return 'text-[#39FF14]';
+    return 'text-slate-300';
+  };
+
+  const getChangeColor = (change: number | undefined): string => {
+    if (!change) return 'text-slate-300';
+    return change >= 0 ? 'text-[#39FF14]' : 'text-[#FF4B5C]';
+  };
+
+  // Metrics configuration with priority levels
+  const metricsConfig: MetricConfig[] = [
+    {
+      label: 'Symbol',
+      value: symbol,
+      color: 'text-white',
+      priority: 'critical',
+    },
+    {
+      label: 'Price',
+      value: `${entry?.price?.toLocaleString() || '-'}`,
+      color: 'text-white font-mono',
+      priority: 'critical',
+    },
+    {
+      label: 'RSI(15m)',
+      value: entry?.rsi15m?.toFixed(1) || 'N/A',
+      color: getRSIColor(entry?.rsi15m ?? undefined),
+      priority: 'critical',
+    },
+    {
+      label: 'Bias',
+      value: getBiasLabel(),
+      color: 'text-white italic',
+      priority: 'critical',
+      dot: true,
+    },
+    {
+      label: '24h Δ',
+      value: `${(entry?.change24h || 0) >= 0 ? '+' : ''}${entry?.change24h?.toFixed(2)}%`,
+      color: getChangeColor(entry?.change24h),
+      priority: 'secondary',
+    },
+    {
+      label: 'Style',
+      value: tradingStyle.toUpperCase(),
+      color: 'text-blue-400 font-black tracking-tighter',
+      priority: 'secondary',
+    },
+    {
+      label: 'Win Rate',
+      value: <WinRateBadge symbol={symbol} className="scale-75 origin-left" />,
+      color: 'text-white',
+      priority: 'tertiary',
+    },
+  ];
+
   // Render
 
   return (
@@ -145,8 +213,8 @@ Powered by Mindscape Analytics Signal Narration Engine™
             className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[98%] max-w-6xl max-h-[90vh] overflow-hidden bg-[#070B14] border border-white/10 rounded-2xl shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] z-50 flex flex-col"
           >
             {/* ── Institutional Surveillance Ribbon (Unified Header) ── */}
-            <div className="relative border-b border-white/10 bg-gradient-to-r from-blue-500/5 via-transparent to-emerald-500/5 px-5 py-4">
-              <div className="flex items-center justify-between gap-6">
+            <div className="relative overflow-hidden border-b border-white/10 bg-gradient-to-r from-blue-500/5 via-transparent to-emerald-500/5 px-3 sm:px-4 lg:px-5 py-2 sm:py-3 lg:py-4">
+              <div className="flex items-center justify-between gap-2 sm:gap-4 lg:gap-6">
                 {/* Left: Signal Profile */}
                 <div className="flex items-center gap-4 shrink-0">
                   <div className="relative">
@@ -161,7 +229,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     )}
                   </div>
                   <div>
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-1 sm:gap-1.5 lg:gap-2 mb-0.5">
                       <div className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md bg-[#39FF14]/10 border border-[#39FF14]/20 animate-pulse">
                         <div className="w-1.5 h-1.5 rounded-full bg-[#39FF14]" />
                         <span className="text-[8px] font-black text-[#39FF14] uppercase tracking-widest">Live Feed</span>
@@ -177,7 +245,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     <h2 className="text-xl font-black text-white tracking-tight leading-none truncate max-w-md">
                       {narration?.headline || 'Analyzing Market Signals...'}
                     </h2>
-                    <div className="flex items-center gap-3 mt-1.5 opacity-80 scale-90 origin-left">
+                    <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mt-1.5 opacity-80 scale-90 origin-left">
                       <div className="flex items-center gap-1">
                         <span className="text-[7px] font-black text-slate-500 uppercase">Indic. Sync:</span>
                         <span className={cn(
@@ -245,28 +313,41 @@ Powered by Mindscape Analytics Signal Narration Engine™
                 </div>
 
                 {/* Center: Live Surveillance Metrics (Compact Ribbon) */}
-                <div className="hidden lg:flex flex-1 items-center justify-center gap-6 px-6 border-x border-white/5 mx-2">
-                  {[
-                    { label: 'Symbol', val: symbol, color: 'text-white' },
-                    { label: 'Price', val: `$${entry?.price?.toLocaleString() || '-'}`, color: 'text-white font-mono' },
-                    { label: '24h Δ', val: `${(entry?.change24h || 0) >= 0 ? '+' : ''}${entry?.change24h?.toFixed(2)}%`, color: (entry?.change24h || 0) >= 0 ? 'text-[#39FF14]' : 'text-[#FF4B5C]' },
-                    { label: 'RSI(15m)', val: entry?.rsi15m?.toFixed(1) || 'N/A', color: (entry?.rsi15m || 50) >= 70 ? 'text-[#FF4B5C]' : (entry?.rsi15m || 50) <= 30 ? 'text-[#39FF14]' : 'text-slate-300' },
-                    { label: 'Style', val: tradingStyle.toUpperCase(), color: 'text-blue-400 font-black tracking-tighter' },
-                    { label: 'Bias', val: getBiasLabel(), color: 'text-white italic', dot: true },
-                    { label: 'Win Rate', val: <WinRateBadge symbol={symbol} className="scale-75 origin-left" />, color: 'text-white' },
-                  ].map((m, i) => (
-                    <div key={i} className="flex flex-col">
-                      <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">{m.label}</span>
+                <div className="hidden lg:flex flex-1 items-center justify-center gap-2 sm:gap-4 lg:gap-6 px-6 border-x border-white/5 mx-2" data-testid="metrics-ribbon-desktop">
+                  {metricsConfig.map((m, i) => (
+                    <div key={i} className="flex flex-col" data-testid="desktop-metric">
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">{m.label}</span>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {m.dot && <div className={cn("w-1.5 h-1.5 rounded-full", getBiasColor())} />}
-                        <span className={cn("text-xs font-black tracking-tight", m.color)}>{m.val}</span>
+                        <span className={cn("text-[10px] sm:text-xs font-black tracking-tight", m.color)} data-testid="metric-value">{m.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Mobile/Tablet: Metrics Grid */}
+                <div className="lg:hidden grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 px-3 sm:px-4 flex-1">
+                  {metricsConfig.map((m, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "flex flex-col",
+                        m.priority === 'tertiary' && "hidden",
+                        m.priority === 'secondary' && "hidden sm:flex"
+                      )} 
+                      data-testid="mobile-metric"
+                    >
+                      <span className="text-[8px] sm:text-[9px] font-black text-slate-500 uppercase tracking-widest">{m.label}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {m.dot && <div className={cn("w-1.5 h-1.5 rounded-full", getBiasColor())} />}
+                        <span className={cn("text-[10px] sm:text-xs font-black tracking-tight", m.color)} data-testid="metric-value">{m.value}</span>
                       </div>
                     </div>
                   ))}
                 </div>
 
                 {/* Right: Actions */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <button onClick={handleCopyBrief} className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all",
                     copied ? "bg-[#39FF14]/10 border-[#39FF14]/30 text-[#39FF14]" : "bg-white/5 border-white/10 text-slate-400 hover:text-white"

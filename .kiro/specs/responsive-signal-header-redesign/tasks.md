@@ -24,8 +24,8 @@ This implementation plan converts the responsive signal header design into discr
   - Verify no non-ASCII decorative characters remain in the header section
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 2. Implement responsive metrics ribbon with priority-based filtering
-  - [ ] 2.1 Create MetricConfig interface and metrics configuration array
+- [x] 2. Implement responsive metrics ribbon with priority-based filtering
+  - [x] 2.1 Create MetricConfig interface and metrics configuration array
     - Define `MetricConfig` interface with `label`, `value`, `color`, `priority`, and optional `dot` properties
     - Create `metricsConfig` array with all 7 metrics (Symbol, Price, RSI, Bias, 24h Δ, Style, Win Rate)
     - Assign priority levels: critical (Symbol, Price, RSI, Bias), secondary (24h Δ, Style), tertiary (Win Rate)
@@ -39,7 +39,7 @@ This implementation plan converts the responsive signal header design into discr
     - Test color helper functions with various input values
     - _Requirements: 2.5, 10.2_
   
-  - [ ] 2.3 Implement desktop metrics ribbon (1024px+)
+  - [x] 2.3 Implement desktop metrics ribbon (1024px+)
     - Replace existing `hidden lg:flex` metrics div with new structure
     - Use `hidden lg:flex` for desktop-only horizontal layout
     - Apply responsive gap classes: `gap-2 sm:gap-4 lg:gap-6`
@@ -48,7 +48,7 @@ This implementation plan converts the responsive signal header design into discr
     - Preserve WinRateBadge component with `scale-75 origin-left` styling
     - _Requirements: 2.2, 2.3, 3.3, 5.2, 5.3_
   
-  - [ ] 2.4 Implement mobile/tablet metrics grid (<1024px)
+  - [x] 2.4 Implement mobile/tablet metrics grid (<1024px)
     - Create new `lg:hidden` div for mobile/tablet layouts
     - Implement 2-column grid for mobile: `grid grid-cols-2 gap-2`
     - Implement 3-column grid for tablet: `sm:grid-cols-3 sm:gap-3`
@@ -64,15 +64,15 @@ This implementation plan converts the responsive signal header design into discr
     - Snapshot test at 1920px (large desktop - 7 metrics)
     - _Requirements: 2.1, 2.3, 3.1, 3.2, 3.3_
 
-- [ ] 3. Optimize header container spacing and layout
-  - [ ] 3.1 Apply responsive padding to header container
+- [x] 3. Optimize header container spacing and layout
+  - [x] 3.1 Apply responsive padding to header container
     - Update header container padding from fixed `py-4` to responsive `py-2 sm:py-3 lg:py-4`
     - Update horizontal padding from fixed `px-5` to responsive `px-3 sm:px-4 lg:px-5`
     - Verify 20% vertical space reduction on desktop (measure before/after height)
     - Verify 15% vertical space reduction on mobile (measure before/after height)
     - _Requirements: 4.1, 4.3, 4.5_
   
-  - [ ] 3.2 Apply responsive gap spacing throughout header
+  - [x] 3.2 Apply responsive gap spacing throughout header
     - Update main flex container gap from `gap-6` to `gap-2 sm:gap-4 lg:gap-6`
     - Update Signal Profile badge row gap to `gap-1 sm:gap-1.5 lg:gap-2`
     - Update Signal Profile sub-metrics gap to `gap-1.5 sm:gap-2 lg:gap-3`
@@ -85,15 +85,15 @@ This implementation plan converts the responsive signal header design into discr
     - Test that gap spacing scales correctly across breakpoints
     - _Requirements: 4.3, 4.5, 5.5_
 
-- [ ] 4. Implement responsive text sizing and truncation
-  - [ ] 4.1 Apply responsive text sizes to metric labels and values
+- [x] 4. Implement responsive text sizing and truncation
+  - [x] 4.1 Apply responsive text sizes to metric labels and values
     - Update metric labels from `text-[8px]` to `text-[8px] sm:text-[9px]`
     - Update metric values from `text-xs` to `text-[10px] sm:text-xs`
     - Ensure minimum font size of 11px for readability on mobile
     - Add `data-testid="metric-value"` for testing
     - _Requirements: 10.4, 10.5_
   
-  - [ ] 4.2 Implement headline truncation for mobile
+  - [x] 4.2 Implement headline truncation for mobile
     - Verify headline has `truncate` class applied
     - Verify headline container has `max-w-md` constraint
     - Test headline truncation with long signal headlines (50+ characters)
@@ -106,15 +106,15 @@ This implementation plan converts the responsive signal header design into discr
     - Test color contrast ratios for all text elements
     - _Requirements: 10.5_
 
-- [ ] 5. Ensure responsive layout stability and prevent overflow
-  - [ ] 5.1 Add overflow prevention classes
+- [x] 5. Ensure responsive layout stability and prevent overflow
+  - [x] 5.1 Add overflow prevention classes
     - Apply `overflow-hidden` to header container
     - Verify no horizontal scrolling from 320px to 1920px
     - Test with long symbol names (e.g., "BTCUSDTPERP")
     - Test with extreme metric values (e.g., price: 1,234,567.89)
     - _Requirements: 9.1, 9.2, 9.3_
   
-  - [ ] 5.2 Implement adaptive Signal Profile layout
+  - [x] 5.2 Implement adaptive Signal Profile layout
     - Ensure Signal Profile uses `shrink-0` to prevent compression
     - Verify emoji icon maintains fixed size (w-12 h-12) across breakpoints
     - Test badge row wrapping behavior on very small screens (320px)
@@ -127,7 +127,7 @@ This implementation plan converts the responsive signal header design into discr
     - Test smooth transitions between breakpoints (639px → 640px, 1023px → 1024px)
     - _Requirements: 3.5, 9.1, 9.3, 9.4, 9.5_
 
-- [ ] 6. Checkpoint - Verify responsive behavior and run tests
+- [x] 6. Checkpoint - Verify responsive behavior and run tests
   - Manually test header at 320px, 375px, 768px, 1024px, 1440px, 1920px viewport widths
   - Verify all 7 metrics are visible on desktop (1024px+)
   - Verify 6 metrics are visible on tablet (640-1024px)
