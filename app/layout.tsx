@@ -50,7 +50,7 @@ export const metadata: Metadata = {
         url: 'https://rsiq.mindscapeanalytics.com/og-image.png',
         width: 1200,
         height: 630,
-        alt: 'RSIQ Pro — Institutional Crypto Terminal by Mindscape Analytics',
+        alt: 'RSIQ Pro - Institutional Crypto Terminal by Mindscape Analytics',
         type: 'image/png',
       },
       {
@@ -58,7 +58,7 @@ export const metadata: Metadata = {
         url: 'https://rsiq.mindscapeanalytics.com/api/og/BTC',
         width: 1200,
         height: 630,
-        alt: 'RSIQ Pro — Live BTC Institutional Signal',
+        alt: 'RSIQ Pro - Live BTC Institutional Signal',
       },
     ],
     locale: 'en_US',

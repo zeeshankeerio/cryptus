@@ -47,7 +47,7 @@ The leading cause of blown accounts is human emotion. We solve this mathematical
 
 Before risking capital, institutional traders stress-test strategies against Black Swan events.
 
-*   **Generative Market Modeling:** Users can backtest their custom Screener configurations against a "Digital Twin" of the market—an AI-generated simulation that recreates infinite permutations of flash crashes, liquidity droughts, and euphoria spikes.
+*   **Generative Market Modeling:** Users can backtest their custom Screener configurations against a "Digital Twin" of the market-an AI-generated simulation that recreates infinite permutations of flash crashes, liquidity droughts, and euphoria spikes.
 *   **Monte Carlo Strategy Scoring:** The AI automatically suggests tweaks to the user's matrix parameters to optimize for the highest Sharpe ratio across 10,000 synthetic market conditions.
 
 ---

@@ -1,5 +1,5 @@
 /**
- * Alert Templates API — Task 10.2
+ * Alert Templates API - Task 10.2
  * CRUD operations for alert configuration templates.
  * Requirements: 7.6, 7.7
  */
@@ -7,7 +7,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 
-// ── GET /api/templates — list all templates for the user ──────────────────────
+// ── GET /api/templates - list all templates for the user ──────────────────────
 export async function GET(request: Request) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ── POST /api/templates — create a new template ───────────────────────────────
+// ── POST /api/templates - create a new template ───────────────────────────────
 export async function POST(request: Request) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });

@@ -39,7 +39,7 @@ export const OrderFlowIndicator = memo(function OrderFlowIndicator({
   const ratioPercent = (ratio * 100).toFixed(1);
   const Icon = getIcon(pressure);
 
-  // Native title tooltip — no z-index / overflow issues
+  // Native title tooltip - no z-index / overflow issues
   const tooltipText = `Buy Volume: $${buyVolumeFormatted}\nSell Volume: $${sellVolumeFormatted}\nBuy Ratio: ${ratioPercent}%\nTrades (1m): ${tradeCount1m ?? 0}`;
 
   if (compact) {

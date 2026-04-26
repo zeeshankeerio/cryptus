@@ -1,9 +1,9 @@
 /**
- * Alert History API — Tasks 11.1, 11.3, 11.5, 11.7, 11.9
- * GET /api/alerts/history — filtered, paginated alert history
- * GET /api/alerts/history?export=csv — CSV export
- * GET /api/alerts/history?stats=1 — statistics
- * DELETE /api/alerts/history — bulk delete
+ * Alert History API - Tasks 11.1, 11.3, 11.5, 11.7, 11.9
+ * GET /api/alerts/history - filtered, paginated alert history
+ * GET /api/alerts/history?export=csv - CSV export
+ * GET /api/alerts/history?stats=1 - statistics
+ * DELETE /api/alerts/history - bulk delete
  * Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6
  */
 import { NextResponse } from 'next/server';
@@ -105,7 +105,7 @@ export async function GET(request: Request) {
   }
 }
 
-// ── DELETE /api/alerts/history — bulk delete (Requirement 8.6) ───────────────
+// ── DELETE /api/alerts/history - bulk delete (Requirement 8.6) ───────────────
 export async function DELETE(request: Request) {
   try {
     const session = await auth.api.getSession({ headers: request.headers });

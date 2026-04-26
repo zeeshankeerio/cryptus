@@ -89,7 +89,7 @@ describe('LRUCache', () => {
     cache.set('b', 2)
     cache.set('c', 3)
 
-    // Access 'a' — now order is b(LRU), c, a(MRU)
+    // Access 'a' - now order is b(LRU), c, a(MRU)
     cache.get('a')
 
     // Adding 'd' should evict 'b' (now LRU)

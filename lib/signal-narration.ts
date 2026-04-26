@@ -39,8 +39,8 @@ export interface SignalNarration {
  * Get a human-readable zone description for an RSI value,
  * calibrated to the asset class's volatility profile.
  *
- * Crypto: wide zones (20/30/70/80) — extreme oscillations are normal
- * Metals/Forex: tighter zones (22-25/32-35/65-68/75-78) — commodity mean-reversion
+ * Crypto: wide zones (20/30/70/80) - extreme oscillations are normal
+ * Metals/Forex: tighter zones (22-25/32-35/65-68/75-78) - commodity mean-reversion
  * 
  * 2026 FIX: Use proportional offsets for "approaching" thresholds
  */
@@ -58,7 +58,7 @@ function rsiZone(rsi: number | null, market: ScreenerEntry['market'] = 'Crypto')
   if (rsi >= zones.deepOB) return 'deeply overbought';
   if (rsi >= zones.ob)     return 'overbought';
   if (rsi >= zones.ob - approachingOffset) return 'approaching overbought';
-  return null; // Neutral — not interesting enough to narrate
+  return null; // Neutral - not interesting enough to narrate
 }
 
 function formatNum(n: number | null, decimals = 1): string {
@@ -108,7 +108,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       // EXTREME move (>50%)
       const emoji = priceChange > 0 ? '🚀' : '💥';
       const direction = priceChange > 0 ? 'rallied' : 'crashed';
-      reasons.push(`${emoji} PARABOLIC MOVE: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h — extreme exhaustion risk, high reversal probability`);
+      reasons.push(`${emoji} PARABOLIC MOVE: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h. Extreme exhaustion risk, high reversal probability`);
       totalPoints += 25;
       // Extreme rally = bearish reversal signal (overbought exhaustion)
       // Extreme crash = bullish reversal signal (oversold bounce)
@@ -119,7 +119,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       // VERY STRONG move (30-50%)
       const emoji = priceChange > 0 ? '🚀' : '📉';
       const direction = priceChange > 0 ? 'surged' : 'plunged';
-      reasons.push(`${emoji} EXTREME MOMENTUM: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h — monitor for exhaustion signals`);
+      reasons.push(`${emoji} EXTREME MOMENTUM: Price ${direction} ${absPriceChange.toFixed(1)}% in 24h. Monitor for exhaustion signals`);
       totalPoints += 20;
       if (priceChange > 0) bearishPoints += 20;
       else bullishPoints += 20;
@@ -128,14 +128,14 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       // STRONG move (15-30%)
       const emoji = priceChange > 0 ? '📈' : '📉';
       const direction = priceChange > 0 ? 'rallied' : 'declined';
-      reasons.push(`${emoji} Strong 24h momentum: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}% — ${priceChange > 0 ? 'overbought' : 'oversold'} risk building`);
+      reasons.push(`${emoji} Strong 24h momentum: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}%. ${priceChange > 0 ? 'Overbought' : 'Oversold'} risk building`);
       totalPoints += 12;
       if (priceChange > 0) bearishPoints += 12;
       else bullishPoints += 12;
       pillars.momentum = true;
     } else if (absPriceChange > 5) {
       // MODERATE move (5-15%)
-      reasons.push(`📊 24h change: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}% — moderate momentum`);
+      reasons.push(`📊 24h change: ${priceChange > 0 ? '+' : ''}${priceChange.toFixed(1)}%. Moderate momentum`);
       totalPoints += 5;
       if (priceChange > 0) bearishPoints += 5;
       else bullishPoints += 5;
@@ -283,8 +283,8 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   // 2026 FIX: Correct double-counting bug - only add points once, to the appropriate direction
   if (entry.adx !== null && entry.adx > 0) {
     if (entry.adx > 30) {
-      reasons.push(`📐 ADX at ${formatNum(entry.adx)} — strong trend confirmed, trend-following signals amplified`);
-      // ADX confirms direction of the dominant bias — amplifies, doesn't create
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)}. Strong trend confirmed, trend-following signals amplified`);
+      // ADX confirms direction of the dominant bias - amplifies, doesn't create
       if (bullishPoints > bearishPoints) {
         bullishPoints += 5;
         totalPoints += 5;
@@ -295,7 +295,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       // If neutral (bullishPoints === bearishPoints), ADX doesn't add points
       pillars.trend = true;
     } else if (entry.adx < 18) {
-      reasons.push(`📐 ADX at ${formatNum(entry.adx)} — choppy/ranging market, oscillator signals more reliable`);
+      reasons.push(`📐 ADX at ${formatNum(entry.adx)}. Choppy/ranging market, oscillator signals more reliable`);
       totalPoints += 3;
       pillars.trend = true;
     }
@@ -325,12 +325,12 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   // This is a high-conviction event that the scoring engine weights at 1.5.
   if (entry.rsiCrossover && entry.rsiCrossover !== 'none') {
     if (entry.rsiCrossover === 'bullish_reversal') {
-      reasons.push('↥ RSI Bullish Reversal — RSI crossed back above oversold zone, confirming momentum shift to upside');
+      reasons.push('↥ RSI Bullish Reversal: RSI crossed back above oversold zone, confirming momentum shift to upside');
       bullishPoints += 14;
       totalPoints += 14;
       pillars.momentum = true;
     } else if (entry.rsiCrossover === 'bearish_reversal') {
-      reasons.push('↧ RSI Bearish Reversal — RSI crossed back below overbought zone, confirming momentum shift to downside');
+      reasons.push('↧ RSI Bearish Reversal: RSI crossed back below overbought zone, confirming momentum shift to downside');
       bearishPoints += 14;
       totalPoints += 14;
       pillars.momentum = true;
@@ -357,10 +357,10 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   if (sms != null && Math.abs(sms) >= 30) {
     const smsBullish = sms > 0;
     if (smsBullish) {
-      reasons.push(`🐳 Smart Money Flow: +${sms} — Derivatives data (funding, order flow, whale activity) confirms bullish institutional positioning`);
+      reasons.push(`🐳 Smart Money Flow: +${sms}. Derivatives data (funding, order flow, whale activity) confirms bullish institutional positioning`);
       bullishPoints += 8;
     } else {
-      reasons.push(`🐳 Smart Money Flow: ${sms} — Derivatives data signals net institutional selling pressure (negative funding / liquidation clusters)`);
+      reasons.push(`🐳 Smart Money Flow: ${sms}. Derivatives data signals net institutional selling pressure (negative funding / liquidation clusters)`);
       bearishPoints += 8;
     }
     totalPoints += 8;
@@ -399,7 +399,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
 
     if (cci >= 200) {
       if (isCommodity) {
-        reasons.push(`📡 CCI at ${formatNum(cci)} — extreme overbought (commodity momentum peak). High reversal probability.`);
+        reasons.push(`📡 CCI at ${formatNum(cci)}. Extreme overbought (commodity momentum peak). High reversal probability.`);
       } else {
         reasons.push(`📉 CCI at ${formatNum(cci)} - extreme overbought condition (Trend Exhaustion)`);
       }
@@ -407,7 +407,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       totalPoints += ptsExtreme;
     } else if (cci >= 100) {
       if (isCommodity) {
-        reasons.push(`📡 CCI at ${formatNum(cci)} — overbought zone. Trend likely intact but momentum may plateau.`);
+        reasons.push(`📡 CCI at ${formatNum(cci)}. Overbought zone. Trend likely intact but momentum may plateau.`);
       } else {
         reasons.push(`📉 CCI at ${formatNum(cci)} - entering overbought zone`);
       }
@@ -415,7 +415,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       totalPoints += ptsNormal;
     } else if (cci <= -200) {
       if (isCommodity) {
-        reasons.push(`📡 CCI at ${formatNum(cci)} — extreme oversold (commodity demand spike zone). High mean-reversion probability.`);
+        reasons.push(`📡 CCI at ${formatNum(cci)}. Extreme oversold (commodity demand spike zone). High mean-reversion probability.`);
       } else {
         reasons.push(`📈 CCI at ${formatNum(cci)} - extreme oversold condition (Trend Bottoming)`);
       }
@@ -423,7 +423,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       totalPoints += ptsExtreme;
     } else if (cci <= -100) {
       if (isCommodity) {
-        reasons.push(`📡 CCI at ${formatNum(cci)} — oversold territory. Bullish entry zone.`);
+        reasons.push(`📡 CCI at ${formatNum(cci)}. Oversold territory. Bullish entry zone.`);
       } else {
         reasons.push(`📈 CCI at ${formatNum(cci)} - entering oversold zone`);
       }
@@ -431,7 +431,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       totalPoints += ptsNormal;
     } else if (isCommodity && Math.abs(cci) > 80) {
       const dir = cci > 0 ? 'approaching overbought' : 'approaching oversold';
-      reasons.push(`📡 CCI at ${formatNum(cci)} — ${dir} boundary.`);
+      reasons.push(`📡 CCI at ${formatNum(cci)}. ${dir} boundary.`);
     }
     pillars.momentum = true;
   }
@@ -483,7 +483,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     reasons.push(
       `🎯 Risk Parameters (${direction}): SL $${formatPrice(rp.stopLoss)} | TP1 $${formatPrice(rp.takeProfit1)} (${rp.riskRewardRatio}:1) | TP2 $${formatPrice(rp.takeProfit2)} (2:1) | ATR: ${formatNum(rp.atrUsed, 4)}`
     );
-    // Risk params don't add directional points — they're informational
+    // Risk params don't add directional points - they're informational
   }
 
   // ── 16. Fibonacci Proximity (Institutional Demand/Supply) ──
@@ -521,7 +521,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   // ── 17. Fair Value Gap (FVG) & Momentum Gaps ──
   if (entry.regime?.regime === 'breakout' && entry.longCandle && entry.volumeSpike) {
     const direction = entry.candleDirection === 'bullish' ? 'Bullish' : 'Bearish';
-    reasons.push(`⚡ ${direction} Fair Value Gap (FVG) / Momentum Gap detected — rapid institutional execution in progress`);
+    reasons.push(`⚡ ${direction} Fair Value Gap (FVG) / Momentum Gap detected. Rapid institutional execution in progress`);
     totalPoints += 12;
     if (entry.candleDirection === 'bullish') bullishPoints += 12;
     else if (entry.candleDirection === 'bearish') bearishPoints += 12;
@@ -547,9 +547,9 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       if (isBullish) {
         reasons.push('🏅 Gold Macro Context: Bullish setups often coincide with USD weakness, elevated geopolitical risk, or inflation hedging demand. Monitor DXY for inverse confirmation.');
       } else if (isBearish) {
-        reasons.push('🏅 Gold Macro Context: Bearish pressure may reflect USD strengthening or risk-on rotation. Central bank buying provides structural support — consider scaling entries.');
+        reasons.push('🏅 Gold Macro Context: Bearish pressure may reflect USD strengthening or risk-on rotation. Central bank buying provides structural support; consider scaling entries.');
       } else {
-        reasons.push('🏅 Gold Macro Context: Neutral consolidation — awaiting a catalyst (CPI, Fed policy, geopolitical event). Gold typically leads risk-off moves by 1-3 sessions.');
+        reasons.push('🏅 Gold Macro Context: Neutral consolidation. Awaiting a catalyst (CPI, Fed policy, geopolitical event). Gold typically leads risk-off moves by 1-3 sessions.');
       }
       pillars.structure = true;
     }
@@ -557,7 +557,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     // ── Silver: Industrial Demand + Safe-Haven Hybrid ──
     if (isSilver) {
       if (isBullish) {
-        reasons.push('🥈 Silver Macro Context: Dual driver — safe-haven buying AND industrial demand (solar panels, electronics). Silver typically lags Gold then outperforms (higher beta).');
+        reasons.push('🥈 Silver Macro Context: Dual driver (safe-haven buying AND industrial demand from solar panels, electronics). Silver typically lags Gold then outperforms (higher beta).');
       } else if (isBearish) {
         reasons.push('🥈 Silver Macro Context: Industrial slowdown fears + USD strength can pressure Silver harder than Gold. Gold/Silver ratio expansion = bearish for Silver.');
       }
@@ -571,20 +571,20 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       } else if (isBearish) {
         reasons.push('🛢️ Oil Macro Context: Bearish pressure from demand destruction fears, supply glut, or OPEC compliance concerns. Recession signals amplify oil drawdowns.');
       } else {
-        reasons.push('🛢️ Oil Macro Context: Consolidation — oil markets balancing supply/demand. Breakout direction typically dictated by next OPEC+ meeting or US inventory data.');
+        reasons.push('🛢️ Oil Macro Context: Consolidation - oil markets balancing supply/demand. Breakout direction typically dictated by next OPEC+ meeting or US inventory data.');
       }
       pillars.structure = true;
     }
 
     // ── Natural Gas: Seasonal / Storage Cycle ──
     if (isGas) {
-      reasons.push('⛽ Natural Gas Context: Highly seasonal — summer/winter storage cycles drive extreme moves. Check EIA storage reports for directional confirmation.');
+      reasons.push('⛽ Natural Gas Context: Highly seasonal - summer/winter storage cycles drive extreme moves. Check EIA storage reports for directional confirmation.');
     }
 
     // ── Copper: Economic Bellwether / "Dr. Copper" ──
     if (isCopper) {
       if (isBullish) {
-        reasons.push('🟤 Copper Macro: "Dr. Copper" bullish — industrial expansion signal. China PMI and construction data are primary catalysts for copper demand.');
+        reasons.push('🟤 Copper Macro: "Dr. Copper" bullish - industrial expansion signal. China PMI and construction data are primary catalysts for copper demand.');
       } else if (isBearish) {
         reasons.push('🟤 Copper Macro: Copper weakness signals industrial slowdown. Often a leading indicator of broader economic contraction 2-3 months ahead.');
       }
@@ -684,7 +684,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     headline = 'Indecision Zone | Conflicting Signals, Risk Off';
     emoji = '🟡';
     if (reasons.length > 0 && !reasons.some(r => r.includes('HOLD'))) {
-      reasons.push('⚖️ Conflicting signals detected — neutral stance recommended until price confirms direction');
+      reasons.push('⚖️ Conflicting signals detected - neutral stance recommended until price confirms direction');
     }
   } else {
     headline = 'Market Equilibrium | No Edge, Stand Aside';
@@ -710,7 +710,7 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     tradingStyle === 'position' ? 'weighted for maximum 1d/Weekly macro cycle preservation' :
     'balanced for 15m/1h intraday market structure';
 
-  reasons.unshift(`🛡️ Strategy Mode: ${styleLabel} — Indicators are ${styleExplanation}`);
+  reasons.unshift(`🛡️ Strategy Mode: ${styleLabel} - Indicators are ${styleExplanation}`);
 
   return {
     headline,

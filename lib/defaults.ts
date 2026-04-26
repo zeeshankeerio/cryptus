@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Centralized Default Configuration
+ * RSIQ Pro - Centralized Default Configuration
  * Copyright © 2024-2026 Mindscape Analytics LLC. All rights reserved.
  *
  * SINGLE SOURCE OF TRUTH for all default thresholds and settings.
@@ -8,7 +8,7 @@
  * Why 80/20 (not 70/30 or 90/15)?
  *   - Institutional standard: 80/20 balances signal frequency with accuracy
  *   - 70/30 triggers too many false positives in volatile crypto markets
- *   - 90/15 is too passive — misses 60%+ of actionable setups
+ *   - 90/15 is too passive - misses 60%+ of actionable setups
  *   - Validated across 2024-2026 backtesting data
  */
 
@@ -17,9 +17,9 @@
 export const RSI_DEFAULTS = {
   /** Standard RSI period (Wilder's) */
   period: 14,
-  /** Overbought threshold — institutional standard */
+  /** Overbought threshold - institutional standard */
   overbought: 80,
-  /** Oversold threshold — institutional standard */
+  /** Oversold threshold - institutional standard */
   oversold: 20,
 } as const;
 

@@ -94,7 +94,7 @@ export function calculateMacd(
 ): MacdResult | null {
   // Stability check: MACD needs at least slowPeriod + signalPeriod bars for a valid signal line.
   // We use 2x the slow period as a practical minimum for a stable, non-noisy signal.
-  // (26*2 = 52 bars minimum — avoids the "signal line still forming" problem)
+  // (26*2 = 52 bars minimum - avoids the "signal line still forming" problem)
   if (closes.length < slowPeriod * 2) return null;
 
   const emaFast = calculateEma(closes, fastPeriod);
@@ -491,7 +491,7 @@ export function calculateConfluence(params: {
   let bearish = 0;
   let total = 0;
 
-  // Graduated RSI zone scoring — wider gradient for better signal quality
+  // Graduated RSI zone scoring - wider gradient for better signal quality
   const checkRsi = (rsi: number | null, w: number) => {
     if (rsi === null) return;
     total += w;
@@ -611,7 +611,7 @@ export function calculateOBV(
 /**
  * Williams %R: momentum oscillator measuring overbought/oversold conditions.
  * Range: -100 (oversold) to 0 (overbought).
- * Complementary to StochRSI — uses raw price range rather than RSI values.
+ * Complementary to StochRSI - uses raw price range rather than RSI values.
  *
  * Institutional usage:
  *   < -80 = oversold zone (potential buy)
@@ -760,7 +760,7 @@ export function computeStrategyScore(params: {
   rsiScore(params.rsi4h, tw.rsi4h, '4h');
   rsiScore(params.rsi1d, tw.rsi1d, '1d');
 
-  // MACD histogram — ATR-relative scaling for consistent behavior across all price levels
+  // MACD histogram - ATR-relative scaling for consistent behavior across all price levels
   // 2026 fix: Price-relative scaling breaks on high/low priced assets.
   // ATR-normalized MACD measures histogram significance against actual volatility.
   if (params.macdHistogram != null && enabled.macd !== false) {
@@ -770,7 +770,7 @@ export function computeStrategyScore(params: {
     // Use ATR for normalization if available, else fall back to price-relative
     let macdNorm: number;
     if (params.atr != null && params.atr > 0) {
-      // Histogram as fraction of ATR — 1.0 = histogram equals one ATR (very strong)
+      // Histogram as fraction of ATR - 1.0 = histogram equals one ATR (very strong)
       macdNorm = Math.abs(params.macdHistogram) / params.atr;
       macdNorm = Math.min(macdNorm * 80, 100); // Scale: 0.625 ATR → 50 points, 1.25 ATR → 100 points
       
@@ -789,7 +789,7 @@ export function computeStrategyScore(params: {
     }
   }
 
-  // Bollinger position — regime: oscillator weight (mean-reversion signal category)
+  // Bollinger position - regime: oscillator weight (mean-reversion signal category)
   if (params.bbPosition != null && enabled.bb !== false) {
     factors += 1;
     const bbW = 1.0 * rw.oscillators * sessionQuality;
@@ -809,7 +809,7 @@ export function computeStrategyScore(params: {
     else if (params.stochK < 30) score += 40 * stochW;
     else if (params.stochK > 80 && params.stochD > 80) { score -= 80 * stochW; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); }
     else if (params.stochK > 70) score -= 40 * stochW;
-    // K/D Crossover Confirmation — properly weighted with factors to prevent inflation
+    // K/D Crossover Confirmation - properly weighted with factors to prevent inflation
     if (params.stochK > params.stochD && params.stochK < 30) {
       factors += 0.5;
       score += 70 * 0.5 * rw.oscillators * sessionQuality; // regime-scaled
@@ -829,7 +829,7 @@ export function computeStrategyScore(params: {
     }
   }
 
-  // EMA cross — regime: trend weight
+  // EMA cross - regime: trend weight
   if (params.emaCross !== 'none' && enabled.ema !== false) {
     const emaWeight = tw.ema * rw.trend * sessionQuality;
     factors += tw.ema;
@@ -837,7 +837,7 @@ export function computeStrategyScore(params: {
     reasons.push(params.emaCross === 'bullish' ? 'Bullish EMA cross' : 'Bearish EMA cross');
   }
 
-  // VWAP — regime: volume weight
+  // VWAP - regime: volume weight
   if (params.vwapDiff !== null && enabled.vwap !== false) {
     factors += 1.0;
     const volW = 1.0 * rw.volume * sessionQuality;
@@ -859,7 +859,7 @@ export function computeStrategyScore(params: {
   // ── Intelligence signals ──
 
   // Multi-TF confluence
-  // Multi-TF confluence — regime: trend weight (confluence reflects cross-TF trend agreement)
+  // Multi-TF confluence - regime: trend weight (confluence reflects cross-TF trend agreement)
   if (params.confluence !== undefined && Math.abs(params.confluence) >= 20 && enabled.confluence !== false) {
     factors += 2.5;
     const confW = 2.5 * rw.trend * sessionQuality;
@@ -895,7 +895,7 @@ export function computeStrategyScore(params: {
     }
   }
 
-  // Momentum — regime: momentum weight
+  // Momentum - regime: momentum weight
   if (params.momentum !== undefined && params.momentum !== null && Math.abs(params.momentum * volatilityMultiplier) > 0.5 && enabled.momentum !== false) {
     factors += 0.5;
     const momW = 0.5 * rw.momentum;
@@ -906,7 +906,7 @@ export function computeStrategyScore(params: {
     else if (scaledMomentum < -3) reasons.push('Strong institutional momentum (Down)');
   }
 
-  // ── OBV (On-Balance Volume) — Volume Trend Confirmation ──
+  // ── OBV (On-Balance Volume) - Volume Trend Confirmation ──
   // Regime: volume weight applied
   if (params.obvTrend && params.obvTrend !== 'none' && enabled.obv !== false) {
     factors += 1.5;
@@ -935,7 +935,7 @@ export function computeStrategyScore(params: {
     else if (params.cci <= -100) { score += 60 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) oversold`); }
   }
 
-  // ── Williams %R — Complementary Oscillator ──
+  // ── Williams %R - Complementary Oscillator ──
   // Regime: oscillator weight applied
   if (params.williamsR !== null && params.williamsR !== undefined && enabled.williamsR !== false) {
     factors += 0.8;
@@ -1008,7 +1008,7 @@ export function computeStrategyScore(params: {
   }
 
   // ── HIDDEN DIVERGENCE (Continuation) ────────────────────────────
-  // Lower weight than regular divergence — continuation, not reversal
+  // Lower weight than regular divergence - continuation, not reversal
   // Regime: momentum weight; volatility-scaled for asset class
   if (params.hiddenDivergence && params.hiddenDivergence !== 'none' && enabled.divergence !== false) {
     const hiddenDivWeight = tw.divergenceBonus * 0.75;
@@ -1399,7 +1399,7 @@ export interface FibonacciLevels {
   level382: number;
   /** 50.0% retracement (psychological level) */
   level500: number;
-  /** 61.8% retracement (golden ratio — strongest level) */
+  /** 61.8% retracement (golden ratio - strongest level) */
   level618: number;
   /** 78.6% retracement (deep pullback) */
   level786: number;
@@ -1551,7 +1551,7 @@ export function calculateCCI(
   // Mean of typical prices
   const mean = typicalPrices.reduce((a, b) => a + b, 0) / period;
 
-  // Mean Deviation (not std dev — CCI specifically uses mean absolute deviation)
+  // Mean Deviation (not std dev - CCI specifically uses mean absolute deviation)
   const meanDeviation = typicalPrices.reduce((a, b) => a + Math.abs(b - mean), 0) / period;
 
   if (meanDeviation === 0) return 0;

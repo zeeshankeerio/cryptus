@@ -28,7 +28,7 @@ filesToFix.forEach(relPath => {
   
   try {
     let content = fs.readFileSync(fullPath, 'utf8');
-    const newContent = content.replace(/—/g, '-').replace(/–/g, '-');
+    const newContent = content.replace(/-/g, '-').replace(/–/g, '-');
     
     if (content !== newContent) {
       fs.writeFileSync(fullPath, newContent, 'utf8');

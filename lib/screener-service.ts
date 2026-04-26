@@ -820,7 +820,7 @@ async function fetchWithRetry(
  * Maps Yahoo JSON structure to standard BinanceKline format.
  *
  * ⚡ 2026 Metals Fix: Commodity futures (GC=F, SI=F, CL=F, BZ=F, etc.) do not
- * maintain reliable 1m history on Yahoo Finance — they typically return only
+ * maintain reliable 1m history on Yahoo Finance - they typically return only
  * a few dozen candles which is insufficient for RSI(14), MACD(26), or Stoch(14).
  * For metals/energy: use 5m interval (60 days available = ~17,000 candles).
  */
@@ -1517,7 +1517,7 @@ function buildEntry(
     const fibLevels = calculateFibonacciLevels(closes15m, 50);
 
     // 2026 Intelligence: CCI (Commodity Channel Index)
-    // Critical for metals/energy — designed for commodity futures trending markets.
+    // Critical for metals/energy - designed for commodity futures trending markets.
     // Also used as a supplementary oscillator for crypto in ranging regimes.
     const cci = calculateCCI(highs15m, lows15m, closes15m, 20);
 
@@ -1871,7 +1871,7 @@ function runRefresh(
       lastComputeMs: 0,
     };
 
-    // ── Tiered Fetching Logic — 100/200/500 symbol prioritization ──
+    // ── Tiered Fetching Logic - 100/200/500 symbol prioritization ──
     const isInitialLoad = uncachedSymbols.length > (symbolCount * 0.5);
     const baseBootstrapCap = symbolCount;
     // For 500+ symbols, we rolling-refresh in batches of 300 to keep the event loop responsive

@@ -287,21 +287,27 @@ export function computeAllSmartMoney(
   const result = new Map<string, SmartMoneyPressure>();
 
   for (const symbol of symbols) {
-    const pressure = computeSmartMoneyPressure(
-      symbol, fundingRates, liquidations, whaleAlerts, orderFlow, cvdData
-    );
-    // Only include if we have at least one data source
-    if (
-      pressure.components.fundingSignal !== 0 ||
-      pressure.components.liquidationImbalance !== 0 ||
-      pressure.components.whaleDirection !== 0 ||
-      pressure.components.orderFlowPressure !== 0 ||
-      pressure.components.cvdSignal !== 0
-    ) {
-      result.set(symbol, pressure);
+    try {
+      const pressure = computeSmartMoneyPressure(
+        symbol, fundingRates, liquidations, whaleAlerts, orderFlow, cvdData
+      );
+      
+      // FIX: Always include if we have at least one data source (not if signals are non-zero)
+      // Neutral market (all signals = 0) is still valid data
+      const hasData = 
+        fundingRates.has(symbol) ||
+        liquidations.some(l => l.symbol === symbol) ||
+        whaleAlerts.some(w => w.symbol === symbol) ||
+        orderFlow.has(symbol);
+      
+      if (hasData) {
+        result.set(symbol, pressure);
+      }
+    } catch (error) {
+      console.error(`[SmartMoney] Failed to calculate for ${symbol}:`, error);
+      // Continue with other symbols
     }
   }
-
 
   return result;
 }

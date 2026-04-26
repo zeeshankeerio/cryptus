@@ -56,3 +56,8 @@ coverage/
 
 # ─── Archive (local dev notes, not for production) ────────────
 # archive/ is intentionally NOT gitignored so docs are preserved in repo
+
+# ─── Irrelevant Files ─────────────────────────────────────────
+.kiro/
+tsc-errors.txt
+replace_emdash.py

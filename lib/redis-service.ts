@@ -1,7 +1,7 @@
 import { Redis } from '@upstash/redis';
 
 /**
- * RSIQ Pro — Distributed State Layer (Upstash Redis)
+ * RSIQ Pro - Distributed State Layer (Upstash Redis)
  * 
  * This service provides a shared truth for indicators and alert states
  * across all server instances (Vercel, AWS, etc.).

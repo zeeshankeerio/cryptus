@@ -37,7 +37,7 @@ beforeEach(() => {
 
   // Reset the module-level singleton between tests by re-importing
   // (vitest isolates modules per test file, but the singleton persists within
-  //  the file — we reset it by clearing the mock and letting the first call
+  //  the file - we reset it by clearing the mock and letting the first call
   //  re-initialize via setVapidDetails)
 });
 
@@ -102,7 +102,7 @@ describe('sendPushNotificationWithRetry', () => {
 
     const result = await sendPushNotificationWithRetry(makeSub(), makePayload());
     expect(result).toEqual({ success: false, expired: true });
-    // Must NOT retry — only one call
+    // Must NOT retry - only one call
     expect(webpush.sendNotification).toHaveBeenCalledTimes(1);
   });
 

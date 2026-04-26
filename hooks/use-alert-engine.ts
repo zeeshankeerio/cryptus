@@ -20,7 +20,7 @@ async function requestWakeLock() {
       console.log('[alerts] Wake Lock released');
       wakeLock = null;
     });
-    console.log('[alerts] Wake Lock acquired — screen will stay on for alerts');
+    console.log('[alerts] Wake Lock acquired - screen will stay on for alerts');
   } catch (e) {
     console.warn('[alerts] Wake Lock unavailable:', e);
   }
@@ -263,7 +263,7 @@ export function useAlertEngine(
         });
         if (res.ok) {
           const saved = await res.json();
-          if (saved.skipped) return; // Server-side cooldown dedup — keep optimistic entry
+          if (saved.skipped) return; // Server-side cooldown dedup - keep optimistic entry
           const normalized: Alert = {
             ...saved,
             createdAt: typeof saved.createdAt === 'string' ? new Date(saved.createdAt).getTime() : saved.createdAt,
@@ -271,18 +271,18 @@ export function useAlertEngine(
           // Replace the optimistic entry with the server-confirmed one
           setAlerts(prev => prev.map(a => a.id === optimisticAlert.id ? normalized : a));
         } else if (res.status >= 500 && retryCount === 0) {
-          // Server error — retry once after 2s
+          // Server error - retry once after 2s
           await new Promise(r => setTimeout(r, 2000));
           return attempt(1);
         }
-        // 4xx errors (auth, entitlement) — don't retry, keep optimistic entry
+        // 4xx errors (auth, entitlement) - don't retry, keep optimistic entry
       } catch (e) {
         if (retryCount === 0) {
-          // Network error — retry once after 3s
+          // Network error - retry once after 3s
           await new Promise(r => setTimeout(r, 3000));
           return attempt(1);
         }
-        // Second failure — keep optimistic entry, log silently
+        // Second failure - keep optimistic entry, log silently
         console.warn('[alerts] Failed to persist alert after retry:', e);
       }
     };
@@ -420,7 +420,7 @@ export function useAlertEngine(
             zoneState.current.set(stateKey, currentZone);
           });
 
-          // Strategy Shift — PERF: Removed main-thread computeStrategyScore() call.
+          // Strategy Shift - PERF: Removed main-thread computeStrategyScore() call.
           // The worker already computes strategy scores and emits ALERT_TRIGGERED
           // for strategy shifts. The main thread now only records signals for
           // win-rate tracking using the strategy score from the live tick data.
@@ -440,7 +440,7 @@ export function useAlertEngine(
           }
         });
 
-        // Win Rate Evaluation — PERF: 30s interval (was 10s)
+        // Win Rate Evaluation - PERF: 30s interval (was 10s)
         // 5m/15m/1h outcomes don't need 10s polling granularity
         const now = Date.now();
         if (!lastWinRateEvalRef.current || now - lastWinRateEvalRef.current > 30000) {

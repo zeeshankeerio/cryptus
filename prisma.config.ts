@@ -1,4 +1,4 @@
-// Prisma 7.x configuration — connection URLs are managed here, not in schema.prisma.
+// Prisma 7.x configuration - connection URLs are managed here, not in schema.prisma.
 // See: https://pris.ly/d/config-datasource
 import "dotenv/config";
 import { defineConfig } from "prisma/config";

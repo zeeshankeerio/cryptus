@@ -57,7 +57,7 @@ export function normalizeCoinConfig(raw: any): CoinConfig {
     alertOnVolumeSpike: raw.alertOnVolumeSpike ?? false,
     longCandleThreshold: raw.longCandleThreshold ?? 5.0,
     volumeSpikeThreshold: raw.volumeSpikeThreshold ?? 5.0,
-    // Task 14.1: New fields — default gracefully for legacy rows
+    // Task 14.1: New fields - default gracefully for legacy rows
     priority: raw.priority ?? 'medium',
     sound: raw.sound ?? 'default',
     quietHoursEnabled: raw.quietHoursEnabled ?? false,

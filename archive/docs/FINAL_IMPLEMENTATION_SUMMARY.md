@@ -1,4 +1,4 @@
-# RSIQ Pro — Final Implementation Summary
+# RSIQ Pro - Final Implementation Summary
 
 ## All Changes Completed ✅
 
@@ -141,7 +141,7 @@ This document summarizes all improvements made to the real-time crypto RSI scree
 - ✅ Added deduplication: won't record same symbol+signal within 3 minutes
 - ✅ Added in-memory cache: localStorage read at most every 5s (not every render)
 - ✅ Replaced all CSS tooltips with native `title` attributes
-- ✅ Replaced `Loader2` spinner with static "—" dash
+- ✅ Replaced `Loader2` spinner with static "-" dash
 - ✅ Fixed calibration threshold: checks evaluated signals, not just recorded
 
 **Files Modified:**

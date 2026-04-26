@@ -423,7 +423,7 @@ function ensureExchange(name) {
 }
 
 /** 
- * Unified Health Monitor — combines zombie detection, staleness marking, and heartbeat
+ * Unified Health Monitor - combines zombie detection, staleness marking, and heartbeat
  * into a single 10s interval. Previous design ran 3 separate timers (zombie 10s,
  * staleness 5s, heartbeat 5s) = 6 timer fires per 10s. Now: 1 timer fire per 10s.
  */
@@ -1198,7 +1198,7 @@ function handleMessage(e, port = null) {
         console.log('[worker] Cold-start baseline sync ready - awaiting SYNC_STATES with open1m/volStart1m');
       });
       
-      // PERF: 250ms flush rhythm — Binance only emits ~1x/sec, so 4x/sec is sufficient.
+      // PERF: 250ms flush rhythm - Binance only emits ~1x/sec, so 4x/sec is sufficient.
       // Previous 50ms caused 20x/sec postMessage + React state churn → browser freeze.
       startFlushing(payload.flushInterval || 250);
       startUnifiedHealthMonitor(); // Single 10s timer for zombie + staleness + heartbeat
@@ -1981,7 +1981,7 @@ function startFlushing(interval) {
   
   flushInterval = setInterval(() => {
     if (tickerBuffer.size > 0) {
-      // PERF: Delta-only flushing — skip symbols whose price hasn't changed.
+      // PERF: Delta-only flushing - skip symbols whose price hasn't changed.
       // This eliminates 60-80% of unnecessary data transfer on quiet markets.
       const deltaPayload = [];
       for (const [sym, tick] of tickerBuffer) {

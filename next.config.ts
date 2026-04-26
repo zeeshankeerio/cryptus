@@ -59,7 +59,7 @@ const withPWA = withPWAInit({
         },
       },
       // ── CRITICAL: Real-time trading data MUST NEVER be cached ──
-      // These endpoints power the live screener and alerts — serving stale data
+      // These endpoints power the live screener and alerts - serving stale data
       // from the PWA cache causes the "no price updates" bug on installed apps.
       {
         urlPattern: /\/api\/(screener|alerts|config|entitlements|health|market-data|derivatives)/,
@@ -74,7 +74,7 @@ const withPWA = withPWAInit({
         urlPattern: /\/(ticker-worker|sw|derivatives-worker)\.js$/,
         handler: 'NetworkOnly',
       },
-      // External exchange APIs (Binance/Bybit REST + Futures) — always fresh
+      // External exchange APIs (Binance/Bybit REST + Futures) - always fresh
       {
         urlPattern: /^https:\/\/(api|fapi)\.(binance\.com|bybit\.com)\//,
         handler: 'NetworkOnly',
@@ -117,7 +117,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  // Standalone output creates a self-contained build — ideal for Render, Railway, etc.
+  // Standalone output creates a self-contained build - ideal for Render, Railway, etc.
   // Includes only necessary node_modules, so the deploy is smaller and faster.
   output: "standalone",
   images: { unoptimized: true },

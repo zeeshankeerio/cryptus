@@ -3,7 +3,7 @@ import { redis } from '@/lib/redis-service';
 import { getSessionUser } from '@/lib/api-auth';
 
 /**
- * Signal Sync API — Aggregates global win rates in Redis.
+ * Signal Sync API - Aggregates global win rates in Redis.
  * Powering Requirement: Cross-device institutional consistency.
  */
 

@@ -74,7 +74,7 @@ class PriceTickEngine extends EventTarget {
   private heartbeatInterval: any = null;
   private lastWorkerHeartbeat: number = Date.now();
   private connectionCheckInterval: any = null;
-  // Stored so they can be removed on stop() — prevents listener accumulation
+  // Stored so they can be removed on stop() - prevents listener accumulation
   private handleVisibility: (() => void) | null = null;
   private handleOnline: (() => void) | null = null;
   private handleFocus: (() => void) | null = null;
@@ -238,12 +238,12 @@ class PriceTickEngine extends EventTarget {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         const lastTick = this.getLastTickTime();
         const silenceMs = Date.now() - lastTick;
-        if (silenceMs > 15000) { // 15s threshold — worker handles 5s detection
+        if (silenceMs > 15000) { // 15s threshold - worker handles 5s detection
           console.warn('[PriceEngine] Detected stale data while visible, forcing resume...');
           this.forceResume();
         }
       }
-    }, 15000); // 15s interval — reduced from 5s
+    }, 15000); // 15s interval - reduced from 5s
 
     // ── Network Recovery Logic (PWA Critical) ──
     if (typeof window !== 'undefined') {
@@ -523,7 +523,7 @@ class PriceTickEngine extends EventTarget {
   postToWorker(message: { type: string; payload?: any }) {
     // this.port is always set for SharedWorker (MessagePort), null for DedicatedWorker
     // this.worker for DedicatedWorker is a Worker (has postMessage)
-    // We never call postMessage on a raw SharedWorker — only on its .port
+    // We never call postMessage on a raw SharedWorker - only on its .port
     const endpoint: MessagePort | Worker | null = this.port || (this.worker instanceof Worker ? this.worker : null);
     if (endpoint) {
       endpoint.postMessage(message);
@@ -646,7 +646,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
 
     // Periodic flush: ensures accumulated ticks reach React state even when
     // the WebSocket goes quiet between batches (e.g. low-volatility periods).
-    // CRITICAL: Only flush when there is actually pending data — avoids empty
+    // CRITICAL: Only flush when there is actually pending data - avoids empty
     // Map allocations every 50ms which cause unnecessary React re-renders.
     const flushTimer = setInterval(() => {
       if (!mountedRef.current || pendingBatch.size === 0) return; // ← guard: skip if nothing pending
@@ -662,7 +662,7 @@ export function useLivePrices(symbols: Set<string>, throttleMs: number = 300) {
         lastUpdate = now;
         pendingBatch.clear();
       }
-    }, 300); // PERF: 300ms flush — limits React re-renders to ~3/sec (was 100ms = 10/sec)
+    }, 300); // PERF: 300ms flush - limits React re-renders to ~3/sec (was 100ms = 10/sec)
 
     const handleWorkerMessage = (e: MessageEvent) => {
       if (!mountedRef.current) return;

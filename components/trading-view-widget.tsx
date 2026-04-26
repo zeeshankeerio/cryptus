@@ -95,7 +95,7 @@ function TradingViewWidget({
       '1w':   'W',
       'M':    'M',
     };
-    // RSI periods like "14" have no chart meaning — default to 15m
+    // RSI periods like "14" have no chart meaning - default to 15m
     return map[iv] ?? (isNaN(Number(iv)) ? '15' : (Number(iv) <= 5 ? iv : '15'));
   };
 
@@ -151,7 +151,7 @@ function TradingViewWidget({
     widgetDiv.className = 'tradingview-widget-container__widget';
     widgetDiv.style.cssText = 'height: 100%; width: 100%;';
 
-    // Defer mount until modal animation finishes — prevents 0-height widget bug
+    // Defer mount until modal animation finishes - prevents 0-height widget bug
     const timer = setTimeout(() => {
       if (!container.current) return;
       container.current.innerHTML = '';
@@ -171,7 +171,7 @@ function TradingViewWidget({
       className="tradingview-widget-container"
       style={{ height: '100%', width: '100%', background: '#070B14' }}
     >
-      {/* Loading state — replaced by widget on mount */}
+      {/* Loading state - replaced by widget on mount */}
       <div className="flex flex-col items-center justify-center h-full gap-4">
         <div className="w-12 h-12 border-4 border-[#39FF14]/20 border-t-[#39FF14] rounded-full animate-spin" />
         <div className="flex flex-col items-center gap-1">

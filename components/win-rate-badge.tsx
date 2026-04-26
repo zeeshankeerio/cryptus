@@ -6,13 +6,13 @@ import { useSymbolWinRate } from './win-rate-context';
 import { cn } from '@/lib/utils';
 
 /**
- * Win Rate Badge — per-symbol signal accuracy display.
+ * Win Rate Badge - per-symbol signal accuracy display.
  *
  * Design decisions:
  * - Uses centralized context for efficient data refresh
  * - Shows countdown timer for pending evaluations
  * - Uses native `title` tooltip to avoid z-index / overflow issues
- * - Shows "-" (not a spinner) when no data — avoids Loader2 re-renders on 500 rows
+ * - Shows "-" (not a spinner) when no data - avoids Loader2 re-renders on 500 rows
  * 
  * Performance: No individual refresh intervals - all data comes from WinRateContext
  */
@@ -46,7 +46,7 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
     return () => clearInterval(interval);
   }, []);
 
-  // No data yet — show a minimal placeholder
+  // No data yet - show a minimal placeholder
   if (!stats || stats.totalSignals === 0) {
     return (
       <div className={cn(
@@ -54,7 +54,7 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
         className
       )}>
         <Activity size={9} className="opacity-40" />
-        <span>—</span>
+        <span>-</span>
       </div>
     );
   }
@@ -76,7 +76,7 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
           "inline-flex items-center gap-1 px-2 py-1 rounded border text-[8px] font-bold text-slate-500 bg-slate-800/20 border-slate-700/30",
           className
         )}
-        title={`${stats.totalSignals} signal${stats.totalSignals !== 1 ? 's' : ''} recorded — awaiting 5m evaluation`}
+        title={`${stats.totalSignals} signal${stats.totalSignals !== 1 ? 's' : ''} recorded - awaiting 5m evaluation`}
       >
         <Clock size={9} className="animate-pulse" />
         <span>{stats.totalSignals}sig</span>
@@ -88,7 +88,7 @@ export function WinRateBadge({ symbol, className }: WinRateBadgeProps) {
   const isPositive = primaryRate >= 50;
 
   const tooltipText = [
-    `Win Rate — ${symbol}`,
+    `Win Rate - ${symbol}`,
     `Signals: ${stats.totalSignals}`,
     ``,
     `5m:  ${stats.winRate5m.toFixed(1)}%  (${stats.wins5m}W / ${stats.losses5m}L)  avg ${stats.avgReturn5m >= 0 ? '+' : ''}${stats.avgReturn5m.toFixed(2)}%`,

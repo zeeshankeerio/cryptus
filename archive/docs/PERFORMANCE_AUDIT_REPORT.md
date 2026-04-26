@@ -1,8 +1,8 @@
-# Real-Time Screener — Performance Audit & Root Cause Analysis
+# Real-Time Screener - Performance Audit & Root Cause Analysis
 
 ## Why the Browser Hangs After a Few Minutes
 
-### Root Cause #1 — CRITICAL: `processedData` useMemo Runs on Every Tick
+### Root Cause #1 - CRITICAL: `processedData` useMemo Runs on Every Tick
 
 **Location**: `components/screener-dashboard.tsx` ~line 2610
 
@@ -19,7 +19,7 @@
 
 ---
 
-### Root Cause #2 — CRITICAL: `lastGlobalUpdate` setState on Every Tick
+### Root Cause #2 - CRITICAL: `lastGlobalUpdate` setState on Every Tick
 
 **Location**: `components/screener-dashboard.tsx` ~line 2565
 
@@ -38,7 +38,7 @@ Every 100ms, `livePrices` changes → `setLastGlobalUpdate` fires → **entire S
 
 ---
 
-### Root Cause #3 — HIGH: Alert Engine Runs `computeStrategyScore` on Every Tick for Every Symbol
+### Root Cause #3 - HIGH: Alert Engine Runs `computeStrategyScore` on Every Tick for Every Symbol
 
 **Location**: `hooks/use-alert-engine.ts` ~line 200
 
@@ -48,7 +48,7 @@ Every 100ms, `livePrices` changes → `setLastGlobalUpdate` fires → **entire S
 
 ---
 
-### Root Cause #4 — HIGH: `PriceTickEngine` Fires Individual `tick:${sym}` Events for Every Symbol in Every Batch
+### Root Cause #4 - HIGH: `PriceTickEngine` Fires Individual `tick:${sym}` Events for Every Symbol in Every Batch
 
 **Location**: `hooks/use-live-prices.ts` ~line 130
 
@@ -68,7 +68,7 @@ With 500 symbols per batch, this fires **501 CustomEvents** per flush. Each `tic
 
 ---
 
-### Root Cause #5 — HIGH: `use-derivatives-intel` `smartMoney` useMemo Runs on Every Liquidation/Whale
+### Root Cause #5 - HIGH: `use-derivatives-intel` `smartMoney` useMemo Runs on Every Liquidation/Whale
 
 **Location**: `hooks/use-derivatives-intel.ts` ~line 60
 
@@ -85,7 +85,7 @@ const smartMoney = useMemo(() => {
 
 ---
 
-### Root Cause #6 — MEDIUM: `syncStates` useEffect Runs on Every `processedData` Change
+### Root Cause #6 - MEDIUM: `syncStates` useEffect Runs on Every `processedData` Change
 
 **Location**: `components/screener-dashboard.tsx` ~line 2900
 
@@ -95,7 +95,7 @@ const smartMoney = useMemo(() => {
 
 ---
 
-### Root Cause #7 — MEDIUM: `LiveStatusIndicator` Has a 1-Second `setInterval` That Causes Re-Renders
+### Root Cause #7 - MEDIUM: `LiveStatusIndicator` Has a 1-Second `setInterval` That Causes Re-Renders
 
 **Location**: `components/screener-dashboard.tsx` (LiveStatusIndicator component)
 
@@ -105,13 +105,13 @@ const smartMoney = useMemo(() => {
 
 ---
 
-### Root Cause #8 — MEDIUM: `IntersectionObserver` Created for Every Row, Never Pooled
+### Root Cause #8 - MEDIUM: `IntersectionObserver` Created for Every Row, Never Pooled
 
 **Location**: `components/screener-dashboard.tsx` ScreenerRow component
 
 **Problem**: Each of 500 rows creates its own `IntersectionObserver`. With 500 rows, that's 500 observers. Each observer fires callbacks on scroll.
 
-**Fix**: Use a single shared `IntersectionObserver` with `observe()` per element (already the correct pattern, but the current implementation creates one observer per row which is fine — this is lower priority).
+**Fix**: Use a single shared `IntersectionObserver` with `observe()` per element (already the correct pattern, but the current implementation creates one observer per row which is fine - this is lower priority).
 
 ---
 

@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Binance Open Interest Proxy
+ * RSIQ Pro - Binance Open Interest Proxy
  * Resolves CORS issues and provides server-side batching/caching.
  * 
  * Architecture:

@@ -1,5 +1,5 @@
 /**
- * Conditional Alert Evaluation Logic — Task 6.5
+ * Conditional Alert Evaluation Logic - Task 6.5
  * Supports AND/OR logic combining up to 5 conditions.
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6
  */

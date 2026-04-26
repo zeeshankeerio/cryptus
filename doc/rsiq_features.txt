@@ -1,4 +1,4 @@
-RSIQ Pro — Complete Feature Audit & Gap Analysis
+RSIQ Pro - Complete Feature Audit & Gap Analysis
 ✅ Existing Features (38 Total)
 Real-Time Data Engine
 #	Feature	Status	Notes
@@ -26,7 +26,7 @@ Technical Intelligence (18 Indicators)
 20	Composite Strategy Score	✅
 Derivatives Intelligence (Unique)
 #	Feature	Status
-21	Smart Money Pressure Index	✅ Unique — No competitor has this
+21	Smart Money Pressure Index	✅ Unique - No competitor has this
 22	Liquidation Feed (Real-time)	✅
 23	Whale Trade Detection	✅
 24	Funding Rate Monitoring	✅
@@ -49,14 +49,14 @@ Monetization & Security
 37	Tiered entitlements (Owner/Sub/Trial/Free)	✅
 38	Feature flags (Admin-controlled)	✅
 🔴 Missing Killer Features (What Would Go Viral)
-1. Signal Narration Engine™ (UNIQUE — No Competitor Has This)
+1. Signal Narration Engine™ (UNIQUE - No Competitor Has This)
 What: Generate human-readable, institutional-grade explanations for EVERY signal. Instead of just "Strong Buy (score: 78)", show:
 
 "RSI oversold at 22.4 with bullish divergence • MACD crossed bullish • EMA9 > EMA21 • Whale accumulation detected → High-conviction buy setup"
 
 Why Viral: Users screenshot and share signal narrations on Twitter/LinkedIn. Each share = free marketing.
 
-2. Signal Win Rate Tracker (UNIQUE — Premium Feature)
+2. Signal Win Rate Tracker (UNIQUE - Premium Feature)
 What: Track signal outcomes after 5m/15m/1h. If a "Strong Buy" fires at $100, check if the price moved up 0.5%+ within the next hour. Display win rate badges: "This pattern: 73% win rate (last 30d)"
 
 Why Viral: Traders OBSESS over accuracy. Showing verifiable win rates creates trust and converts free→paid users.
@@ -83,4 +83,4 @@ One-Click Signal Sharing	🔥🔥🔥🔥	Medium	Phase 2
 Win Rate Tracker	🔥🔥🔥🔥🔥	High	Phase 3
 Heatmap Correlation	🔥🔥🔥	Medium	Phase 3
 Portfolio Risk Scanner	🔥🔥🔥🔥	High	Phase 4
-Recommendation: Implement Signal Narration Engine NOW — it's low effort, high impact, and creates shareable content that drives organic growth.
+Recommendation: Implement Signal Narration Engine NOW - it's low effort, high impact, and creates shareable content that drives organic growth.

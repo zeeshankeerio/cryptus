@@ -164,7 +164,7 @@ export const config = {
   matcher: [
     /*
      * Match all request paths except:
-     * - api/auth (Auth routes — must be excluded for better-auth)
+     * - api/auth (Auth routes - must be excluded for better-auth)
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - metadata and PWA assets (manifest, sw, robots, favicon)

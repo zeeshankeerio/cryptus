@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * RSIQ Pro — Multi-Asset Market Data Hook
+ * RSIQ Pro - Multi-Asset Market Data Hook
  *
  * Provides real-time data for non-crypto asset classes (Forex, Metals, Stocks).
  * Uses server-side Yahoo Finance proxy with configurable polling intervals.

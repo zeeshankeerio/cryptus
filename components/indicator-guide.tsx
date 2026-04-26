@@ -47,11 +47,11 @@ const INDICATORS: Indicator[] = [
       { name: 'Data source', value: 'Real-time WebSocket', description: 'Approximated client-side for sub-second precision' },
     ],
     interpretation: [
-      { condition: 'RSI ≤ 20', meaning: 'Deeply oversold — strong buy signal', color: 'text-[#39FF14]' },
-      { condition: 'RSI ≤ 30', meaning: 'Oversold — potential reversal zone', color: 'text-[#39FF14]/80' },
-      { condition: 'RSI 30–70', meaning: 'Neutral — no extreme condition', color: 'text-gray-400' },
-      { condition: 'RSI ≥ 70', meaning: 'Overbought — potential reversal zone', color: 'text-[#FF4B5C]/80' },
-      { condition: 'RSI ≥ 80', meaning: 'Deeply overbought — strong sell signal', color: 'text-[#FF4B5C]' },
+      { condition: 'RSI ≤ 20', meaning: 'Deeply oversold - strong buy signal', color: 'text-[#39FF14]' },
+      { condition: 'RSI ≤ 30', meaning: 'Oversold - potential reversal zone', color: 'text-[#39FF14]/80' },
+      { condition: 'RSI 30–70', meaning: 'Neutral - no extreme condition', color: 'text-gray-400' },
+      { condition: 'RSI ≥ 70', meaning: 'Overbought - potential reversal zone', color: 'text-[#FF4B5C]/80' },
+      { condition: 'RSI ≥ 80', meaning: 'Deeply overbought - strong sell signal', color: 'text-[#FF4B5C]' },
     ],
     usage: 'The screener computes RSI across 4 timeframes simultaneously. 1m RSI captures scalping opportunities, while 1h RSI reveals macro trends. RSI-based signals use a fallback chain: 15m → 5m → 1m based on data availability.',
   },
@@ -74,8 +74,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Lookback', value: '40', description: 'Comparison window for swing detection' },
     ],
     interpretation: [
-      { condition: 'Bullish Divergence', meaning: 'Exhausted selling pressure — potential upward reversal', color: 'text-[#39FF14]' },
-      { condition: 'Bearish Divergence', meaning: 'Exhausted buying pressure — potential downward reversal', color: 'text-[#FF4B5C]' },
+      { condition: 'Bullish Divergence', meaning: 'Exhausted selling pressure - potential upward reversal', color: 'text-[#39FF14]' },
+      { condition: 'Bearish Divergence', meaning: 'Exhausted buying pressure - potential downward reversal', color: 'text-[#FF4B5C]' },
     ],
     usage: 'Divergence is weighted heavily (1.5x) in the strategy score. It is most effective when confirmed by an RSI reading in oversold or overbought territory. Look for divergence icons (▲/▼) in the screener table.',
   },
@@ -99,8 +99,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Timeframe', value: '15m candles', description: 'Aggregated from 1-minute klines' },
     ],
     interpretation: [
-      { condition: '▲ Bullish', meaning: 'Fast EMA above slow EMA — uptrend', color: 'text-[#39FF14]' },
-      { condition: '▼ Bearish', meaning: 'Fast EMA below slow EMA — downtrend', color: 'text-[#FF4B5C]' },
+      { condition: '▲ Bullish', meaning: 'Fast EMA above slow EMA - uptrend', color: 'text-[#39FF14]' },
+      { condition: '▼ Bearish', meaning: 'Fast EMA below slow EMA - downtrend', color: 'text-[#FF4B5C]' },
     ],
     usage: 'EMA Cross provides trend context. In the composite strategy, a current bullish trend contributes a steady +60 points to the buy score, while a bearish trend subtracts -60.',
   },
@@ -123,10 +123,10 @@ const INDICATORS: Indicator[] = [
       { name: 'Histogram Scale', value: 'Price %', description: 'Native normalization for cross-asset fairness' },
     ],
     interpretation: [
-      { condition: 'Histogram > 0', meaning: 'Bullish momentum — trend accelerating upwards', color: 'text-[#39FF14]' },
-      { condition: 'Histogram < 0', meaning: 'Bearish momentum — trend accelerating downwards', color: 'text-[#FF4B5C]' },
+      { condition: 'Histogram > 0', meaning: 'Bullish momentum - trend accelerating upwards', color: 'text-[#39FF14]' },
+      { condition: 'Histogram < 0', meaning: 'Bearish momentum - trend accelerating downwards', color: 'text-[#FF4B5C]' },
     ],
-    usage: 'Normalization ensures that a $1.0 fluctuation in BTC (0.001%) doesn\'t generate a stronger signal than a $1.0 fluctuation in ETH (0.04%). This is critical for scanning 500+ diverse pairs. If MACD is globally disabled, the "Histogram" column will show "—" and yield 0 weight to the final Strategy Score.',
+    usage: 'Normalization ensures that a $1.0 fluctuation in BTC (0.001%) doesn\'t generate a stronger signal than a $1.0 fluctuation in ETH (0.04%). This is critical for scanning 500+ diverse pairs. If MACD is globally disabled, the "Histogram" column will show "-" and yield 0 weight to the final Strategy Score.',
   },
   {
     id: 'bollinger',
@@ -146,8 +146,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Std Dev', value: '2.0', description: 'Band width multiplier' },
     ],
     interpretation: [
-      { condition: 'Position ≤ 0.10', meaning: 'Touch lower band — strongly oversold', color: 'text-emerald-400' },
-      { condition: 'Position ≥ 0.90', meaning: 'Touch upper band — strongly overbought', color: 'text-red-400' },
+      { condition: 'Position ≤ 0.10', meaning: 'Touch lower band - strongly oversold', color: 'text-emerald-400' },
+      { condition: 'Position ≥ 0.90', meaning: 'Touch upper band - strongly overbought', color: 'text-red-400' },
     ],
     usage: 'Bollinger "Squeezes" often precede massive breakouts. Use the position metric to identify mean-reversion opportunities during ranging markets.',
   },
@@ -170,9 +170,9 @@ const INDICATORS: Indicator[] = [
       { name: 'Threshold', value: '25', description: 'Minimum level to consider the market "trending"' },
     ],
     interpretation: [
-      { condition: 'ADX > 25', meaning: 'Strong trend in progress — momentum strategies work best', color: 'text-[#39FF14]' },
-      { condition: 'ADX < 20', meaning: 'Weak trend / Ranging — avoid breakout strategies', color: 'text-slate-500' },
-      { condition: 'ADX > 50', meaning: 'Extremely strong trend — caution for blow-off tops', color: 'text-amber-400' },
+      { condition: 'ADX > 25', meaning: 'Strong trend in progress - momentum strategies work best', color: 'text-[#39FF14]' },
+      { condition: 'ADX < 20', meaning: 'Weak trend / Ranging - avoid breakout strategies', color: 'text-slate-500' },
+      { condition: 'ADX > 50', meaning: 'Extremely strong trend - caution for blow-off tops', color: 'text-amber-400' },
     ],
     usage: 'ADX is non-directional. A high ADX in a bearish EMA trend confirms a powerful downtrend. Use it to filter out "fakeout" moves in low-volatility environments.',
   },
@@ -191,8 +191,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Period', value: '14', description: 'Standard lookback' },
     ],
     interpretation: [
-      { condition: 'High ATR', meaning: 'Expanding volatility — widen stop-losses', color: 'text-[#39FF14]' },
-      { condition: 'Low ATR', meaning: 'Consolidating — market is "quiet" before potential move', color: 'text-slate-500' },
+      { condition: 'High ATR', meaning: 'Expanding volatility - widen stop-losses', color: 'text-[#39FF14]' },
+      { condition: 'Low ATR', meaning: 'Consolidating - market is "quiet" before potential move', color: 'text-slate-500' },
     ],
     usage: 'Professional traders often set their stop-losses at 1.5x or 2.0x ATR from their entry price to ensure they are not stopped out by normal market noise.',
   },
@@ -211,11 +211,11 @@ const INDICATORS: Indicator[] = [
     parameters: [
       { name: 'Baseline', value: '20 candles', description: 'The "Normal" speed of the market' },
       { name: 'Warning', value: '2.5×', description: 'Price is moving 2.5x faster than normal' },
-      { name: 'Alert', value: '5.0×', description: 'Extreme speed — often indicates a major breakout' },
+      { name: 'Alert', value: '5.0×', description: 'Extreme speed - often indicates a major breakout' },
     ],
     interpretation: [
-      { condition: 'Ratio ≥ 2.5×', meaning: 'The market is waking up — price is stretching faster than usual.', color: 'text-amber-400' },
-      { condition: 'Ratio ≥ 5.0×', meaning: 'High Intensity — a major "Power Move" is happening. Great for momentum traders.', color: 'text-amber-500 font-bold' },
+      { condition: 'Ratio ≥ 2.5×', meaning: 'The market is waking up - price is stretching faster than usual.', color: 'text-amber-400' },
+      { condition: 'Ratio ≥ 5.0×', meaning: 'High Intensity - a major "Power Move" is happening. Great for momentum traders.', color: 'text-amber-500 font-bold' },
     ],
     usage: 'Use this to catch "Pumps" or "Dumps" early. If you see a green flash (🟢) with a high ratio, it means buyers are aggressive. If you see red (🔴), sellers are in control. It is updated every second via "Live Pulse" technology, giving you an edge over traders using static charts. Requires the "Volatility Monitor" feature flag to be active.',
   },
@@ -234,8 +234,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Reset', value: 'UTC 00:00', description: 'Daily session restart' },
     ],
     interpretation: [
-      { condition: 'Price < VWAP (-2%)', meaning: 'Trading at a discount — bullish accumulation', color: 'text-[#39FF14]' },
-      { condition: 'Price > VWAP (+2%)', meaning: 'Trading at a premium — bearish distribution', color: 'text-[#FF4B5C]' },
+      { condition: 'Price < VWAP (-2%)', meaning: 'Trading at a discount - bullish accumulation', color: 'text-[#39FF14]' },
+      { condition: 'Price > VWAP (+2%)', meaning: 'Trading at a premium - bearish distribution', color: 'text-[#FF4B5C]' },
     ],
     usage: 'Price trading significantly below VWAP in an uptrend is a high-probability "dip buying" setup.',
   },
@@ -277,8 +277,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Smooth K/D', value: '3/3', description: 'Smoothing for noise reduction' },
     ],
     interpretation: [
-      { condition: 'Stoch K < 20', meaning: 'Oversold RSI momentum — high probability bounce zone', color: 'text-[#39FF14]' },
-      { condition: 'Stoch K > 80', meaning: 'Overbought RSI momentum — high probability pull-back', color: 'text-[#FF4B5C]' },
+      { condition: 'Stoch K < 20', meaning: 'Oversold RSI momentum - high probability bounce zone', color: 'text-[#39FF14]' },
+      { condition: 'Stoch K > 80', meaning: 'Overbought RSI momentum - high probability pull-back', color: 'text-[#FF4B5C]' },
       { condition: 'K Cross above D', meaning: 'Bullish momentum shift within the RSI band', color: 'text-[#39FF14]/70' },
     ],
     usage: 'Stoch RSI is much more sensitive than standard RSI. It often reaches extreme 0 or 100 values while normal RSI is still at 40 or 60. Use it to time entries within a larger RSI trend.',
@@ -322,7 +322,7 @@ const INDICATORS: Indicator[] = [
     ],
     interpretation: [
       { condition: 'Score ≥ +25', meaning: 'Bullish Alignment', color: 'text-[#39FF14]' },
-      { condition: 'Score ≥ +60', meaning: 'Strong Bullish Alignment — High Conviction', color: 'text-[#39FF14] font-bold' },
+      { condition: 'Score ≥ +60', meaning: 'Strong Bullish Alignment - High Conviction', color: 'text-[#39FF14] font-bold' },
     ],
     usage: 'Confluence filters out "false signals" where one timeframe is bullish but the rest are bearish. It is weighted heavily (2.0x) in the final strategy score. If Confluence is globally disabled, the dashboard hides these alignment metrics to reduce UI noise.',
   },
@@ -346,8 +346,8 @@ const INDICATORS: Indicator[] = [
       { name: 'Divergence', value: '1.5x', description: 'Reversal confirmation' },
     ],
     interpretation: [
-      { condition: 'Score ≥ +50', meaning: 'Strong Buy — Full System Alignment', color: 'text-[#39FF14]' },
-      { condition: 'Score ≤ -50', meaning: 'Strong Sell — Full System Alignment', color: 'text-[#FF4B5C]' },
+      { condition: 'Score ≥ +50', meaning: 'Strong Buy - Full System Alignment', color: 'text-[#39FF14]' },
+      { condition: 'Score ≤ -50', meaning: 'Strong Sell - Full System Alignment', color: 'text-[#FF4B5C]' },
     ],
     usage: 'Sort the screener by Strategy Score to find assets where multiple deep technical systems are in agreement. Note: Disabling global indicator flags (like RSI or EMA) instantly removes them from the Score Calculation, allowing you to build your own custom weighted environment.',
   },
@@ -653,7 +653,7 @@ export default function IndicatorGuide() {
                     <span className="text-[#39FF14]">•</span> <strong>Strategy Weighting:</strong> Disabled indicators are excluded from the Score.
                   </li>
                   <li className="text-[11px] text-gray-300 flex items-center gap-2">
-                    <span className="text-[#39FF14]">•</span> <strong>Placeholder Mode:</strong> Disabled indicators show a steady "—" instead of zero, allowing you to instantly spot which metrics are currently inactive.
+                    <span className="text-[#39FF14]">•</span> <strong>Placeholder Mode:</strong> Disabled indicators show a steady "-" instead of zero, allowing you to instantly spot which metrics are currently inactive.
                   </li>
                   <li className="text-[11px] text-gray-300 flex items-center gap-2">
                     <span className="text-[#39FF14]">•</span> <strong>Alert Filtering:</strong> Alerts only trigger for active indicators. Disabling an indicator globally silences all related push notifications.
@@ -692,7 +692,7 @@ export default function IndicatorGuide() {
                 <p className="text-[11px] text-gray-400">Highly precise mode. Tags only appear for coins with specific custom thresholds OR when "Extreme RSI Mode" is globally active. No 70/30 fallback.</p>
               </div>
               <div className="flex items-center justify-between p-2 rounded-lg bg-gray-500/10 border border-gray-500/20">
-                <span className="text-gray-400">Neutral (—)</span>
+                <span className="text-gray-400">Neutral (-)</span>
                 <span className="text-gray-400 text-xs">Standard State</span>
               </div>
             </div>

@@ -1,5 +1,5 @@
 /**
- * Health Check Endpoint — Task 12.6
+ * Health Check Endpoint - Task 12.6
  * GET /api/health
  * Returns system health status, database connectivity, VAPID status, and metrics.
  * Requirements: 11.6

@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Market Regime Classification Engine
+ * RSIQ Pro - Market Regime Classification Engine
  * Copyright © 2024-2026 Mindscape Analytics LLC. All rights reserved.
  *
  * Classifies current market conditions into one of four regimes:
@@ -112,7 +112,7 @@ export function classifyRegime(params: {
     return {
       regime: 'volatile',
       confidence: Math.round(confidence),
-      details: `ATR ${atrRatio.toFixed(1)}× above average, ADX ${adx.toFixed(0)} (no trend) — high chop risk`,
+      details: `ATR ${atrRatio.toFixed(1)}× above average, ADX ${adx.toFixed(0)} (no trend) - high chop risk`,
     };
   }
 
@@ -130,7 +130,7 @@ export function classifyRegime(params: {
 
   // ── Ranging Regime (default) ──
   // Low ADX + potentially narrow BB
-  const bbDetail = bbRatio < 0.8 ? ' (BB squeezing — breakout may be imminent)' : '';
+  const bbDetail = bbRatio < 0.8 ? ' (BB squeezing - breakout may be imminent)' : '';
   const confidence = Math.min(80, 40 + (20 - adx) * 2 + (bbRatio < 1.0 ? 10 : 0));
   return {
     regime: 'ranging',

@@ -29,7 +29,7 @@ function computeHysteresis(overboughtThreshold: number, oversoldThreshold: numbe
 }
 
 /**
- * Determine RSI zone with hysteresis — matches the foreground/worker evaluator exactly.
+ * Determine RSI zone with hysteresis - matches the foreground/worker evaluator exactly.
  */
 function getZoneWithHysteresis(
   val: number | null,
@@ -232,7 +232,7 @@ async function handleCronRequest(request: Request) {
           const isFirstSeen = previousZone === undefined || previousZone === 'NEUTRAL';
           
           if (isFirstSeen) {
-            // Check Cooldown (uses normalized labels now — matches foreground)
+            // Check Cooldown (uses normalized labels now - matches foreground)
             const cooldownKey = `${config.symbol}-${tf.label}`;
             const tenantCooldownKey = `${userId}:${config.symbol}-${tf.label}`;
             if (cooldownMap.has(tenantCooldownKey) || cooldownMap.has(cooldownKey)) {

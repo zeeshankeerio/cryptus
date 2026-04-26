@@ -1,5 +1,5 @@
 /**
- * Bulk Configuration Operations — Task 10.4
+ * Bulk Configuration Operations - Task 10.4
  * POST /api/config/bulk
  * Requirements: 10.2, 10.3, 10.5, 10.6
  *
@@ -190,7 +190,7 @@ export async function POST(request: Request) {
         }
       });
     } catch (txErr: any) {
-      // Transaction failed — report as partial failure (Requirement 10.6)
+      // Transaction failed - report as partial failure (Requirement 10.6)
       errors.push(txErr.message ?? 'Transaction failed');
       return NextResponse.json({
         success: false,

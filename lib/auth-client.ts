@@ -4,7 +4,7 @@ import { createAuthClient } from "better-auth/react";
 import { stripeClient } from "@better-auth/stripe/client";
 
 function getAuthBaseURL(): string {
-  // Client-side: always use the current browser origin — this is always correct
+  // Client-side: always use the current browser origin - this is always correct
   if (typeof window !== "undefined") return window.location.origin;
   // Server-side (SSR): use env vars only, no hardcoded domains
   return (

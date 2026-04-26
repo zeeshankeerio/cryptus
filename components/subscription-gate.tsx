@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * RSIQ Pro — Subscription Gate
+ * RSIQ Pro - Subscription Gate
  * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
  *
  * Protects the terminal with auth + subscription verification.
@@ -46,7 +46,7 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
       return () => clearTimeout(timer);
     }
 
-    // All retries exhausted — redirect to login
+    // All retries exhausted - redirect to login
     hasRedirected.current = true;
     router.replace("/login");
   }, [session.isPending, session.data, sessionRetries, router]);

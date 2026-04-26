@@ -1,5 +1,5 @@
 /**
- * Apply Template to Symbols — Task 10.2
+ * Apply Template to Symbols - Task 10.2
  * POST /api/templates/:id/apply
  * Body: { symbols: string[], exchange?: string }
  * Requirements: 7.7, 10.3
@@ -33,7 +33,7 @@ export async function POST(
       return NextResponse.json({ error: 'Template not found' }, { status: 404 });
     }
 
-    // Apply template to all symbols in a single transaction — Requirement 10.3
+    // Apply template to all symbols in a single transaction - Requirement 10.3
     const results = await prisma.$transaction(
       symbols.map((symbol) =>
         prisma.coinConfig.upsert({

@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Strategy Scoring Unit Tests
+ * RSIQ Pro - Strategy Scoring Unit Tests
  * 
  * Tests for the most critical function in the system: computeStrategyScore().
  * Each test validates a specific scoring behavior documented in the gap analysis.
@@ -170,7 +170,7 @@ describe('computeStrategyScore', () => {
   });
 
   it('uses Forex-specific RSI zones (tighter: 35/65)', () => {
-    // RSI at 32 — this is oversold in Forex (zone: 35) but not in Crypto (zone: 30)
+    // RSI at 32 - this is oversold in Forex (zone: 35) but not in Crypto (zone: 30)
     const forexResult = computeStrategyScore(baseParams({
       rsi15m: 32, market: 'Forex',
       macdHistogram: 1, emaCross: 'bullish', adx: 25,

@@ -82,21 +82,32 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
   const [smartMoney, setSmartMoney] = useState<Map<string, SmartMoneyPressure>>(new Map());
 
   useEffect(() => {
-    if (!enabled || fundingRates.size === 0) {
+    // FIX: Don't wait for funding rates - calculate with whatever data is available
+    if (!enabled) {
       setSmartMoney(new Map());
       return;
     }
     if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);
     smartMoneyTimerRef.current = setTimeout(() => {
-      const result = computeAllSmartMoney(
-        Array.from(symbols),
-        fundingRates,
-        liquidations,
-        whaleAlerts,
-        orderFlow
-      );
-      setSmartMoney(result);
-    }, 2000); // Recompute at most every 2s
+      try {
+        const result = computeAllSmartMoney(
+          Array.from(symbols),
+          fundingRates,
+          liquidations,
+          whaleAlerts,
+          orderFlow
+        );
+        setSmartMoney(result);
+        
+        // DEBUG: Log calculation results (development only)
+        if (process.env.NODE_ENV === 'development' && result.size > 0) {
+          console.log('[SmartMoney] Calculated scores:', result.size, 'symbols');
+        }
+      } catch (error) {
+        console.error('[SmartMoney] Calculation failed:', error);
+        // Don't clear existing scores on error - keep last known good state
+      }
+    }, 500); // FIX: Reduced from 2000ms to 500ms for faster updates
     return () => {
       if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);
     };

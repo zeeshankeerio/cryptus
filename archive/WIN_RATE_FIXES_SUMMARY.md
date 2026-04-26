@@ -10,7 +10,7 @@ Successfully applied **6 critical improvements** to the Win Rate tracking system
 
 ### 1. **CRITICAL: Decoupled Signal Recording from Alert Configuration**
 
-**Problem:** Signals only recorded when `alertOnStrategyShift` was enabled, causing win rate badges to show "—" even when signals were firing.
+**Problem:** Signals only recorded when `alertOnStrategyShift` was enabled, causing win rate badges to show "-" even when signals were firing.
 
 **Solution Applied:**
 - ❌ **REMOVED:** Conditional `if (config?.alertOnStrategyShift)` wrapper around signal recording

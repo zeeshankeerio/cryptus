@@ -1,11 +1,11 @@
 /**
- * RSIQ Pro — Multi-Asset Class Configuration
+ * RSIQ Pro - Multi-Asset Class Configuration
  *
  * Defines the asset classes, symbols, and data source routing for:
- * - Crypto (Binance/Bybit WebSocket — real-time)
- * - Forex (Yahoo Finance proxy — 5s polling)
- * - Metals (Bybit linear + Yahoo Finance — hybrid)
- * - Stocks (Yahoo Finance proxy — 5s polling)
+ * - Crypto (Binance/Bybit WebSocket - real-time)
+ * - Forex (Yahoo Finance proxy - 5s polling)
+ * - Metals (Bybit linear + Yahoo Finance - hybrid)
+ * - Stocks (Yahoo Finance proxy - 5s polling)
  */
 
 // ── Asset Class Definitions ──────────────────────────────────────

@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 60; // Allow up to 60s for 500-coin fetches on Vercel
 export const preferredRegion = 'fra1'; // Non-US region to avoid Binance/Bybit IP blocks
 
-// ── Accelerated Data Flow Caches — eliminates DB thrashing on high-frequency recalibrations ──
+// ── Accelerated Data Flow Caches - eliminates DB thrashing on high-frequency recalibrations ──
 const SESSION_CACHE_TTL = 30_000;
 const sessionCache = new Map<string, { data: any; expiresAt: number }>();
 
@@ -60,7 +60,7 @@ export async function GET(request: Request) {
     const prioritySymbols = searchParams.get('prioritySymbols')?.split(',').filter(Boolean) ?? [];
     const tradingStyle = (searchParams.get('tradingStyle') as TradingStyle) || 'intraday';
 
-    // Session cache lookup — reduces Prisma load on 5-second pollers
+    // Session cache lookup - reduces Prisma load on 5-second pollers
     const sessionId = request.headers.get('cookie') ?? 'anon';
     const cachedSession = sessionCache.get(sessionId);
     const now = Date.now();

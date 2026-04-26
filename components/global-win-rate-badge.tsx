@@ -7,7 +7,7 @@ import { useWinRateContext } from './win-rate-context';
 import { cn } from '@/lib/utils';
 
 /**
- * Global Win Rate Badge — system-wide signal accuracy display.
+ * Global Win Rate Badge - system-wide signal accuracy display.
  */
 
 export function GlobalWinRateBadge() {

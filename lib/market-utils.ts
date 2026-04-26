@@ -15,7 +15,7 @@ export function getMarketType(symbol: string): ScreenerEntry['market'] {
   
   // Metal Detection (Yahoo + Binance/Bybit linear + Energy futures)
   // All energy commodities (oil, gas) are classified as 'Metal' for RSI zone calibration
-  // (Metal zones: 22/32/68/78 — appropriate for low-volatility commodity futures)
+  // (Metal zones: 22/32/68/78 - appropriate for low-volatility commodity futures)
   const isMetal = METALS_SYMBOLS.some(m => m.yahoo === s || m.exchange === s) || 
                   [
                     // Gold tokenized on-chain

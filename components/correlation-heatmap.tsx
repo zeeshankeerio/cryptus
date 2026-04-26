@@ -1,6 +1,6 @@
 'use client';
 /**
- * RSIQ Pro — Correlation Heatmap Panel
+ * RSIQ Pro - Correlation Heatmap Panel
  * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
  *
  * Renders an NxN heatmap matrix showing real-time Pearson correlations
@@ -164,7 +164,7 @@ export function CorrelationHeatmap({ open, onClose, data }: CorrelationHeatmapPr
                                   )}
                                   title={isDiagonal ? `${getSymbolAlias(rowSym)} Identity` : `${getSymbolAlias(rowSym)} ↔ ${getSymbolAlias(matrix.symbols[j])}: ${r.toFixed(3)}`}
                                 >
-                                  {isDiagonal ? '—' : r.toFixed(2)}
+                                  {isDiagonal ? '-' : r.toFixed(2)}
                                   {!isDiagonal && Math.abs(r) > 0.8 && (
                                     <div className="absolute top-0.5 right-0.5 w-1 h-1 rounded-full bg-white/20 animate-pulse" />
                                   )}

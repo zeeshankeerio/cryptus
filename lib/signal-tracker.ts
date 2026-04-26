@@ -65,7 +65,7 @@ const CHECK_INTERVALS = {
 } as const;
 
 // Win threshold: price moved in signal direction by at least 0.5%
-// (0.3% was too tight — barely covers spreads + slippage in real trading)
+// (0.3% was too tight - barely covers spreads + slippage in real trading)
 const WIN_THRESHOLD_PCT = 0.005;
 
 // ── In-memory cache to avoid reading localStorage on every render ──
@@ -152,7 +152,7 @@ export function recordSignal(
 /**
  * Check and update outcomes for all unsettled snapshots.
  * Call this periodically with current prices.
- * Uses the price at the FIRST evaluation after the interval — accurate.
+ * Uses the price at the FIRST evaluation after the interval - accurate.
  */
 export function evaluateOutcomes(
   currentPrices: Map<string, number>,
@@ -192,7 +192,7 @@ export function evaluateOutcomes(
       changed = true;
     }
 
-    // 5m outcome — Evaluated at first check after 5m OR if MFE hits threshold
+    // 5m outcome - Evaluated at first check after 5m OR if MFE hits threshold
     if (snap.outcome5m === undefined && (elapsed >= CHECK_INTERVALS['5m'] || snap.maxFavExcursion >= threshold)) {
       snap.outcome5m = currentPrice;
       snap.win5m = snap.maxFavExcursion >= threshold;
@@ -232,7 +232,7 @@ export function evaluateOutcomes(
 
 /**
  * Compute win rate statistics for a specific symbol or all symbols.
- * Uses the in-memory cache — safe to call frequently.
+ * Uses the in-memory cache - safe to call frequently.
  */
 export function computeWinRateStats(symbol?: string): WinRateStats[] {
   const snapshots = loadSnapshots();
@@ -294,7 +294,7 @@ export function computeWinRateStats(symbol?: string): WinRateStats[] {
 
 /**
  * Get the global summary across all symbols.
- * Uses the in-memory cache — safe to call on every render.
+ * Uses the in-memory cache - safe to call on every render.
  */
 export function getGlobalWinRate(): {
   winRate5m: number;

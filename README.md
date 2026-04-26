@@ -1,4 +1,4 @@
-# RSIQ Pro — Crypto RSI Market Screener
+# RSIQ Pro - Crypto RSI Market Screener
 
 Real-time multi-pair RSI screener with live WebSocket price feeds, multi-exchange support, alert engine, and PWA capabilities.
 

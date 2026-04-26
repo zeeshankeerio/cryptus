@@ -97,7 +97,7 @@ export const FundingRateCellWithTooltip = memo(function FundingRateCellWithToolt
   compact = true,
   showTooltip = true
 }: FundingRateCellWithTooltipProps) {
-  // Delegate entirely to FundingRateCell — the title tooltip is built in
+  // Delegate entirely to FundingRateCell - the title tooltip is built in
   return <FundingRateCell data={data} className={className} compact={compact} />;
 });
 

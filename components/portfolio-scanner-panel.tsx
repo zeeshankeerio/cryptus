@@ -1,6 +1,6 @@
 'use client';
 /**
- * RSIQ Pro — Portfolio Risk Scanner Panel
+ * RSIQ Pro - Portfolio Risk Scanner Panel
  * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
  *
  * Premium institutional feature that lets users input positions and receive
@@ -183,7 +183,7 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
                     },
                     { 
                       label: 'Aggregate RSI', 
-                      value: report.portfolioRsi !== null ? report.portfolioRsi.toFixed(1) : '—',
+                      value: report.portfolioRsi !== null ? report.portfolioRsi.toFixed(1) : '-',
                       color: report.portfolioRsi === null ? 'text-slate-300' : report.portfolioRsi >= 70 ? 'text-rose-500' : report.portfolioRsi <= 30 ? 'text-[#39FF14]' : 'text-slate-300'
                     },
                     { label: 'HHI Index', value: report.concentrationHhi, labelExtra: 'Concentration', color: 'text-slate-400' }
@@ -304,7 +304,7 @@ export function PortfolioScannerPanel({ open, onClose, data }: PortfolioScannerP
                               pos.rsi >= 70 ? 'text-rose-500' :
                               pos.rsi <= 30 ? 'text-[#39FF14]' : 'text-slate-500'
                             )}>
-                              {pos.rsi !== null ? pos.rsi.toFixed(1) : '—'}
+                              {pos.rsi !== null ? pos.rsi.toFixed(1) : '-'}
                             </td>
                             <td className="px-6 py-5">
                               <button

@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Hybrid Multi-Asset Market Data API
+ * RSIQ Pro - Hybrid Multi-Asset Market Data API
  * Copyright © 2024–2026 Mindscape Analytics LLC. All rights reserved.
  * https://mindscapeanalytics.com/
  *
@@ -13,7 +13,7 @@
  *    Provides: 1m historical candles (2 hours) for technicals (RSI/EMA).
  * 3. Fallback: query2.finance.yahoo.com if query1 fails (geo-redundancy).
  *
- * Security: Session-gated — requires authenticated user with active subscription or trial.
+ * Security: Session-gated - requires authenticated user with active subscription or trial.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
     const { user } = await getSessionUser();
     userId = user?.id ?? null;
   } catch {
-    // Auth failure is non-fatal — anonymous access with lower limits
+    // Auth failure is non-fatal - anonymous access with lower limits
   }
 
   // ── 2. Rate Limit (authenticated users get higher burst) ──
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
     // ── 4. Fetch Batch Quotes (v7) with fallback ──
     const quotePath = `/v7/finance/quote?symbols=${encodeURIComponent(symbols.join(','))}&fields=regularMarketPrice,regularMarketOpen,regularMarketPreviousClose,regularMarketChange,regularMarketChangePercent,regularMarketVolume,regularMarketDayHigh,regularMarketDayLow,fiftyDayAverage,twoHundredDayAverage,shortName,longName,marketState,currency`;
 
-    // ── 5. Fetch Charts for Technicals (v8) — Parallelized ──
+    // ── 5. Fetch Charts for Technicals (v8) - Parallelized ──
     const techRequired = symbols.slice(0, 30);
 
     const [quoteResponse, ...chartResults] = await Promise.all([

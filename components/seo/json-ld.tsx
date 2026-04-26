@@ -1,7 +1,7 @@
 import React from 'react';
 
 /**
- * RSIQ Pro — Comprehensive JSON-LD Structured Data
+ * RSIQ Pro - Comprehensive JSON-LD Structured Data
  *
  * Covers:
  * - SoftwareApplication (Google App indexing)
@@ -40,7 +40,7 @@ export function JsonLd() {
       'Funding rate heatmap',
       'Open Interest tracking',
       'Multi-timeframe RSI (1m, 5m, 15m, 1h)',
-      'PWA — works offline on mobile',
+      'PWA - works offline on mobile',
       'Push notifications for extreme RSI signals',
     ],
     aggregateRating: {
@@ -119,7 +119,7 @@ export function JsonLd() {
     },
     image: OG,
     description:
-      'Enterprise-grade AI & Financial Engineering for Institutional Trading Environments. Creators of RSIQ Pro — the institutional crypto terminal.',
+      'Enterprise-grade AI & Financial Engineering for Institutional Trading Environments. Creators of RSIQ Pro - the institutional crypto terminal.',
     foundingDate: '2024',
     sameAs: [
       'https://twitter.com/MindscapeAL',

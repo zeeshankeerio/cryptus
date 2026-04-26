@@ -1,5 +1,5 @@
 /**
- * RSIQ Pro — Daily SEO Content Agent
+ * RSIQ Pro - Daily SEO Content Agent
  *
  * ⚠️ DEPRECATED: This route is no longer used for automatic SEO updates
  * SEO content is now generated on-demand via ISR (Incremental Static Regeneration)
@@ -64,13 +64,13 @@ function generateSocialSnippets(symbols: string[]): string[] {
 
   return [
     // X / Twitter thread starter
-    `📊 RSIQ Pro Daily Scan — ${date}\n\nInstitutional RSI sweep across ${symbols.length}+ pairs.\nTop movers: ${top5.join(', ')}\n\n🔍 Full analysis: ${BASE_URL}/terminal\n\n#Crypto #RSI #TradingSignals #Binance #Bybit`,
+    `📊 RSIQ Pro Daily Scan - ${date}\n\nInstitutional RSI sweep across ${symbols.length}+ pairs.\nTop movers: ${top5.join(', ')}\n\n🔍 Full analysis: ${BASE_URL}/terminal\n\n#Crypto #RSI #TradingSignals #Binance #Bybit`,
 
     // Telegram channel post
-    `🚨 *RSIQ Pro Market Intelligence* — ${date}\n\n📈 Scanning ${symbols.length}+ pairs for institutional signals\n🐋 Whale radar active\n💰 Funding rate heatmap live\n⚡ Liquidation feed streaming\n\n👉 [Open Terminal](${BASE_URL}/terminal)\n\n_Powered by Mindscape Analytics_`,
+    `🚨 *RSIQ Pro Market Intelligence* - ${date}\n\n📈 Scanning ${symbols.length}+ pairs for institutional signals\n🐋 Whale radar active\n💰 Funding rate heatmap live\n⚡ Liquidation feed streaming\n\n👉 [Open Terminal](${BASE_URL}/terminal)\n\n_Powered by Mindscape Analytics_`,
 
     // LinkedIn post
-    `Market Intelligence Update — ${date}\n\nRSIQ Pro is scanning ${symbols.length}+ crypto pairs in real-time, tracking:\n• Multi-timeframe RSI (1m, 5m, 15m, 1h)\n• Institutional order flow\n• Whale trade detection ($100K+)\n• Live liquidation feed\n• Smart Money Pressure Index\n\nBuilt for traders who need institutional-grade data without institutional costs.\n\n🔗 ${BASE_URL}\n\n#CryptoTrading #TradingTools #MarketAnalysis #Fintech`,
+    `Market Intelligence Update - ${date}\n\nRSIQ Pro is scanning ${symbols.length}+ crypto pairs in real-time, tracking:\n• Multi-timeframe RSI (1m, 5m, 15m, 1h)\n• Institutional order flow\n• Whale trade detection ($100K+)\n• Live liquidation feed\n• Smart Money Pressure Index\n\nBuilt for traders who need institutional-grade data without institutional costs.\n\n🔗 ${BASE_URL}\n\n#CryptoTrading #TradingTools #MarketAnalysis #Fintech`,
   ];
 }
 

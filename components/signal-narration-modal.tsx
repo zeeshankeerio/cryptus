@@ -210,7 +210,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 10 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[98%] max-w-6xl max-h-[90vh] overflow-hidden bg-[#070B14] border border-white/10 rounded-2xl shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] z-50 flex flex-col"
+            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[98%] max-w-[90rem] max-h-[90vh] overflow-hidden bg-[#070B14] border border-white/10 rounded-2xl shadow-[0_0_80px_-20px_rgba(0,0,0,0.8)] z-50 flex flex-col"
           >
             {/* ── Institutional Surveillance Ribbon (Unified Header) ── */}
             <div className="relative overflow-hidden border-b border-white/10 bg-gradient-to-r from-blue-500/5 via-transparent to-emerald-500/5 px-3 sm:px-4 lg:px-5 py-2 sm:py-3 lg:py-4">
@@ -373,7 +373,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
                   </h3>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                   {narration?.reasons.map((reason, idx) => {
                     const isSMC = reason.includes('🏛️') || reason.includes('⚡');
                     return (
@@ -406,7 +406,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
                 </div>
 
                 {/* Data Surveillance Matrix (NEW - Institutional Alignment) */}
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 border-t border-white/5 pt-4">
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 border-t border-white/5 pt-4">
                   {/* RSI Spectrum Heatmap */}
                   <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3">
                     <h4 className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2.5 flex items-center gap-1.5">

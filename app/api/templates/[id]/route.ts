@@ -1,7 +1,7 @@
 /**
- * Alert Template by ID — Task 10.2
+ * Alert Template by ID - Task 10.2
  * DELETE and PATCH for individual templates.
- * POST /api/templates/:id/apply — apply template to symbols.
+ * POST /api/templates/:id/apply - apply template to symbols.
  */
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
