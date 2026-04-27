@@ -11,7 +11,8 @@ import { calculateRsiSeries } from './rsi';
 import { LRUCache } from './lru-cache';
 import { RSI_DEFAULTS, INDICATOR_DEFAULTS, STRATEGY_DEFAULTS, RSI_ZONES, TF_WEIGHTS, type TradingStyle } from './defaults';
 import { getRegimeWeights, type MarketRegime } from './market-regime';
-import { groupCorrelatedIndicators, applyDiminishingReturns, shouldSuppressSignal } from './signal-helpers';
+import { groupCorrelatedIndicators, applyDiminishingReturns, shouldSuppressSignal, calculateSmartMoneyBoost, type SmartMoneyComponents } from './signal-helpers';
+import { validateWithSuperSignal } from './signal-validation';
 import { SIGNAL_FEATURES } from './feature-flags';
 
 function round(n: number): number {
@@ -684,6 +685,10 @@ export function computeStrategyScore(params: {
   cci?: number | null;
   /** Smart Money Pressure Index score (-100 to +100). When significant, influences strategy direction. */
   smartMoneyScore?: number | null;
+  /** Smart Money component breakdown for component-aware boost calculation */
+  smartMoneyComponents?: SmartMoneyComponents;
+  /** Super Signal score for cross-validation (-100 to +100) */
+  superSignalScore?: number | null;
   /** Hidden divergence signal (continuation patterns). */
   hiddenDivergence?: 'hidden-bullish' | 'hidden-bearish' | 'none';
   /** Market regime for dynamic weight adjustment. */
@@ -1115,10 +1120,26 @@ export function computeStrategyScore(params: {
 
     if (scoreDirection !== 'neutral') {
       if (smDirection === scoreDirection) {
-        // Confirmation: Smart Money agrees with technical signal → boost
-        score *= 1.15;
-        factors += 1.5;
-        reasons.push(`🐋 Smart Money confirms (${params.smartMoneyScore > 0 ? '+' : ''}${params.smartMoneyScore})`);
+        // ── PHASE 4: STRONG SMART MONEY ──
+        // Component-aware boost (20-40% vs fixed 15%)
+        if (SIGNAL_FEATURES.useStrongSmartMoney && params.smartMoneyComponents) {
+          const smBoost = calculateSmartMoneyBoost(params.smartMoneyScore, params.smartMoneyComponents);
+          score *= (1 + smBoost.boost);
+          factors += 1.5;
+          
+          const boostPct = (smBoost.boost * 100).toFixed(0);
+          reasons.push(`🐋 Smart Money confirms (+${boostPct}% boost)`);
+          
+          // Add component details if significant
+          if (smBoost.reasons.length > 0) {
+            smBoost.reasons.forEach(r => reasons.push(`  • ${r}`));
+          }
+        } else {
+          // Fallback to original 15% boost
+          score *= 1.15;
+          factors += 1.5;
+          reasons.push(`🐋 Smart Money confirms (${params.smartMoneyScore > 0 ? '+' : ''}${params.smartMoneyScore})`);
+        }
       } else {
         // Contradiction: Smart Money disagrees → penalty + caution
         score *= 0.80;
@@ -1271,6 +1292,28 @@ export function computeStrategyScore(params: {
   }
   
   normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;
+
+  // ── PHASE 5: SUPER SIGNAL VALIDATION ────────────────────────────
+  // Cross-validate Strategy score with Super Signal to reduce conflicting signals
+  if (SIGNAL_FEATURES.useSuperSignalValidation && params.superSignalScore !== undefined) {
+    const validation = validateWithSuperSignal(normalized, params.superSignalScore);
+    
+    // Apply validation multiplier
+    normalized = Math.round(normalized * validation.multiplier);
+    normalized = Math.max(-100, Math.min(100, normalized));
+    
+    // Add validation reason if significant
+    if (validation.reason) {
+      reasons.push(validation.reason);
+    }
+    
+    // Add confidence indicator
+    if (validation.confidence === 'high') {
+      reasons.push('✓ High confidence signal');
+    } else if (validation.confidence === 'low') {
+      reasons.push('⚠ Low confidence - conflicting signals');
+    }
+  }
 
   // ── Multi-TF RSI Agreement Gate for Strong Signals ──
   // Require at least 3 of 4 RSI timeframes to agree on direction for Strong.
