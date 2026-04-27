@@ -11,6 +11,8 @@ import { calculateRsiSeries } from './rsi';
 import { LRUCache } from './lru-cache';
 import { RSI_DEFAULTS, INDICATOR_DEFAULTS, STRATEGY_DEFAULTS, RSI_ZONES, TF_WEIGHTS, type TradingStyle } from './defaults';
 import { getRegimeWeights, type MarketRegime } from './market-regime';
+import { groupCorrelatedIndicators, applyDiminishingReturns, shouldSuppressSignal } from './signal-helpers';
+import { SIGNAL_FEATURES } from './feature-flags';
 
 function round(n: number): number {
   return Math.round(n * 1e8) / 1e8;
@@ -705,6 +707,26 @@ export function computeStrategyScore(params: {
 }): StrategyResult {
   let score = 0;
   
+  // ── Phase 2: Correlation Penalty Tracking ──
+  // Track individual indicator scores for correlation penalty application
+  const indicatorScores = {
+    // Oscillators (highly correlated)
+    rsi: 0,
+    stoch: 0,
+    williamsR: 0,
+    cci: 0,
+    bb: 0,
+    
+    // Trend indicators
+    macd: 0,
+    ema: 0,
+    
+    // Volume indicators
+    obv: 0,
+    vwap: 0,
+    volumeSpike: 0,
+  };
+  
   // ── Regime-Aware Dynamic Weights ──
   const rw = params.regime ? getRegimeWeights(params.regime) : { oscillators: 1.0, trend: 1.0, volume: 1.0, momentum: 1.0 };
   
@@ -744,12 +766,30 @@ export function computeStrategyScore(params: {
     if (rsi === null || enabled.rsi === false) return;
     factors += weight;
     const effectiveWeight = weight * rw.oscillators;
-    if (rsi <= rsiDeepOS) { score += 100 * effectiveWeight; reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) deeply oversold`); }
-    else if (rsi <= rsiOS) { score += 80 * effectiveWeight; reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) oversold`); }
-    else if (rsi >= rsiDeepOB) { score -= 100 * effectiveWeight; reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) deeply overbought`); }
-    else if (rsi >= rsiOB) { score -= 80 * effectiveWeight; reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) overbought`); }
-    else if (rsi < 45) score += 30 * effectiveWeight;
-    else if (rsi > 55) score -= 30 * effectiveWeight;
+    
+    let contribution = 0; // Track this indicator's contribution
+    
+    if (rsi <= rsiDeepOS) { 
+      contribution = 100 * effectiveWeight;
+      reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) deeply oversold`); 
+    }
+    else if (rsi <= rsiOS) { 
+      contribution = 80 * effectiveWeight;
+      reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) oversold`); 
+    }
+    else if (rsi >= rsiDeepOB) { 
+      contribution = -100 * effectiveWeight;
+      reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) deeply overbought`); 
+    }
+    else if (rsi >= rsiOB) { 
+      contribution = -80 * effectiveWeight;
+      reasons.push(`RSI ${tf} (${rsi.toFixed(0)}) overbought`); 
+    }
+    else if (rsi < 45) contribution = 30 * effectiveWeight;
+    else if (rsi > 55) contribution = -30 * effectiveWeight;
+    
+    score += contribution;
+    indicatorScores.rsi += contribution; // Accumulate RSI contributions
   };
 
   rsiScore(params.rsi1m, tw.rsi1m, '1m');
@@ -766,6 +806,8 @@ export function computeStrategyScore(params: {
     const macdWeight = tw.macd * rw.trend;
     factors += macdWeight;
     
+    let contribution = 0; // Track MACD contribution
+    
     // Use ATR for normalization if available, else fall back to price-relative
     let macdNorm: number;
     if (params.atr != null && params.atr > 0) {
@@ -774,18 +816,21 @@ export function computeStrategyScore(params: {
       macdNorm = Math.min(macdNorm * 80, 100); // Scale: 0.625 ATR → 50 points, 1.25 ATR → 100 points
       
       if (params.macdHistogram > 0) {
-        score += macdNorm * macdWeight * sessionQuality;
+        contribution = macdNorm * macdWeight * sessionQuality;
         if (macdNorm > 40) reasons.push('MACD bullish momentum');
       } else {
-        score -= macdNorm * macdWeight * sessionQuality;
+        contribution = -macdNorm * macdWeight * sessionQuality;
         if (macdNorm > 40) reasons.push('MACD bearish momentum');
       }
     } else {
       // Fallback: percentage of price (legacy behavior, improved scaling)
       const histogramWeight = macdWeight * sessionQuality;
       const normHist = (params.macdHistogram / (params.atr || params.price * 0.005)) * 1000;
-      score += normHist * histogramWeight;
+      contribution = normHist * histogramWeight;
     }
+    
+    score += contribution;
+    indicatorScores.macd += contribution;
   }
 
   // Bollinger position - regime: oscillator weight (mean-reversion signal category)
@@ -793,10 +838,22 @@ export function computeStrategyScore(params: {
     factors += 1;
     const bbW = 1.0 * rw.oscillators * sessionQuality;
     const bp = params.bbPosition;
-    if (bp <= 0.1) { score += 80 * bbW; reasons.push(`Near lower BB (${bp.toFixed(2)})`); }
-    else if (bp <= 0.25) score += 40 * bbW;
-    else if (bp >= 0.9) { score -= 80 * bbW; reasons.push(`Near upper BB (${bp.toFixed(2)})`); }
-    else if (bp >= 0.75) score -= 40 * bbW;
+    
+    let contribution = 0; // Track BB contribution
+    
+    if (bp <= 0.1) { 
+      contribution = 80 * bbW;
+      reasons.push(`Near lower BB (${bp.toFixed(2)})`); 
+    }
+    else if (bp <= 0.25) contribution = 40 * bbW;
+    else if (bp >= 0.9) { 
+      contribution = -80 * bbW;
+      reasons.push(`Near upper BB (${bp.toFixed(2)})`); 
+    }
+    else if (bp >= 0.75) contribution = -40 * bbW;
+    
+    score += contribution;
+    indicatorScores.bb += contribution;
   }
 
   // Stochastic RSI with K/D crossover confirmation
@@ -804,27 +861,48 @@ export function computeStrategyScore(params: {
   if (params.stochK != null && params.stochD != null && enabled.stoch !== false) {
     factors += 1;
     const stochW = 1.0 * rw.oscillators * sessionQuality; // regime-scaled for stoch base
-    if (params.stochK < 20 && params.stochD < 20) { score += 80 * stochW; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) oversold`); }
-    else if (params.stochK < 30) score += 40 * stochW;
-    else if (params.stochK > 80 && params.stochD > 80) { score -= 80 * stochW; reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); }
-    else if (params.stochK > 70) score -= 40 * stochW;
+    
+    let contribution = 0; // Track Stoch contribution
+    
+    if (params.stochK < 20 && params.stochD < 20) { 
+      contribution = 80 * stochW;
+      reasons.push(`StochRSI (${params.stochK.toFixed(0)}) oversold`); 
+    }
+    else if (params.stochK < 30) contribution = 40 * stochW;
+    else if (params.stochK > 80 && params.stochD > 80) { 
+      contribution = -80 * stochW;
+      reasons.push(`StochRSI (${params.stochK.toFixed(0)}) overbought`); 
+    }
+    else if (params.stochK > 70) contribution = -40 * stochW;
+    
+    score += contribution;
+    indicatorScores.stoch += contribution;
+    
     // K/D Crossover Confirmation - properly weighted with factors to prevent inflation
     if (params.stochK > params.stochD && params.stochK < 30) {
       factors += 0.5;
-      score += 70 * 0.5 * rw.oscillators * sessionQuality; // regime-scaled
+      const crossContribution = 70 * 0.5 * rw.oscillators * sessionQuality;
+      score += crossContribution;
+      indicatorScores.stoch += crossContribution;
       reasons.push('StochRSI bullish cross in oversold');
     } else if (params.stochK < params.stochD && params.stochK > 70) {
       factors += 0.5;
-      score -= 70 * 0.5 * rw.oscillators * sessionQuality;
+      const crossContribution = -70 * 0.5 * rw.oscillators * sessionQuality;
+      score += crossContribution;
+      indicatorScores.stoch += crossContribution;
       reasons.push('StochRSI bearish cross in overbought');
     }
     // Standard crossover in neutral zone (weaker signal)
     else if (params.stochK > params.stochD && params.stochK < 50) {
       factors += 0.25;
-      score += 60 * 0.25 * rw.oscillators * sessionQuality;
+      const crossContribution = 60 * 0.25 * rw.oscillators * sessionQuality;
+      score += crossContribution;
+      indicatorScores.stoch += crossContribution;
     } else if (params.stochK < params.stochD && params.stochK > 50) {
       factors += 0.25;
-      score -= 60 * 0.25 * rw.oscillators * sessionQuality;
+      const crossContribution = -60 * 0.25 * rw.oscillators * sessionQuality;
+      score += crossContribution;
+      indicatorScores.stoch += crossContribution;
     }
   }
 
@@ -832,7 +910,11 @@ export function computeStrategyScore(params: {
   if (params.emaCross !== 'none' && enabled.ema !== false) {
     const emaWeight = tw.ema * rw.trend * sessionQuality;
     factors += tw.ema;
-    score += (params.emaCross === 'bullish' ? 60 : -60) * emaWeight;
+    
+    const contribution = (params.emaCross === 'bullish' ? 60 : -60) * emaWeight;
+    score += contribution;
+    indicatorScores.ema += contribution;
+    
     reasons.push(params.emaCross === 'bullish' ? 'Bullish EMA cross' : 'Bearish EMA cross');
   }
 
@@ -841,8 +923,20 @@ export function computeStrategyScore(params: {
     factors += 1.0;
     const volW = 1.0 * rw.volume * sessionQuality;
     const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
-    if (scaledVwapDiff < -2) { score += 40 * volW; if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); }
-    else if (scaledVwapDiff > 2) { score -= 40 * volW; if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); }
+    
+    let contribution = 0;
+    
+    if (scaledVwapDiff < -2) { 
+      contribution = 40 * volW;
+      if (scaledVwapDiff < -3) reasons.push(`Below VWAP (${params.vwapDiff.toFixed(2)}%)`); 
+    }
+    else if (scaledVwapDiff > 2) { 
+      contribution = -40 * volW;
+      if (scaledVwapDiff > 3) reasons.push(`Above VWAP (${params.vwapDiff.toFixed(2)}%)`); 
+    }
+    
+    score += contribution;
+    indicatorScores.vwap += contribution;
   }
 
   // Volume spike: additive factor (not multiplicative) to prevent inflating already-high scores
@@ -851,7 +945,11 @@ export function computeStrategyScore(params: {
     factors += 0.5;
     const volW = 0.5 * rw.volume * sessionQuality;
     const volBoost = score > 0 ? 30 : score < 0 ? -30 : 0;
-    score += volBoost * volW;
+    const contribution = volBoost * volW;
+    
+    score += contribution;
+    indicatorScores.volumeSpike += contribution;
+    
     if (volBoost !== 0) reasons.push('Volume spike confirms direction');
   }
 
@@ -910,13 +1008,19 @@ export function computeStrategyScore(params: {
   if (params.obvTrend && params.obvTrend !== 'none' && enabled.obv !== false) {
     factors += 1.5;
     const volW = 1.5 * rw.volume;
+    
+    let contribution = 0;
+    
     if (params.obvTrend === 'bullish') {
-      score += 55 * volW;
+      contribution = 55 * volW;
       reasons.push('OBV volume trend bullish (accumulation)');
     } else {
-      score -= 55 * volW;
+      contribution = -55 * volW;
       reasons.push('OBV volume trend bearish (distribution)');
     }
+    
+    score += contribution;
+    indicatorScores.obv += contribution;
   }
 
   // ── CCI (Commodity Channel Index) ──
@@ -928,10 +1032,27 @@ export function computeStrategyScore(params: {
     const cciW = cciBaseW * marketW * rw.trend * sessionQuality;
     factors += (cciBaseW * marketW);
     
-    if (params.cci >= 200) { score -= 100 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) extreme overbought`); }
-    else if (params.cci >= 100) { score -= 60 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) overbought`); }
-    else if (params.cci <= -200) { score += 100 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) extreme oversold`); }
-    else if (params.cci <= -100) { score += 60 * cciW; reasons.push(`CCI (${params.cci.toFixed(0)}) oversold`); }
+    let contribution = 0;
+    
+    if (params.cci >= 200) { 
+      contribution = -100 * cciW;
+      reasons.push(`CCI (${params.cci.toFixed(0)}) extreme overbought`); 
+    }
+    else if (params.cci >= 100) { 
+      contribution = -60 * cciW;
+      reasons.push(`CCI (${params.cci.toFixed(0)}) overbought`); 
+    }
+    else if (params.cci <= -200) { 
+      contribution = 100 * cciW;
+      reasons.push(`CCI (${params.cci.toFixed(0)}) extreme oversold`); 
+    }
+    else if (params.cci <= -100) { 
+      contribution = 60 * cciW;
+      reasons.push(`CCI (${params.cci.toFixed(0)}) oversold`); 
+    }
+    
+    score += contribution;
+    indicatorScores.cci += contribution;
   }
 
   // ── Williams %R - Complementary Oscillator ──
@@ -939,17 +1060,23 @@ export function computeStrategyScore(params: {
   if (params.williamsR !== null && params.williamsR !== undefined && enabled.williamsR !== false) {
     factors += 0.8;
     const oscW = 0.8 * rw.oscillators;
+    
+    let contribution = 0;
+    
     if (params.williamsR <= -85) {
-      score += 80 * oscW;
+      contribution = 80 * oscW;
       reasons.push(`Williams %R (${params.williamsR.toFixed(0)}) deeply oversold`);
     } else if (params.williamsR <= -70) {
-      score += 45 * oscW;
+      contribution = 45 * oscW;
     } else if (params.williamsR >= -15) {
-      score -= 80 * oscW;
+      contribution = -80 * oscW;
       reasons.push(`Williams %R (${params.williamsR.toFixed(0)}) deeply overbought`);
     } else if (params.williamsR >= -30) {
-      score -= 45 * oscW;
+      contribution = -45 * oscW;
     }
+    
+    score += contribution;
+    indicatorScores.williamsR += contribution;
   }
 
   // ── TFA TREND GUARD (v2) ──────────────────────────────────────────
@@ -1035,6 +1162,55 @@ export function computeStrategyScore(params: {
     }
   }
 
+  // ── PHASE 2: CORRELATION PENALTY APPLICATION ────────────────────
+  // Apply diminishing returns to correlated indicators to prevent score inflation
+  if (SIGNAL_FEATURES.useCorrelationPenalty) {
+    // Group indicators by correlation
+    const groups = groupCorrelatedIndicators({
+      rsiScore: indicatorScores.rsi,
+      stochScore: indicatorScores.stoch,
+      williamsRScore: indicatorScores.williamsR,
+      cciScore: indicatorScores.cci,
+      bbScore: indicatorScores.bb,
+      macdScore: indicatorScores.macd,
+      emaScore: indicatorScores.ema,
+      obvScore: indicatorScores.obv,
+      vwapScore: indicatorScores.vwap,
+      volumeSpikeScore: indicatorScores.volumeSpike,
+    });
+    
+    // Calculate adjusted score with diminishing returns
+    let adjustedScore = 0;
+    const adjustmentDetails: string[] = [];
+    
+    for (const group of groups) {
+      if (group.scores.length === 0) continue;
+      
+      const rawGroupScore = group.scores.reduce((sum, s) => sum + s, 0);
+      const adjustedGroupScore = applyDiminishingReturns(group.scores);
+      
+      adjustedScore += adjustedGroupScore;
+      
+      // Log adjustment if significant
+      if (group.scores.length > 1 && Math.abs(rawGroupScore - adjustedGroupScore) > 5) {
+        const reduction = Math.abs(rawGroupScore - adjustedGroupScore);
+        adjustmentDetails.push(
+          `${group.name}: ${group.scores.length} indicators, ` +
+          `reduced by ${reduction.toFixed(0)} points`
+        );
+      }
+    }
+    
+    // Replace score with adjusted score
+    score = adjustedScore;
+    
+    // Add explanation to reasons
+    if (adjustmentDetails.length > 0) {
+      reasons.push('✓ Correlation penalty applied:');
+      adjustmentDetails.forEach(detail => reasons.push(`  • ${detail}`));
+    }
+  }
+
   // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
   
@@ -1054,13 +1230,36 @@ export function computeStrategyScore(params: {
   const rsiHighCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r > 75).length;
   const rsiLowCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r < 25).length;
   
-  if (normalized > 25 && rsiHighCount >= 2) {
-    normalized = Math.min(24, normalized * 0.4);
-    reasons.push('⚠ Buy suppressed: extreme overbought state');
-  }
-  if (normalized < -25 && rsiLowCount >= 2) {
-    normalized = Math.max(-24, normalized * 0.4);
-    reasons.push('⚠ Sell suppressed: deeply oversold state');
+  // ── PHASE 3: RELAXED SUPPRESSION ────────────────────────────────
+  // Smart suppression that considers 1h trend and volume context
+  if (!SIGNAL_FEATURES.useRelaxedSuppression) {
+    // Original aggressive suppression (backward compatibility)
+    if (normalized > 25 && rsiHighCount >= 2) {
+      normalized = Math.min(24, normalized * 0.4);
+      reasons.push('⚠ Buy suppressed: extreme overbought state');
+    }
+    if (normalized < -25 && rsiLowCount >= 2) {
+      normalized = Math.max(-24, normalized * 0.4);
+      reasons.push('⚠ Sell suppressed: deeply oversold state');
+    }
+  } else {
+    // New smart suppression (Phase 3)
+    const suppression = shouldSuppressSignal({
+      normalized,
+      rsi1m: params.rsi1m,
+      rsi5m: params.rsi5m,
+      rsi15m: params.rsi15m,
+      rsi1h: params.rsi1h,
+      volumeSpike: params.volumeSpike,
+    });
+    
+    if (suppression.suppress) {
+      normalized *= suppression.multiplier;
+      reasons.push(suppression.reason);
+    } else if (suppression.reason) {
+      // Add positive confirmation even when not suppressing
+      reasons.push(suppression.reason);
+    }
   }
 
   // 3. Evidence Guard: Force neutrality for low-confidence data

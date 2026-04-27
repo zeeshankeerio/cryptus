@@ -56,6 +56,13 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
   const [whaleAlerts, setWhaleAlerts] = useState<WhaleTradeEvent[]>([]);
   const [orderFlow, setOrderFlow] = useState<Map<string, OrderFlowData>>(new Map());
   const [openInterest, setOpenInterest] = useState<Map<string, OpenInterestData>>(new Map());
+  
+  // Phase 1 additions
+  const [cvd, setCvd] = useState<Map<string, import('@/lib/derivatives-types').CVDData>>(new Map());
+  const [fundingHistory, setFundingHistory] = useState<Map<string, import('@/lib/derivatives-types').FundingRateHistory>>(new Map());
+  const [oiAnalysis, setOiAnalysis] = useState<Map<string, import('@/lib/derivatives-types').OpenInterestAnalysis>>(new Map());
+  const [cascadeRisk, setCascadeRisk] = useState<Map<string, import('@/lib/derivatives-types').LiquidationCascadeRisk>>(new Map());
+  
   const [isConnected, setIsConnected] = useState(false);
   const [streamHealth, setStreamHealth] = useState({
     funding: false,
@@ -95,7 +102,8 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           fundingRates,
           liquidations,
           whaleAlerts,
-          orderFlow
+          orderFlow,
+          cvd // Pass CVD data for Phase 1 calculation
         );
         setSmartMoney(result);
         
@@ -107,11 +115,11 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
         console.error('[SmartMoney] Calculation failed:', error);
         // Don't clear existing scores on error - keep last known good state
       }
-    }, 500); // FIX: Reduced from 2000ms to 500ms for faster updates
+    }, 300); // FIX: Reduced to match worker flush interval for instant updates
     return () => {
       if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);
     };
-  }, [symbols, fundingRates, liquidations, whaleAlerts, orderFlow, enabled]);
+  }, [symbols, fundingRates, liquidations, whaleAlerts, orderFlow, cvd, enabled]);
 
   // ── Worker Lifecycle ──────────────────────────────────────────
 
@@ -134,12 +142,17 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           break;
 
         case 'SNAPSHOT': {
-          const { fundingRates, liquidations, whaleAlerts, orderFlow, openInterest } = payload;
+          const { fundingRates, liquidations, whaleAlerts, orderFlow, openInterest, cvd, fundingHistory, oiAnalysis, cascadeRisk } = payload;
           if (fundingRates) setFundingRates(new Map(fundingRates));
           if (liquidations) setLiquidations(liquidations);
           if (whaleAlerts) setWhaleAlerts(whaleAlerts);
           if (orderFlow) setOrderFlow(new Map(orderFlow));
           if (openInterest) setOpenInterest(new Map(openInterest));
+          // Phase 1 data
+          if (cvd) setCvd(new Map(cvd));
+          if (fundingHistory) setFundingHistory(new Map(fundingHistory));
+          if (oiAnalysis) setOiAnalysis(new Map(oiAnalysis));
+          if (cascadeRisk) setCascadeRisk(new Map(cascadeRisk));
           break;
         }
 
@@ -255,6 +268,55 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           });
           break;
         }
+
+        // Phase 1 message handlers
+        case 'CVD_UPDATE': {
+          const entries = payload as [string, import('@/lib/derivatives-types').CVDData][];
+          setCvd(prev => {
+            const next = new Map(prev);
+            for (const [sym, data] of entries) {
+              next.set(sym, data);
+            }
+            return next;
+          });
+          break;
+        }
+
+        case 'FUNDING_HISTORY_UPDATE': {
+          const entries = payload as [string, import('@/lib/derivatives-types').FundingRateHistory][];
+          setFundingHistory(prev => {
+            const next = new Map(prev);
+            for (const [sym, data] of entries) {
+              next.set(sym, data);
+            }
+            return next;
+          });
+          break;
+        }
+
+        case 'OI_ANALYSIS_UPDATE': {
+          const entries = payload as [string, import('@/lib/derivatives-types').OpenInterestAnalysis][];
+          setOiAnalysis(prev => {
+            const next = new Map(prev);
+            for (const [sym, data] of entries) {
+              next.set(sym, data);
+            }
+            return next;
+          });
+          break;
+        }
+
+        case 'CASCADE_RISK_UPDATE': {
+          const entries = payload as [string, import('@/lib/derivatives-types').LiquidationCascadeRisk][];
+          setCascadeRisk(prev => {
+            const next = new Map(prev);
+            for (const [sym, data] of entries) {
+              next.set(sym, data);
+            }
+            return next;
+          });
+          break;
+        }
       }
     };
 
@@ -320,6 +382,12 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     orderFlow,
     openInterest,
     smartMoney,
+    // Phase 1 additions
+    cvd,
+    fundingHistory,
+    oiAnalysis,
+    cascadeRisk,
+    // Connection state
     isConnected,
     isStale,
     streamHealth,

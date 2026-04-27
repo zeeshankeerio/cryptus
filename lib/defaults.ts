@@ -164,3 +164,9 @@ export const TF_WEIGHTS: Record<TradingStyle, {
   }
 };
 
+// ── Signal Accuracy Feature Flags ───────────────────────────────
+// DEPRECATED: Use lib/feature-flags.ts instead
+// This export is kept for backward compatibility only
+
+export { SIGNAL_FEATURES } from './feature-flags';
+

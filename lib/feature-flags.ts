@@ -1,152 +1,168 @@
-import { prisma } from "@/lib/prisma";
+/**
+ * Feature Flags - Global Configuration System
+ * Copyright © 2024-2026 Mindscape Analytics LLC. All rights reserved.
+ *
+ * Centralized feature flag management for signal accuracy improvements.
+ * Flags can be toggled globally without code changes.
+ */
 
-export interface FeatureFlags {
-  maxTrialRecords: number;
-  maxSubscribedRecords: number;
-  allowTrialAlerts: boolean;
-  allowTrialAdvancedIndicators: boolean;
-  allowTrialCustomSettings: boolean;
+// ── Feature Flag Configuration ──────────────────────────────────
+
+export interface SignalFeatureFlags {
+  /** Phase 2: Apply correlation penalty to prevent score inflation from redundant indicators */
+  useCorrelationPenalty: boolean;
+  
+  /** Phase 3: Use smart suppression that considers 1h trend and volume (vs aggressive suppression) */
+  useRelaxedSuppression: boolean;
+  
+  /** Phase 4: Use component-aware Smart Money boost (20-40% vs fixed 15%) */
+  useStrongSmartMoney: boolean;
+  
+  /** Phase 5: Validate Strategy signals against Super Signal to reduce conflicts */
+  useSuperSignalValidation: boolean;
+  
+  /** Future: Use regime-aware thresholds (dynamic vs fixed 60/30) */
+  useRegimeThresholds: boolean;
+  
+  /** Future: Use weighted TF agreement (importance-based vs simple count) */
+  useWeightedTFAgreement: boolean;
 }
 
-const DEFAULT_FLAGS: FeatureFlags = {
-  maxTrialRecords: 100,
-  maxSubscribedRecords: 500,
-  allowTrialAlerts: true, // Enable alerts for trial users to test full platform
-  allowTrialAdvancedIndicators: true, // Requirement 1.2: Enable by default for trial users
-  allowTrialCustomSettings: false,
+// ── Default Configuration ───────────────────────────────────────
+// All flags default to FALSE for safe deployment and backward compatibility
+
+const DEFAULT_FLAGS: SignalFeatureFlags = {
+  useCorrelationPenalty: false,
+  useRelaxedSuppression: false,
+  useStrongSmartMoney: false,
+  useSuperSignalValidation: false,
+  useRegimeThresholds: false,
+  useWeightedTFAgreement: false,
 };
 
-let tableEnsured = false;
+// ── Environment Variable Overrides ──────────────────────────────
+// Flags can be enabled via environment variables for gradual rollout
 
-async function ensureFeatureFlagsTable(): Promise<void> {
-  if (tableEnsured) return;
-
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS "feature_flag" (
-      "id" TEXT PRIMARY KEY,
-      "maxTrialRecords" INTEGER NOT NULL DEFAULT 100,
-      "maxSubscribedRecords" INTEGER NOT NULL DEFAULT 500,
-      "allowTrialAlerts" BOOLEAN NOT NULL DEFAULT false,
-      "allowTrialAdvancedIndicators" BOOLEAN NOT NULL DEFAULT true,
-      "allowTrialCustomSettings" BOOLEAN NOT NULL DEFAULT false,
-      "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
-      "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  tableEnsured = true;
+function getEnvFlag(key: string, defaultValue: boolean): boolean {
+  if (typeof window === 'undefined') {
+    // Server-side: Check process.env
+    const envValue = process.env[`NEXT_PUBLIC_${key}`];
+    if (envValue !== undefined) {
+      return envValue === 'true' || envValue === '1';
+    }
+  } else {
+    // Client-side: Check window.ENV or localStorage
+    try {
+      const localValue = localStorage.getItem(`feature_${key}`);
+      if (localValue !== null) {
+        return localValue === 'true';
+      }
+    } catch (e) {
+      // localStorage not available
+    }
+  }
+  return defaultValue;
 }
 
-type FeatureFlagRow = {
-  id: string;
-  maxTrialRecords: number;
-  maxSubscribedRecords: number;
-  allowTrialAlerts: boolean;
-  allowTrialAdvancedIndicators: boolean;
-  allowTrialCustomSettings: boolean;
+// ── Active Feature Flags ────────────────────────────────────────
+// This is the single source of truth for all feature flags
+
+export const SIGNAL_FEATURES: SignalFeatureFlags = {
+  useCorrelationPenalty: getEnvFlag('USE_CORRELATION_PENALTY', DEFAULT_FLAGS.useCorrelationPenalty),
+  useRelaxedSuppression: getEnvFlag('USE_RELAXED_SUPPRESSION', DEFAULT_FLAGS.useRelaxedSuppression),
+  useStrongSmartMoney: getEnvFlag('USE_STRONG_SMART_MONEY', DEFAULT_FLAGS.useStrongSmartMoney),
+  useSuperSignalValidation: getEnvFlag('USE_SUPER_SIGNAL_VALIDATION', DEFAULT_FLAGS.useSuperSignalValidation),
+  useRegimeThresholds: getEnvFlag('USE_REGIME_THRESHOLDS', DEFAULT_FLAGS.useRegimeThresholds),
+  useWeightedTFAgreement: getEnvFlag('USE_WEIGHTED_TF_AGREEMENT', DEFAULT_FLAGS.useWeightedTFAgreement),
 };
 
-function sanitizeFlags(flags: Partial<FeatureFlags>): FeatureFlags {
-  const maxTrialRecords = Math.min(Math.max(Number(flags.maxTrialRecords ?? DEFAULT_FLAGS.maxTrialRecords), 50), 500);
-  const maxSubscribedRecords = Math.min(Math.max(Number(flags.maxSubscribedRecords ?? DEFAULT_FLAGS.maxSubscribedRecords), 100), 1000);
+// ── Feature Flag Management ─────────────────────────────────────
 
-  return {
-    maxTrialRecords,
-    maxSubscribedRecords,
-    allowTrialAlerts: Boolean(flags.allowTrialAlerts ?? DEFAULT_FLAGS.allowTrialAlerts),
-    allowTrialAdvancedIndicators: Boolean(
-      flags.allowTrialAdvancedIndicators ?? DEFAULT_FLAGS.allowTrialAdvancedIndicators,
-    ),
-    allowTrialCustomSettings: Boolean(
-      flags.allowTrialCustomSettings ?? DEFAULT_FLAGS.allowTrialCustomSettings,
-    ),
-  };
+/**
+ * Get current state of all feature flags
+ */
+export function getFeatureFlags(): SignalFeatureFlags {
+  return { ...SIGNAL_FEATURES };
 }
 
-function rowToFlags(row: FeatureFlagRow | null | undefined): FeatureFlags {
-  if (!row) return DEFAULT_FLAGS;
+/**
+ * Check if a specific feature is enabled
+ */
+export function isFeatureEnabled(feature: keyof SignalFeatureFlags): boolean {
+  return SIGNAL_FEATURES[feature];
+}
 
-  return sanitizeFlags({
-    maxTrialRecords: row.maxTrialRecords,
-    maxSubscribedRecords: row.maxSubscribedRecords,
-    allowTrialAlerts: row.allowTrialAlerts,
-    allowTrialAdvancedIndicators: row.allowTrialAdvancedIndicators,
-    allowTrialCustomSettings: row.allowTrialCustomSettings,
+/**
+ * Enable a feature flag (client-side only, persists to localStorage)
+ */
+export function enableFeature(feature: keyof SignalFeatureFlags): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`feature_${feature}`, 'true');
+      (SIGNAL_FEATURES as any)[feature] = true;
+      console.log(`[Feature Flags] Enabled: ${feature}`);
+    } catch (e) {
+      console.error(`[Feature Flags] Failed to enable ${feature}:`, e);
+    }
+  }
+}
+
+/**
+ * Disable a feature flag (client-side only, persists to localStorage)
+ */
+export function disableFeature(feature: keyof SignalFeatureFlags): void {
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`feature_${feature}`, 'false');
+      (SIGNAL_FEATURES as any)[feature] = false;
+      console.log(`[Feature Flags] Disabled: ${feature}`);
+    } catch (e) {
+      console.error(`[Feature Flags] Failed to disable ${feature}:`, e);
+    }
+  }
+}
+
+/**
+ * Reset all feature flags to defaults
+ */
+export function resetFeatureFlags(): void {
+  if (typeof window !== 'undefined') {
+    try {
+      Object.keys(DEFAULT_FLAGS).forEach(key => {
+        localStorage.removeItem(`feature_${key}`);
+      });
+      Object.assign(SIGNAL_FEATURES, DEFAULT_FLAGS);
+      console.log('[Feature Flags] Reset to defaults');
+    } catch (e) {
+      console.error('[Feature Flags] Failed to reset:', e);
+    }
+  }
+}
+
+// ── Feature Flag Descriptions ───────────────────────────────────
+
+export const FEATURE_DESCRIPTIONS: Record<keyof SignalFeatureFlags, string> = {
+  useCorrelationPenalty: 'Reduces score inflation from correlated indicators (Phase 2)',
+  useRelaxedSuppression: 'Smart suppression considering 1h trend and volume (Phase 3)',
+  useStrongSmartMoney: 'Component-aware Smart Money boost 20-40% (Phase 4)',
+  useSuperSignalValidation: 'Cross-validates Strategy with Super Signal (Phase 5)',
+  useRegimeThresholds: 'Dynamic thresholds based on market regime (Future)',
+  useWeightedTFAgreement: 'Importance-based timeframe agreement (Future)',
+};
+
+// ── Logging & Monitoring ────────────────────────────────────────
+
+/**
+ * Log current feature flag state (for debugging)
+ */
+export function logFeatureFlags(): void {
+  console.log('[Feature Flags] Current State:', {
+    ...SIGNAL_FEATURES,
+    timestamp: new Date().toISOString(),
   });
 }
 
-export async function getFeatureFlags(): Promise<FeatureFlags> {
-  await ensureFeatureFlagsTable();
-
-  const rows = await prisma.$queryRawUnsafe<FeatureFlagRow[]>(
-    `SELECT * FROM "feature_flag" WHERE "id" = 'global' LIMIT 1;`,
-  );
-
-  const existing = rowToFlags(rows[0]);
-
-  if (rows.length > 0) {
-    return existing;
-  }
-
-  const inserted = await prisma.$queryRawUnsafe<FeatureFlagRow[]>(
-    `
-      INSERT INTO "feature_flag" (
-        "id",
-        "maxTrialRecords",
-        "maxSubscribedRecords",
-        "allowTrialAlerts",
-        "allowTrialAdvancedIndicators",
-        "allowTrialCustomSettings",
-        "updatedAt"
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      ON CONFLICT ("id") DO UPDATE SET
-        "updatedAt" = NOW()
-      RETURNING *;
-    `,
-    "global",
-    DEFAULT_FLAGS.maxTrialRecords,
-    DEFAULT_FLAGS.maxSubscribedRecords,
-    DEFAULT_FLAGS.allowTrialAlerts,
-    DEFAULT_FLAGS.allowTrialAdvancedIndicators,
-    DEFAULT_FLAGS.allowTrialCustomSettings,
-  );
-
-  return rowToFlags(inserted[0]);
-}
-
-export async function updateFeatureFlags(partial: Partial<FeatureFlags>): Promise<FeatureFlags> {
-  const current = await getFeatureFlags();
-  const next = sanitizeFlags({ ...current, ...partial });
-
-  const rows = await prisma.$queryRawUnsafe<FeatureFlagRow[]>(
-    `
-      INSERT INTO "feature_flag" (
-        "id",
-        "maxTrialRecords",
-        "maxSubscribedRecords",
-        "allowTrialAlerts",
-        "allowTrialAdvancedIndicators",
-        "allowTrialCustomSettings",
-        "updatedAt"
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      ON CONFLICT ("id") DO UPDATE SET
-        "maxTrialRecords" = EXCLUDED."maxTrialRecords",
-        "maxSubscribedRecords" = EXCLUDED."maxSubscribedRecords",
-        "allowTrialAlerts" = EXCLUDED."allowTrialAlerts",
-        "allowTrialAdvancedIndicators" = EXCLUDED."allowTrialAdvancedIndicators",
-        "allowTrialCustomSettings" = EXCLUDED."allowTrialCustomSettings",
-        "updatedAt" = NOW()
-      RETURNING *;
-    `,
-    "global",
-    next.maxTrialRecords,
-    next.maxSubscribedRecords,
-    next.allowTrialAlerts,
-    next.allowTrialAdvancedIndicators,
-    next.allowTrialCustomSettings,
-  );
-
-  return rowToFlags(rows[0]);
+// Log on initialization (development only)
+if (process.env.NODE_ENV === 'development') {
+  logFeatureFlags();
 }

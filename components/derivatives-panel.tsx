@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getSymbolAlias } from '@/lib/symbol-utils';
 import { formatPrice } from '@/lib/utils';
+import { LiquidationStatsPanel } from './liquidation-stats-panel';
 import type {
   FundingRateData,
   LiquidationEvent,
@@ -142,7 +143,7 @@ const LiquidationItem = memo(function LiquidationItem({ liq }: { liq: Liquidatio
         <span className={cn(
           "font-black text-[10px]",
           liq.valueUsd >= 500000 ? (isLong ? "text-[#FF4B5C]" : "text-[#39FF14]") : "text-white/80"
-        )}>{sizeStr}</span>
+        )}>${sizeStr}</span>
         <span className="text-slate-600 text-[9px] font-mono shrink-0">@ ${formatPrice(Number(liq.price))}</span>
         <span className="text-slate-700 text-[8px] font-mono shrink-0">{timeStr}</span>
       </div>
@@ -178,7 +179,7 @@ const WhaleItem = memo(function WhaleItem({ whale }: { whale: WhaleTradeEvent })
         </span>
       </div>
       <div className="flex items-center gap-2 tabular-nums">
-        <span className="font-black text-[10px] text-white/90">{sizeStr}</span>
+        <span className="font-black text-[10px] text-white/90">${sizeStr}</span>
         <span className="text-slate-600 text-[9px] font-mono shrink-0">@ ${formatPrice(Number(whale.price))}</span>
         <span className="text-slate-700 text-[8px] font-mono shrink-0">{timeStr}</span>
       </div>
@@ -271,6 +272,9 @@ interface DerivativesPanelProps {
   orderFlow: Map<string, OrderFlowData>;
   openInterest: Map<string, OpenInterestData>;
   smartMoney: Map<string, SmartMoneyPressure>;
+  // Phase 1 additions
+  cvd?: Map<string, import('@/lib/derivatives-types').CVDData>;
+  cascadeRisk?: Map<string, import('@/lib/derivatives-types').LiquidationCascadeRisk>;
   isConnected: boolean;
   streamHealth?: {
     funding: boolean;
@@ -281,7 +285,7 @@ interface DerivativesPanelProps {
   onUpdateConfig?: (config: { liquidationThreshold?: number }) => void;
 }
 
-type ActiveTab = 'liquidations' | 'whales' | 'funding' | 'flow';
+type ActiveTab = 'liquidations' | 'whales' | 'funding' | 'flow' | 'cascade' | 'cvd';
 
 export const DerivativesPanel = memo(function DerivativesPanel({
   fundingRates,
@@ -290,6 +294,8 @@ export const DerivativesPanel = memo(function DerivativesPanel({
   orderFlow,
   openInterest,
   smartMoney,
+  cvd,
+  cascadeRisk,
   isConnected,
   streamHealth,
   onUpdateConfig,
@@ -297,6 +303,7 @@ export const DerivativesPanel = memo(function DerivativesPanel({
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('liquidations');
   const [liqThreshold, setLiqThreshold] = useState<5000 | 10000>(10000);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null); // For detailed stats
 
   const handleToggleThreshold = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -357,15 +364,32 @@ export const DerivativesPanel = memo(function DerivativesPanel({
   const liqStats = useMemo(() => {
     const recent = liquidations.filter(l => (Date.now() - l.timestamp) < 300000); // 5 min
     let longVal = 0, shortVal = 0;
+    const symbolCounts = new Map<string, number>();
+    
     recent.forEach(l => {
       if (l.side === 'Sell') longVal += l.valueUsd;
       else shortVal += l.valueUsd;
+      symbolCounts.set(l.symbol, (symbolCounts.get(l.symbol) || 0) + 1);
     });
+    
+    // Find most liquidated symbol
+    let topSymbol = '';
+    let topCount = 0;
+    symbolCounts.forEach((count, symbol) => {
+      if (count > topCount) {
+        topSymbol = symbol;
+        topCount = count;
+      }
+    });
+    
     return {
       totalCount: recent.length,
       longValue: longVal,
       shortValue: shortVal,
       totalValue: longVal + shortVal,
+      topSymbol,
+      topCount,
+      imbalance: longVal + shortVal > 0 ? Math.round(((shortVal - longVal) / (longVal + shortVal)) * 100) : 0,
     };
   }, [liquidations]);
 
@@ -374,6 +398,8 @@ export const DerivativesPanel = memo(function DerivativesPanel({
     { id: 'whales', label: 'Whales', mobileLabel: 'Whales', icon: Zap, count: sortedWhales.length },
     { id: 'funding', label: 'Funding', mobileLabel: 'Rates', icon: BarChart3, count: sortedFunding.length },
     { id: 'flow', label: 'Flow', mobileLabel: 'Flow', icon: Activity },
+    ...(cascadeRisk && cascadeRisk.size > 0 ? [{ id: 'cascade' as ActiveTab, label: 'Cascade', mobileLabel: 'Risk', icon: AlertTriangle, count: cascadeRisk.size }] : []),
+    ...(cvd && cvd.size > 0 ? [{ id: 'cvd' as ActiveTab, label: 'CVD', mobileLabel: 'Delta', icon: TrendingUp, count: cvd.size }] : []),
   ];
 
   return (
@@ -446,6 +472,19 @@ export const DerivativesPanel = memo(function DerivativesPanel({
               <span className="text-red-400">${Math.round(liqStats.longValue / 1000)}K 📉</span>
               <span className="text-slate-600">|</span>
               <span className="text-green-400">${Math.round(liqStats.shortValue / 1000)}K 📈</span>
+              {liqStats.topSymbol && (
+                <>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-slate-400">{getSymbolAlias(liqStats.topSymbol)}: {liqStats.topCount}</span>
+                </>
+              )}
+              <span className="text-slate-600">|</span>
+              <span className={cn(
+                "font-black",
+                liqStats.imbalance > 0 ? "text-[#39FF14]" : liqStats.imbalance < 0 ? "text-[#FF4B5C]" : "text-slate-500"
+              )}>
+                {liqStats.imbalance > 0 ? '+' : ''}{liqStats.imbalance}%
+              </span>
             </div>
           )}
 
@@ -504,6 +543,29 @@ export const DerivativesPanel = memo(function DerivativesPanel({
             <div className="p-1.5 max-h-[220px] overflow-y-auto custom-scrollbar">
               {activeTab === 'liquidations' && (
                 <div className="flex flex-col gap-1">
+                  {/* Liquidation Stats for Selected Symbol */}
+                  {selectedSymbol && (
+                    <div className="mb-2 p-2 rounded-lg border border-[#39FF14]/20 bg-[#39FF14]/5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black text-[#39FF14] uppercase tracking-wider">
+                          {getSymbolAlias(selectedSymbol)} Analysis
+                        </span>
+                        <button
+                          onClick={() => setSelectedSymbol(null)}
+                          className="text-[8px] text-slate-500 hover:text-white transition-colors"
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <LiquidationStatsPanel
+                        symbol={selectedSymbol}
+                        liquidations={liquidations}
+                        currentPrice={fundingRates.get(selectedSymbol)?.markPrice}
+                        compact={false}
+                      />
+                    </div>
+                  )}
+                  
                   {sortedLiquidations.length === 0 ? (
                     <div className="flex items-center justify-center gap-2 py-3 text-slate-600 text-[9px]">
                       <Flame size={12} className="opacity-40 animate-pulse" />
@@ -511,7 +573,13 @@ export const DerivativesPanel = memo(function DerivativesPanel({
                     </div>
                   ) : (
                     sortedLiquidations.map(liq => (
-                      <LiquidationItem key={liq.id} liq={liq} />
+                      <div
+                        key={liq.id}
+                        onClick={() => setSelectedSymbol(liq.symbol)}
+                        className="cursor-pointer hover:bg-white/[0.02] transition-colors"
+                      >
+                        <LiquidationItem liq={liq} />
+                      </div>
                     ))
                   )}
                 </div>
@@ -596,6 +664,146 @@ export const DerivativesPanel = memo(function DerivativesPanel({
                     <div className="mt-2 pt-2 border-t border-white/5">
                       <SmartMoneyGauge data={marketPressure} />
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'cascade' && cascadeRisk && (
+                <div className="flex flex-col gap-1">
+                  {cascadeRisk.size === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-3 text-slate-600 text-[9px]">
+                      <AlertTriangle size={12} className="opacity-40 animate-pulse" />
+                      <span>Analyzing liquidation cascade risks...</span>
+                    </div>
+                  ) : (
+                    Array.from(cascadeRisk.entries())
+                      .sort((a, b) => b[1].riskScore - a[1].riskScore)
+                      .slice(0, 15)
+                      .map(([symbol, risk]) => (
+                        <div key={symbol} className={cn(
+                          "flex items-center justify-between px-1.5 py-1 rounded border transition-colors",
+                          risk.severity === 'extreme' ? "bg-[#FF4B5C]/10 border-[#FF4B5C]/30" :
+                          risk.severity === 'high' ? "bg-orange-500/10 border-orange-500/30" :
+                          risk.severity === 'medium' ? "bg-yellow-500/10 border-yellow-500/30" :
+                          "bg-slate-800/30 border-white/5"
+                        )}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-white/90 text-[10px] tracking-tight">
+                              {getSymbolAlias(symbol)}
+                            </span>
+                            <span className={cn(
+                              "text-[8px] font-black px-1 rounded uppercase",
+                              risk.direction === 'long' ? "bg-[#FF4B5C]/15 text-[#FF4B5C]" : "bg-[#39FF14]/15 text-[#39FF14]"
+                            )}>
+                              {risk.direction}
+                            </span>
+                            <span className={cn(
+                              "text-[7px] font-black px-1 rounded uppercase",
+                              risk.severity === 'extreme' ? "bg-[#FF4B5C]/20 text-[#FF4B5C]" :
+                              risk.severity === 'high' ? "bg-orange-500/20 text-orange-400" :
+                              risk.severity === 'medium' ? "bg-yellow-500/20 text-yellow-400" :
+                              "bg-slate-700/20 text-slate-400"
+                            )}>
+                              {risk.severity}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[8px] font-mono">
+                            <span className="text-slate-500">Risk:</span>
+                            <span className={cn(
+                              "font-black tabular-nums",
+                              risk.riskScore >= 80 ? "text-[#FF4B5C]" :
+                              risk.riskScore >= 60 ? "text-orange-400" :
+                              risk.riskScore >= 40 ? "text-yellow-400" :
+                              "text-slate-400"
+                            )}>
+                              {risk.riskScore}
+                            </span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-slate-500">Trigger:</span>
+                            <span className="text-white/80 font-black">${formatPrice(risk.triggerPrice)}</span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-slate-500">Value:</span>
+                            <span className="text-white/80 font-black">
+                              ${risk.estimatedCascadeValue >= 1000000 
+                                ? `${(risk.estimatedCascadeValue / 1000000).toFixed(1)}M`
+                                : `${Math.round(risk.estimatedCascadeValue / 1000)}K`}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'cvd' && cvd && (
+                <div className="flex flex-col gap-1">
+                  {cvd.size === 0 ? (
+                    <div className="flex items-center justify-center gap-2 py-3 text-slate-600 text-[9px]">
+                      <TrendingUp size={12} className="opacity-40 animate-pulse" />
+                      <span>Calculating cumulative volume delta...</span>
+                    </div>
+                  ) : (
+                    Array.from(cvd.entries())
+                      .sort((a, b) => Math.abs(b[1].cvd4h) - Math.abs(a[1].cvd4h))
+                      .slice(0, 15)
+                      .map(([symbol, data]) => (
+                        <div key={symbol} className={cn(
+                          "flex items-center justify-between px-1.5 py-1 rounded border transition-colors",
+                          data.cvdTrend === 'accumulation' ? "bg-[#39FF14]/5 border-[#39FF14]/20" :
+                          data.cvdTrend === 'distribution' ? "bg-[#FF4B5C]/5 border-[#FF4B5C]/20" :
+                          "bg-slate-800/30 border-white/5"
+                        )}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-black text-white/90 text-[10px] tracking-tight">
+                              {getSymbolAlias(symbol)}
+                            </span>
+                            <span className={cn(
+                              "text-[8px] font-black px-1 rounded uppercase",
+                              data.cvdTrend === 'accumulation' ? "bg-[#39FF14]/15 text-[#39FF14]" :
+                              data.cvdTrend === 'distribution' ? "bg-[#FF4B5C]/15 text-[#FF4B5C]" :
+                              "bg-slate-700/15 text-slate-400"
+                            )}>
+                              {data.cvdTrend === 'accumulation' ? 'ACC' : data.cvdTrend === 'distribution' ? 'DIST' : 'NEUT'}
+                            </span>
+                            {data.divergence !== 'none' && (
+                              <span className={cn(
+                                "text-[7px] font-black px-1 rounded uppercase",
+                                data.divergence === 'bullish' ? "bg-[#39FF14]/20 text-[#39FF14]" : "bg-[#FF4B5C]/20 text-[#FF4B5C]"
+                              )}>
+                                {data.divergence === 'bullish' ? '↗ DIV' : '↘ DIV'}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[8px] font-mono">
+                            <span className="text-slate-500">1h:</span>
+                            <span className={cn(
+                              "font-black tabular-nums",
+                              data.cvd1h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+                            )}>
+                              {data.cvd1h >= 0 ? '+' : ''}{(data.cvd1h / 1000000).toFixed(1)}M
+                            </span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-slate-500">4h:</span>
+                            <span className={cn(
+                              "font-black tabular-nums",
+                              data.cvd4h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+                            )}>
+                              {data.cvd4h >= 0 ? '+' : ''}{(data.cvd4h / 1000000).toFixed(1)}M
+                            </span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-slate-500">24h:</span>
+                            <span className={cn(
+                              "font-black tabular-nums",
+                              data.cvd24h >= 0 ? "text-[#39FF14]" : "text-[#FF4B5C]"
+                            )}>
+                              {data.cvd24h >= 0 ? '+' : ''}{(data.cvd24h / 1000000).toFixed(1)}M
+                            </span>
+                            <span className="text-slate-600">|</span>
+                            <span className="text-slate-500">Strength:</span>
+                            <span className="text-white/80 font-black">{data.strength}</span>
+                          </div>
+                        </div>
+                      ))
                   )}
                 </div>
               )}
