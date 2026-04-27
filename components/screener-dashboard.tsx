@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react';
 import Link from 'next/link';
@@ -374,7 +374,7 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
   );
 }
 
-function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry; onViewNarration?: (entry: ScreenerEntry) => void }) {
+function StrategyBadge({ signal, label, reasons, entry, onViewNarration, isOwner }: { signal: ScreenerEntry['strategySignal']; label: string; reasons?: string[]; entry?: ScreenerEntry; onViewNarration?: (entry: ScreenerEntry) => void; isOwner?: boolean }) {
   const config: Record<string, { bg: string; text: string; border: string; icon: string }> = {
     'strong-buy': {
       bg: 'bg-[#39FF14]/25',
@@ -398,13 +398,13 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { sig
       bg: 'bg-[#FF4B5C]/15',
       text: 'text-[#FF4B5C]/90',
       border: 'border-[#FF4B5C]/30',
-      icon: 'ðŸ“‰'
+      icon: '📉'
     },
     'strong-sell': {
       bg: 'bg-[#FF4B5C]/25',
       text: 'text-[#FF4B5C]',
       border: 'border-[#FF4B5C]/50',
-      icon: '⚠ ï¸'
+      icon: '⚠️'
     },
   };
 
@@ -416,15 +416,15 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { sig
     return generateSignalNarration(entry);
   }, [entry, signal]);
 
-  const title = narration
-    ? `${narration.emoji} ${narration.headline} (${narration.conviction}% ${narration.convictionLabel})\n\nTechnical Signals:\n${narration.reasons.map(r => `• ${r}`).join('\n')}\n\nðŸ“‹ Click to copy institutional brief`
-    : reasons?.length ? `Strategic Alignment:\n${reasons.map(r => `• ${r}`).join('\n')}` : undefined;
+  const title = (isOwner && narration)
+    ? `${narration.emoji} ${narration.headline} (${narration.conviction}% ${narration.convictionLabel})\n\nTechnical Signals:\n${narration.reasons.map(r => `• ${r}`).join('\n')}\n\n📋 Click to copy institutional brief`
+    : (isOwner && reasons?.length) ? `Strategic Alignment:\n${reasons.map(r => `• ${r}`).join('\n')}` : undefined;
 
   // Signal Sharing - copy narration shareLine to clipboard for viral growth
   const handleCopySignal = useCallback(() => {
     if (!narration || !entry) return;
     const symbolUrl = `https://rsiq.mindscapeanalytics.com/symbol/${entry.symbol.toLowerCase()}`;
-    const text = `ðŸ“Š RSIQ PRO | ${narration.emoji} ${narration.headline}\n\n${narration.reasons.join('\n')}\n\nConviction: ${narration.conviction}% (${narration.convictionLabel})\nView Data: ${symbolUrl}`;
+    const text = `📊 RSIQ PRO | ${narration.emoji} ${narration.headline}\n\n${narration.reasons.join('\n')}\n\nConviction: ${narration.conviction}% (${narration.convictionLabel})\nView Data: ${symbolUrl}`;
     navigator.clipboard.writeText(text).then(() => {
       toast.success('Strategy Brief copied!', { duration: 2000 });
     }).catch(() => {
@@ -465,7 +465,7 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration }: { sig
 }
 
 
-function SuperSignalBadge({ superSignal }: { superSignal: ScreenerEntry['superSignal'] }) {
+function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry['superSignal']; isOwner?: boolean }) {
   if (!superSignal) {
     return (
       <span className="inline-flex items-center justify-center px-1.5 py-1 w-full max-w-[105px] text-[9px] font-black uppercase tracking-tight leading-none whitespace-nowrap overflow-hidden rounded-lg border bg-slate-700/20 text-slate-600 border-slate-600/30">
@@ -480,13 +480,13 @@ function SuperSignalBadge({ superSignal }: { superSignal: ScreenerEntry['superSi
       bg: 'bg-[#39FF14]/30',
       text: 'text-[#39FF14]',
       border: 'border-[#39FF14]/60',
-      icon: '⚠¡'
+      icon: '🔥'
     },
     'Buy': {
       bg: 'bg-[#39FF14]/20',
       text: 'text-[#39FF14]/90',
       border: 'border-[#39FF14]/40',
-      icon: 'â†—ï¸'
+      icon: '↗️'
     },
     'Neutral': {
       bg: 'bg-slate-700/20',
@@ -498,19 +498,21 @@ function SuperSignalBadge({ superSignal }: { superSignal: ScreenerEntry['superSi
       bg: 'bg-[#FF4B5C]/20',
       text: 'text-[#FF4B5C]/90',
       border: 'border-[#FF4B5C]/40',
-      icon: 'â†˜ï¸'
+      icon: '↘️'
     },
     'Strong Sell': {
       bg: 'bg-[#FF4B5C]/30',
       text: 'text-[#FF4B5C]',
       border: 'border-[#FF4B5C]/60',
-      icon: '⚠ ï¸'
-    },
+      icon: '\xe2\x9a\xa0\xef\xb8\x8f'
+    }
   };
 
   const style = config[superSignal.category] || config.Neutral;
 
-  const title = `SUPER SIGNAL: ${superSignal.category} (${superSignal.value}/100)\n\nComponent Scores:\n• Regime: ${superSignal.components.regime.score.toFixed(1)}\n• Liquidity: ${superSignal.components.liquidity.score.toFixed(1)}\n• Entropy: ${superSignal.components.entropy.score.toFixed(1)}\n• Cross-Asset: ${superSignal.components.crossAsset.score.toFixed(1)}\n• Risk: ${superSignal.components.risk.score.toFixed(1)}\n\nAlgorithm: ${superSignal.algorithmVersion}`;
+  const title = isOwner
+    ? `SUPER SIGNAL: ${superSignal.category} (${superSignal.value}/100)\n\nComponent Scores:\n• Regime: ${superSignal.components.regime.score.toFixed(1)}\n• Liquidity: ${superSignal.components.liquidity.score.toFixed(1)}\n• Entropy: ${superSignal.components.entropy.score.toFixed(1)}\n• Cross-Asset: ${superSignal.components.crossAsset.score.toFixed(1)}\n• Risk: ${superSignal.components.risk.score.toFixed(1)}\n\nAlgorithm: ${superSignal.algorithmVersion}`
+    : undefined;
 
   return (
     <span
@@ -663,6 +665,7 @@ const ScreenerRow = memo(function ScreenerRow({
   onToggleSelection,
   tradingStyle,
   onViewNarration,
+  isOwner,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -703,6 +706,7 @@ const ScreenerRow = memo(function ScreenerRow({
   onToggleSelection?: (symbol: string) => void;
   tradingStyle: TradingStyle;
   onViewNarration: (entry: ScreenerEntry) => void;
+  isOwner?: boolean;
 }) {
 
   const isStarred = watchlist.has(entry.symbol);
@@ -1345,13 +1349,13 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('strategy') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} onViewNarration={onViewNarration} />
+          <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} onViewNarration={onViewNarration} isOwner={isOwner} />
         </td>
       )}
 
       {visibleCols.has('superSignal') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          <SuperSignalBadge superSignal={entry.superSignal} />
+          <SuperSignalBadge superSignal={entry.superSignal} isOwner={isOwner} />
         </td>
       )}
 
@@ -1701,6 +1705,7 @@ const ScreenerCard = memo(function ScreenerCard({
   smartMoneyScore,
   tradingStyle,
   onViewNarration,
+  isOwner,
 }: {
   entry: ScreenerEntry;
   idx: number;
@@ -1738,6 +1743,7 @@ const ScreenerCard = memo(function ScreenerCard({
   smartMoneyScore: { score: number; label: string } | null;
   tradingStyle: TradingStyle;
   onViewNarration: (entry: ScreenerEntry) => void;
+  isOwner?: boolean;
 }) {
   const isStarred = watchlist.has(entry.symbol);
 
@@ -2064,7 +2070,7 @@ const ScreenerCard = memo(function ScreenerCard({
                     {globalUseRsi ? formatRsi(val as number) : '-'}
                   </span>
                 ) : col.id === 'strategy' ? (
-                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} onViewNarration={onViewNarration} />
+                  <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} entry={entry} onViewNarration={onViewNarration} isOwner={isOwner} />
 
                 ) : col.id === 'winRate' ? (
                   <WinRateBadge symbol={entry.symbol} className="scale-90 origin-center" />
@@ -5621,10 +5627,10 @@ export default function ScreenerDashboard() {
                   globalUseConfluence={globalUseConfluence}
                   globalUseDivergence={globalUseDivergence}
                   globalUseMomentum={globalUseMomentum}
-                        globalUseObv={globalUseObv}
-                        globalUseWilliamsR={globalUseWilliamsR}
-                        globalUseCci={globalUseCci}
-                        globalVolatilityEnabled={globalVolatilityEnabled}
+                  globalUseObv={globalUseObv}
+                  globalUseWilliamsR={globalUseWilliamsR}
+                  globalUseCci={globalUseCci}
+                  globalVolatilityEnabled={globalVolatilityEnabled}
                   globalLongCandleThreshold={globalLongCandleThreshold}
                   globalVolumeSpikeThreshold={globalVolumeSpikeThreshold}
                   fundingRate={fundingRates.get(entry.symbol) ? { rate: fundingRates.get(entry.symbol)!.rate, annualized: fundingRates.get(entry.symbol)!.annualized } : null}
@@ -5632,6 +5638,7 @@ export default function ScreenerDashboard() {
                   smartMoneyScore={smartMoney.get(entry.symbol) ? { score: smartMoney.get(entry.symbol)!.score, label: smartMoney.get(entry.symbol)!.label } : null}
                   tradingStyle={tradingStyle}
                   onViewNarration={handleViewNarration}
+                  isOwner={isOwner}
                 />
               ))}
             </>
@@ -5710,6 +5717,17 @@ export default function ScreenerDashboard() {
 
                   <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />
                   {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
+                  {visibleCols.has('superSignal') && (
+                    <SortHeader
+                      label="Supper"
+                      sortKey="superSignal"
+                      currentKey={sortKey}
+                      currentDir={sortKey === 'superSignal' ? sortDir : 'desc'}
+                      onSort={(k) => handleSort(k as any)}
+                      align="right"
+                      widthClass={COL_WIDTHS.signal}
+                    />
+                  )}
                   <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-widest whitespace-nowrap", COL_WIDTHS.edit)}>Edit</th>
                 </tr>
               </thead>
@@ -5786,6 +5804,7 @@ export default function ScreenerDashboard() {
                         onToggleSelection={toggleSymbolSelection}
                         tradingStyle={tradingStyle}
                         onViewNarration={handleViewNarration}
+                        isOwner={isOwner}
                       />
                     ))}
                   </>
