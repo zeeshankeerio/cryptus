@@ -169,9 +169,12 @@ class AlphaVantageClient {
       return symbol.replace('/', '');
     }
     
-    // Metals: GC=F → GOLD, SI=F → SILVER
+    // Metals: GC=F → GOLD, SI=F → SILVER, etc.
     if (symbol === 'GC=F') return 'GOLD';
     if (symbol === 'SI=F') return 'SILVER';
+    if (symbol === 'PL=F') return 'PLATINUM';
+    if (symbol === 'PA=F') return 'PALLADIUM';
+    if (symbol === 'HG=F') return 'COPPER';
     
     // Stocks/Indices: pass through
     return symbol;

@@ -1296,7 +1296,7 @@ export function computeStrategyScore(params: {
   // ── PHASE 5: SUPER SIGNAL VALIDATION ────────────────────────────
   // Cross-validate Strategy score with Super Signal to reduce conflicting signals
   if (SIGNAL_FEATURES.useSuperSignalValidation && params.superSignalScore !== undefined) {
-    const validation = validateWithSuperSignal(normalized, params.superSignalScore);
+    const validation = validateWithSuperSignal(normalized, params.superSignalScore ?? undefined);
     
     // Apply validation multiplier
     normalized = Math.round(normalized * validation.multiplier);

@@ -131,9 +131,12 @@ class TwelveDataClient {
     // Forex: EUR/USD (already correct format for Twelve Data)
     if (symbol.includes('/')) return symbol;
     
-    // Metals: GC=F → XAU/USD, SI=F → XAG/USD
+    // Metals: GC=F → XAU/USD, SI=F → XAG/USD, etc.
     if (symbol === 'GC=F') return 'XAU/USD';
     if (symbol === 'SI=F') return 'XAG/USD';
+    if (symbol === 'PL=F') return 'XPT/USD';
+    if (symbol === 'PA=F') return 'XPD/USD';
+    if (symbol === 'HG=F') return 'XCU/USD';
     
     // Stocks/Indices: pass through
     return symbol;

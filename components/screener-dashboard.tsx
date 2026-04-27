@@ -465,7 +465,7 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration, isOwner
 }
 
 
-function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry['superSignal']; isOwner?: boolean }) {
+function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry['superSignal'], isOwner?: boolean }) {
   if (!superSignal) {
     return (
       <span className="inline-flex items-center justify-center px-1.5 py-1 w-full max-w-[105px] text-[9px] font-black uppercase tracking-tight leading-none whitespace-nowrap overflow-hidden rounded-lg border bg-slate-700/20 text-slate-600 border-slate-600/30">
@@ -3546,11 +3546,15 @@ export default function ScreenerDashboard() {
   }, [globalThresholdsEnabled]);
 
   useEffect(() => {
-    localStorage.setItem('crypto-rsi-global-overbought', globalOverbought.toString());
+    if (globalOverbought != null) {
+      localStorage.setItem('crypto-rsi-global-overbought', globalOverbought.toString());
+    }
   }, [globalOverbought]);
 
   useEffect(() => {
-    localStorage.setItem('crypto-rsi-global-oversold', globalOversold.toString());
+    if (globalOversold != null) {
+      localStorage.setItem('crypto-rsi-global-oversold', globalOversold.toString());
+    }
   }, [globalOversold]);
 
   useEffect(() => {
@@ -3558,15 +3562,21 @@ export default function ScreenerDashboard() {
   }, [globalThresholdTimeframes]);
 
   useEffect(() => {
-    localStorage.setItem('crypto-rsi-global-long-candle-threshold', globalLongCandleThreshold.toString());
+    if (globalLongCandleThreshold != null) {
+      localStorage.setItem('crypto-rsi-global-long-candle-threshold', globalLongCandleThreshold.toString());
+    }
   }, [globalLongCandleThreshold]);
 
   useEffect(() => {
-    localStorage.setItem('crypto-rsi-global-volume-spike-threshold', globalVolumeSpikeThreshold.toString());
+    if (globalVolumeSpikeThreshold != null) {
+      localStorage.setItem('crypto-rsi-global-volume-spike-threshold', globalVolumeSpikeThreshold.toString());
+    }
   }, [globalVolumeSpikeThreshold]);
 
   useEffect(() => {
-    localStorage.setItem('crypto-rsi-pairs', pairCount.toString());
+    if (pairCount != null) {
+      localStorage.setItem('crypto-rsi-pairs', pairCount.toString());
+    }
   }, [pairCount]);
 
   useEffect(() => {
@@ -7922,3 +7932,4 @@ function GlobalSettingsModal({
     </motion.div>
   );
 }
+

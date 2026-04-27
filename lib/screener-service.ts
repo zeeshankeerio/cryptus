@@ -952,6 +952,7 @@ async function fetchYahooTickers(symbols: string[]): Promise<Map<string, Binance
   }
 
   flatResults.forEach((q: any) => {
+    if (!q) return;
     const internalSym = reverseMap.get(q.symbol) || q.symbol;
     tickerMap.set(internalSym, {
       symbol: internalSym,
@@ -1545,6 +1546,20 @@ function buildEntry(
     // Rolling BB width average: needed for BB squeeze/expansion detection
     const bbWidthAvgRolling = computeRollingBbWidthAverage(closes15m, 20, 20);
 
+    // Calculate current candle metrics for volatility indicators
+    const lastKline1m = validKlines[validKlines.length - 1];
+    const open1m = lastKline1m ? parseFloat(lastKline1m[1]) : null;
+    const close1m = lastKline1m ? parseFloat(lastKline1m[4]) : null;
+    const high1m = lastKline1m ? parseFloat(lastKline1m[2]) : null;
+    const low1m = lastKline1m ? parseFloat(lastKline1m[3]) : null;
+    const volStart1m = lastKline1m ? parseFloat(lastKline1m[5]) : null;
+    
+    const curCandleSize = (high1m !== null && low1m !== null) ? Math.abs(high1m - low1m) : null;
+    const curCandleVol = volStart1m;
+
+    const avgBarSize1m = calculateAvgBarSize(highs1m, lows1m, 20);
+    const avgVolume1m = calculateAvgVolume(volumes1m, 20);
+
     const regimeResult = classifyRegime({
       adx,
       atr,
@@ -1552,7 +1567,7 @@ function buildEntry(
       bbWidth,
       bbWidthAvg: bbWidthAvgRolling, // ✅ Fixed: was always null
       volumeSpike,
-      priceChange24h: toNum(ticker.priceChangePercent, 0), // ✅ 2026 FIX: Pass 24h price change for extreme move detection
+      priceChange24h: toNum(ticker?.priceChangePercent, 0), // ✅ 2026 FIX: Pass 24h price change for extreme move detection
       volumeRatio: volumeSpike && curCandleVol && avgVolume1m && avgVolume1m > 0 
         ? curCandleVol / avgVolume1m 
         : null, // ✅ 2026 FIX: Pass volume ratio for breakout vs trending distinction
@@ -1637,23 +1652,14 @@ function buildEntry(
       cci,
       obvTrend: obvResult?.trend ?? 'none',
       williamsR,
-      avgBarSize1m: calculateAvgBarSize(highs1m, lows1m, 20),
-      avgVolume1m: calculateAvgVolume(volumes1m, 20),
+      avgBarSize1m,
+      avgVolume1m,
     };
 
     // Update the long-lived baseline cache for persistent volatility checks
     updateBaselineCache(sym, entry_partial.avgBarSize1m, entry_partial.avgVolume1m);
 
-    const lastKline1m = validKlines[validKlines.length - 1];
-    const open1m = lastKline1m ? parseFloat(lastKline1m[1]) : null;
-    const close1m = lastKline1m ? parseFloat(lastKline1m[4]) : null;
-    const high1m = lastKline1m ? parseFloat(lastKline1m[2]) : null;
-    const low1m = lastKline1m ? parseFloat(lastKline1m[3]) : null;
-    const volStart1m = lastKline1m ? parseFloat(lastKline1m[5]) : null;
-
-    // Calculate current candle metrics for volatility indicators
-    const curCandleSize = (high1m !== null && low1m !== null) ? Math.abs(high1m - low1m) : null;
-    const curCandleVol = volStart1m;
+    // Calculate candle direction and long candle flag (using pre-computed metrics)
     const candleDirection = (close1m !== null && open1m !== null) 
       ? (close1m > open1m ? 'bullish' : close1m < open1m ? 'bearish' : 'neutral')
       : null;

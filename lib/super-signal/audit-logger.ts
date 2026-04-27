@@ -144,7 +144,7 @@ class AuditLogger {
       symbol,
       timestamp: Date.now(),
       algorithmVersion: result.algorithmVersion,
-      componentScores: result.componentScores,
+      componentScores: result.components,
       finalValue: result.value,
       category: result.category,
       inputHash,

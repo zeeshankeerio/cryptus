@@ -11,6 +11,7 @@
 export interface SignalFeatureFlags {
   /** Phase 2: Apply correlation penalty to prevent score inflation from redundant indicators */
   useCorrelationPenalty: boolean;
+
   
   /** Phase 3: Use smart suppression that considers 1h trend and volume (vs aggressive suppression) */
   useRelaxedSuppression: boolean;
@@ -26,19 +27,38 @@ export interface SignalFeatureFlags {
   
   /** Future: Use weighted TF agreement (importance-based vs simple count) */
   useWeightedTFAgreement: boolean;
+
+  /** Entitlements: Max records allowed for trial users */
+  maxTrialRecords: number;
+  /** Entitlements: Max records allowed for subscribed users */
+  maxSubscribedRecords: number;
+  /** Entitlements: Allow alerts for trial/free users */
+  allowTrialAlerts: boolean;
+  /** Entitlements: Allow advanced indicators for trial/free users */
+  allowTrialAdvancedIndicators: boolean;
+  /** Entitlements: Allow custom settings for trial/free users */
+  allowTrialCustomSettings: boolean;
 }
+
+export type FeatureFlags = SignalFeatureFlags;
+
 
 // ── Default Configuration ───────────────────────────────────────
 // INSTITUTIONAL GRADE: All accuracy improvements enabled by default for best signals
 // These are proven enhancements that improve win rates and reduce false signals
 
-const DEFAULT_FLAGS: SignalFeatureFlags = {
+export const DEFAULT_FLAGS: SignalFeatureFlags = {
   useCorrelationPenalty: true,        // ✅ Reduces score inflation by 20-30%
   useRelaxedSuppression: true,        // ✅ Catches 30-40% more momentum trades
   useStrongSmartMoney: true,          // ✅ Component-aware Smart Money boost (20-40%)
   useSuperSignalValidation: true,     // ✅ Cross-validates with Super Signal
   useRegimeThresholds: false,         // Future: Dynamic thresholds
   useWeightedTFAgreement: false,      // Future: Importance-based TF agreement
+  maxTrialRecords: 100,
+  maxSubscribedRecords: 500,
+  allowTrialAlerts: false,
+  allowTrialAdvancedIndicators: false,
+  allowTrialCustomSettings: false,
 };
 
 // ── Environment Variable Overrides ──────────────────────────────
@@ -75,6 +95,11 @@ export const SIGNAL_FEATURES: SignalFeatureFlags = {
   useSuperSignalValidation: getEnvFlag('USE_SUPER_SIGNAL_VALIDATION', DEFAULT_FLAGS.useSuperSignalValidation),
   useRegimeThresholds: getEnvFlag('USE_REGIME_THRESHOLDS', DEFAULT_FLAGS.useRegimeThresholds),
   useWeightedTFAgreement: getEnvFlag('USE_WEIGHTED_TF_AGREEMENT', DEFAULT_FLAGS.useWeightedTFAgreement),
+  maxTrialRecords: 100, // Fixed values for entitlements, not typically env-overridden
+  maxSubscribedRecords: 500,
+  allowTrialAlerts: getEnvFlag('ALLOW_TRIAL_ALERTS', DEFAULT_FLAGS.allowTrialAlerts),
+  allowTrialAdvancedIndicators: getEnvFlag('ALLOW_TRIAL_ADVANCED_INDICATORS', DEFAULT_FLAGS.allowTrialAdvancedIndicators),
+  allowTrialCustomSettings: getEnvFlag('ALLOW_TRIAL_CUSTOM_SETTINGS', DEFAULT_FLAGS.allowTrialCustomSettings),
 };
 
 // ── Feature Flag Management ─────────────────────────────────────
@@ -90,7 +115,8 @@ export function getFeatureFlags(): SignalFeatureFlags {
  * Check if a specific feature is enabled
  */
 export function isFeatureEnabled(feature: keyof SignalFeatureFlags): boolean {
-  return SIGNAL_FEATURES[feature];
+  const val = SIGNAL_FEATURES[feature];
+  return typeof val === 'boolean' ? val : !!val;
 }
 
 /**
@@ -99,6 +125,11 @@ export function isFeatureEnabled(feature: keyof SignalFeatureFlags): boolean {
 export function enableFeature(feature: keyof SignalFeatureFlags): void {
   if (typeof window !== 'undefined') {
     try {
+      const current = SIGNAL_FEATURES[feature];
+      if (typeof current !== 'boolean') {
+        console.warn(`[Feature Flags] Cannot toggle non-boolean feature: ${feature}`);
+        return;
+      }
       localStorage.setItem(`feature_${feature}`, 'true');
       (SIGNAL_FEATURES as any)[feature] = true;
       console.log(`[Feature Flags] Enabled: ${feature}`);
@@ -114,6 +145,11 @@ export function enableFeature(feature: keyof SignalFeatureFlags): void {
 export function disableFeature(feature: keyof SignalFeatureFlags): void {
   if (typeof window !== 'undefined') {
     try {
+      const current = SIGNAL_FEATURES[feature];
+      if (typeof current !== 'boolean') {
+        console.warn(`[Feature Flags] Cannot toggle non-boolean feature: ${feature}`);
+        return;
+      }
       localStorage.setItem(`feature_${feature}`, 'false');
       (SIGNAL_FEATURES as any)[feature] = false;
       console.log(`[Feature Flags] Disabled: ${feature}`);
@@ -150,6 +186,11 @@ export const FEATURE_DESCRIPTIONS: Record<keyof SignalFeatureFlags, string> = {
   useSuperSignalValidation: 'Cross-validates Strategy with Super Signal (Phase 5) - ENABLED',
   useRegimeThresholds: 'Dynamic thresholds based on market regime (Future)',
   useWeightedTFAgreement: 'Importance-based timeframe agreement (Future)',
+  maxTrialRecords: 'Max records for trial users',
+  maxSubscribedRecords: 'Max records for subscribed users',
+  allowTrialAlerts: 'Allow alerts for trial users',
+  allowTrialAdvancedIndicators: 'Allow advanced indicators for trial users',
+  allowTrialCustomSettings: 'Allow custom settings for trial users',
 };
 
 // ── Logging & Monitoring ────────────────────────────────────────

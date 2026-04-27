@@ -1,8 +1,9 @@
 import { AUTH_CONFIG } from "@/lib/config";
-import { getFeatureFlags, type FeatureFlags } from "@/lib/feature-flags";
-import { prisma } from "@/lib/prisma";
-import { getUserFeatureFlags, type UserFeatureFlagName } from "@/lib/user-feature-flags";
-import { entitlementsCache } from "@/lib/entitlements-cache";
+import { getFeatureFlags, SignalFeatureFlags, type FeatureFlags, DEFAULT_FLAGS } from "@/lib/feature-flags";
+import { prisma } from "./prisma";
+import { getUserFeatureFlags, type UserFeatureFlagName } from "./user-feature-flags";
+import { entitlementsCache } from "./entitlements-cache";
+
 
 const RECORD_OPTIONS = [100, 200, 300, 500] as const;
 
@@ -75,19 +76,13 @@ export async function resolveEntitlementsForUser(user: EntitlementUser | null): 
     }
   }
 
-  let flags: FeatureFlags;
+  let flags: SignalFeatureFlags;
   try {
     flags = await getFeatureFlags();
   } catch (error) {
     console.error("[entitlements] Failed to fetch feature flags, falling back to defaults:", error);
     // Explicit fallback to ensure system health during DB transitions
-    flags = {
-      maxTrialRecords: 100,
-      maxSubscribedRecords: 500,
-      allowTrialAlerts: false,
-      allowTrialAdvancedIndicators: false,
-      allowTrialCustomSettings: false,
-    };
+    flags = { ...DEFAULT_FLAGS };
   }
 
   if (!user) {

@@ -71,7 +71,7 @@ describe('SUPER_SIGNAL Integration Tests', () => {
     avgVolume1m: 50000000,
     curCandleSize: 55,
     curCandleVol: 55000000,
-    candleDirection: 'up',
+    candleDirection: 'bullish',
     marketState: 'OPEN',
     signalStartedAt: Date.now(),
     updatedAt: Date.now(),

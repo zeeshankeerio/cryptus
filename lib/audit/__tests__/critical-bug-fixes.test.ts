@@ -465,7 +465,6 @@ describe('Integration: All Fixes Working Together', () => {
     // Now test narrator
     const entry: Partial<ScreenerEntry> = {
       symbol: 'EURUSD',
-      market: 'Forex',
       ...params,
       strategySignal: result.signal,
       candleDirection: 'bullish',
@@ -513,7 +512,6 @@ describe('Integration: All Fixes Working Together', () => {
     // Now test narrator
     const entry: Partial<ScreenerEntry> = {
       symbol: 'BTCUSDT',
-      market: 'Crypto',
       ...params,
       strategySignal: result.signal,
       candleDirection: 'bullish',

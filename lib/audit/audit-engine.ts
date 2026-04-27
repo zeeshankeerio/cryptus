@@ -6,6 +6,7 @@
  * Coordinates validation modules, aggregates results, and generates reports.
  */
 
+import { AuditErrorType } from './types';
 import type {
   AuditOptions,
   AuditResult,
@@ -17,7 +18,6 @@ import type {
   NarratorValidationReport,
   Gap,
   AuditError,
-  AuditErrorType,
 } from './types';
 
 export class AuditEngine {

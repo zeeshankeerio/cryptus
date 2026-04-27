@@ -309,6 +309,8 @@ function connectBybitLiquidationStream() {
         } catch (e) {
           console.warn('[deriv-worker] Failed to send Bybit ping', e.message);
         }
+      } else {
+        clearInterval(pingInterval);
       }
     }, HEARTBEAT_MS + (Math.random() * 2000));
 
@@ -605,7 +607,11 @@ async function pollOpenInterest() {
 
     oiDirty = true;
   } catch (e) {
-    console.error('[deriv-worker] pollOpenInterest critical error:', e);
+    if (e.name === 'AbortError') {
+      console.warn('[deriv-worker] pollOpenInterest request timed out (expected periodically)');
+    } else {
+      console.error('[deriv-worker] pollOpenInterest critical error:', e);
+    }
   }
 
   // ── Intelligence: REST Fallback for Funding ──
