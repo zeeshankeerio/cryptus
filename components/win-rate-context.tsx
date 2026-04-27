@@ -90,15 +90,25 @@ export function WinRateProvider({ children }: WinRateProviderProps) {
         // 1. Push local results to aggregate
         const summary = getWinRateSummary();
         if (summary.total >= 3) {
-          await fetch('/api/signals/sync', {
+          const postRes = await fetch('/api/signals/sync', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(summary),
           });
+          
+          // If rate limited, skip the GET request to avoid double 429
+          if (postRes.status === 429) {
+            console.debug('[win-rate-sync] Rate limited, skipping GET');
+            return;
+          }
         }
 
         // 2. Hydrate global truth
         const res = await fetch('/api/signals/sync');
+        if (res.status === 429) {
+          console.debug('[win-rate-sync] Rate limited on GET');
+          return;
+        }
         const data = await res.json();
         if (data && !data.calibrating) {
           setGlobalData(data);
@@ -109,7 +119,7 @@ export function WinRateProvider({ children }: WinRateProviderProps) {
     };
 
     syncGlobal();
-    const id = setInterval(syncGlobal, 60000); // 1-minute global sync
+    const id = setInterval(syncGlobal, 90000); // Increased from 60s to 90s to avoid rate limit collisions
     return () => clearInterval(id);
   }, []);
 

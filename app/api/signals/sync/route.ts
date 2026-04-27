@@ -20,10 +20,10 @@ export async function POST(request: Request) {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
     const limitKey = `ratelimit:sync:${user?.id || ip}`;
     
-    // Simple 1-min cooldown for syncs
+    // Increased cooldown from 60s to 75s to prevent collision with 90s client interval
     const cooldown = await redis.get(limitKey);
     if (cooldown) {
-      return NextResponse.json({ error: 'Sync cooldown active' }, { status: 429 });
+      return NextResponse.json({ error: 'Sync cooldown active', retryAfter: 75 }, { status: 429 });
     }
 
     const body = await request.json();
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
     pipeline.hincrby(REDIS_KEY, 'evaluated15m', evaluated15m || 0);
     pipeline.hincrby(REDIS_KEY, 'evaluated1h', evaluated1h || 0);
     
-    // Set cooldown
-    pipeline.set(limitKey, '1', { ex: 60 });
+    // Set cooldown - increased from 60s to 75s
+    pipeline.set(limitKey, '1', { ex: 75 });
     
     await pipeline.exec();
 

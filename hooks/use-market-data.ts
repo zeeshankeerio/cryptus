@@ -76,7 +76,7 @@ export function useMarketData(
 
       const res = await fetch(
         `/api/market-data?symbols=${encodeURIComponent(symbols.join(','))}&class=${assetClass}`,
-        { signal: AbortSignal.timeout(10000) }
+        { signal: AbortSignal.timeout(30000) } // Increased from 10s to 30s for metals/forex data
       );
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

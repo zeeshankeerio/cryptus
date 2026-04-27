@@ -24,7 +24,7 @@ const FLUSH_INTERVAL_MS = 300;     // 300ms for ultra-live feel
 const OI_POLL_INTERVAL_MS = 30000;
 const ZOMBIE_WATCHDOG_MS = 10000;   // check every 10s (reduced from 30s)
 const ZOMBIE_THRESHOLD_MS = 15000;  // force reconnect if no data for 15s (reduced from 60s)
-let LIQUIDATION_THRESHOLD = 10000;         // Default $10K (aligned with UI standard)
+let LIQUIDATION_THRESHOLD = 5000;          // Lowered from $10K to $5K for better visibility
 const WHALE_THRESHOLD_USD = 100000;        // $100K+ = whale trade
 const MEGA_WHALE_THRESHOLD_USD = 500000;   // $500K+ = mega whale
 const ORDER_FLOW_WINDOW_MS = 60000;        // 1-minute accumulation window
@@ -164,14 +164,22 @@ function connectFundingStream() {
       resetReconnect(STREAM_KEY);
       
       // Heartbeat: Binance requires a ping every 3 minutes to keep the connection alive
-      // We do it every 30s to be safe
+      // We do it every 25s to be safe and avoid "Ping received after close" errors
       const pingInterval = setInterval(() => {
         if (fundingWs && fundingWs.readyState === WebSocket.OPEN) {
-          try { fundingWs.send(JSON.stringify({ method: 'PING', id: Date.now() })); } catch(e) {}
+          try { 
+            fundingWs.send(JSON.stringify({ method: 'PING', id: Date.now() })); 
+          } catch(e) {
+            console.warn('[deriv-worker] Failed to send funding ping', e);
+            clearInterval(pingInterval);
+          }
         } else {
           clearInterval(pingInterval);
         }
-      }, 30000);
+      }, 25000);
+      
+      // Store interval ID for cleanup
+      fundingWs._pingInterval = pingInterval;
     };
 
     fundingWs.onmessage = (event) => {
@@ -217,6 +225,10 @@ function connectFundingStream() {
 
     fundingWs.onclose = () => {
       console.log('[deriv-worker] Funding stream closed');
+      // Clear ping interval on close
+      if (fundingWs && fundingWs._pingInterval) {
+        clearInterval(fundingWs._pingInterval);
+      }
       fundingWs = null;
       streamHealth.funding = false;
       if (isRunning) scheduleReconnect(STREAM_KEY, connectFundingStream);
@@ -281,6 +293,11 @@ function connectBybitLiquidationStream() {
           const price = parseFloat(liq.price) || lastPrices.get(symbol) || 0;
           const valueUsd = size * price;
 
+          // Debug logging for development
+          if (valueUsd > 0) {
+            console.log(`[deriv-worker] Bybit liquidation: ${symbol} ${liq.side} $${Math.round(valueUsd).toLocaleString()} @ ${price}`);
+          }
+
           if (valueUsd < LIQUIDATION_THRESHOLD) return;
 
           const eventPayload = {
@@ -308,13 +325,21 @@ function connectBybitLiquidationStream() {
           liquidationWs.send(JSON.stringify({ op: 'ping' }));
         } catch (e) {
           console.warn('[deriv-worker] Failed to send Bybit ping', e.message);
+          clearInterval(pingInterval);
         }
       } else {
         clearInterval(pingInterval);
       }
     }, HEARTBEAT_MS + (Math.random() * 2000));
+    
+    // Store interval ID for cleanup
+    liquidationWs._pingInterval = pingInterval;
 
     liquidationWs.onclose = () => {
+      // Clear ping interval on close
+      if (liquidationWs && liquidationWs._pingInterval) {
+        clearInterval(liquidationWs._pingInterval);
+      }
       clearInterval(pingInterval);
       streamHealth.liquidationBybit = false;
       if (isRunning) scheduleReconnect(STREAM_KEY, connectBybitLiquidationStream);
@@ -359,6 +384,11 @@ function connectBinanceLiquidationStream() {
           const size = parseFloat(o.q) || 0;
           const price = parseFloat(o.p) || lastPrices.get(symbol) || 0;
           const valueUsd = size * price;
+
+          // Debug logging for development
+          if (valueUsd > 0) {
+            console.log(`[deriv-worker] Binance liquidation: ${symbol} ${o.S} $${Math.round(valueUsd).toLocaleString()} @ ${price}`);
+          }
 
           if (valueUsd < LIQUIDATION_THRESHOLD) return;
 
@@ -419,14 +449,22 @@ function connectWhaleStream() {
       streamHealth.whale = true;
       resetReconnect(STREAM_KEY);
 
-      // Heartbeat
+      // Heartbeat - reduced from 30s to 25s to prevent "Ping received after close"
       const pingInterval = setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
-          try { ws.send(JSON.stringify({ method: 'PING', id: Date.now() })); } catch(e) {}
+          try { 
+            ws.send(JSON.stringify({ method: 'PING', id: Date.now() })); 
+          } catch(e) {
+            console.warn('[deriv-worker] Failed to send whale ping', e);
+            clearInterval(pingInterval);
+          }
         } else {
           clearInterval(pingInterval);
         }
-      }, 30000);
+      }, 25000);
+      
+      // Store interval ID for cleanup
+      ws._pingInterval = pingInterval;
     };
 
     ws.onmessage = (event) => {
@@ -494,6 +532,10 @@ function connectWhaleStream() {
 
     ws.onclose = () => {
       console.log('[deriv-worker] Whale stream closed');
+      // Clear ping interval on close
+      if (ws && ws._pingInterval) {
+        clearInterval(ws._pingInterval);
+      }
       streamHealth.whale = false;
       whaleWsSockets.delete('combined');
       if (isRunning) scheduleReconnect(STREAM_KEY, connectWhaleStream);
@@ -884,9 +926,9 @@ self.onmessage = function(e) {
       break;
 
     case 'UPDATE_CONFIG':
-      if (payload?.liquidationThreshold) {
+      if (payload?.liquidationThreshold !== undefined) {
         LIQUIDATION_THRESHOLD = payload.liquidationThreshold;
-        console.log(`[deriv-worker] Liquidation threshold updated to $${LIQUIDATION_THRESHOLD}`);
+        console.log(`[deriv-worker] Liquidation threshold updated to $${LIQUIDATION_THRESHOLD.toLocaleString()}`);
       }
       break;
 
