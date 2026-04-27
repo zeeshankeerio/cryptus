@@ -30,11 +30,12 @@ import type {
 // Phase 1: Added CVD (10%) by reducing funding (45%) and orderFlow (5%)
 // This ensures extreme funding rates (like -8%) produce accurate Smart Money scores
 const WEIGHTS = {
-  funding: 0.45,        // 45% - PRIMARY signal (was 50%, reduced for CVD)
-  liquidation: 0.25,    // 25% - secondary
+  funding: 0.40,        // 40% - PRIMARY signal (was 45%)
+  liquidation: 0.20,    // 20% - secondary (was 25%)
   whale: 0.15,          // 15% - tertiary
-  orderFlow: 0.05,      // 5% - supplementary (was 10%, reduced for CVD)
-  cvd: 0.10,            // 10% - NEW Phase 1: Cumulative Volume Delta
+  cvd: 0.10,            // 10% - Phase 1: Cumulative Volume Delta
+  options: 0.10,        // 10% - NEW Phase 1: Options Sentiment (PCR)
+  orderFlow: 0.05,      // 5% - supplementary
 } as const;
 
 /**
@@ -76,6 +77,40 @@ export function computeCVDSignal(
   }
   
   return Math.round(signal);
+}
+
+/**
+ * Options Sentiment Signal (-100 to +100)
+ * 
+ * Put/Call Ratio (PCR) measures hedging sentiment.
+ * PCR < 0.7 = Bullish (Positive signal)
+ * PCR > 1.2 = Bearish (Negative signal)
+ * 
+ * Scale:
+ *   PCR 0.4 = +100 (Extremely Bullish)
+ *   PCR 1.8 = -100 (Extremely Bearish)
+ */
+export function computeOptionsSignal(
+  optionsData: Map<string, import('./derivatives-types').OptionsIntelligence>,
+  symbol: string
+): number {
+  const data = optionsData.get(symbol);
+  if (!data) return 0;
+
+  const pcr = data.putCallRatio;
+  
+  // Center at 1.0
+  // Bullish: 1.0 -> 0.4  =>  0 to +100
+  // Bearish: 1.0 -> 1.8  =>  0 to -100
+  let signal = (1.0 - pcr) * (100 / 0.6);
+  
+  // Implied Volatility (IV) amplification
+  // High IV often marks local bottoms/tops (reversal signal)
+  if (data.impliedVolatility > 60) {
+    signal *= 1.2; // Amplify extremes
+  }
+  
+  return Math.round(Math.min(100, Math.max(-100, signal)));
 }
 
 // ── Signal Computation Functions ─────────────────────────────────
@@ -230,13 +265,15 @@ export function computeSmartMoneyPressure(
   liquidations: LiquidationEvent[],
   whaleAlerts: WhaleTradeEvent[],
   orderFlow: Map<string, OrderFlowData>,
-  cvdData?: Map<string, import('./derivatives-types').CVDData>
+  cvdData?: Map<string, import('./derivatives-types').CVDData>,
+  optionsData?: Map<string, import('./derivatives-types').OptionsIntelligence>
 ): SmartMoneyPressure {
   const fundingSignal = computeFundingSignal(fundingRates, symbol);
   const liquidationSignal = computeLiquidationSignal(liquidations, symbol);
   const whaleSignal = computeWhaleSignal(whaleAlerts, symbol);
   const orderFlowSignal = computeOrderFlowSignal(orderFlow, symbol);
   const cvdSignal = cvdData ? computeCVDSignal(cvdData, symbol) : 0;
+  const optionsSignal = optionsData ? computeOptionsSignal(optionsData, symbol) : 0;
 
   // Weighted composite
   const score = Math.round(
@@ -244,7 +281,8 @@ export function computeSmartMoneyPressure(
     liquidationSignal * WEIGHTS.liquidation +
     whaleSignal * WEIGHTS.whale +
     orderFlowSignal * WEIGHTS.orderFlow +
-    cvdSignal * WEIGHTS.cvd
+    cvdSignal * WEIGHTS.cvd +
+    optionsSignal * WEIGHTS.options
   );
 
   // Clamp to -100..+100
@@ -268,6 +306,7 @@ export function computeSmartMoneyPressure(
       whaleDirection: Math.round(whaleSignal),
       orderFlowPressure: Math.round(orderFlowSignal),
       cvdSignal: Math.round(cvdSignal),
+      optionsSignal: Math.round(optionsSignal),
     },
     updatedAt: Date.now(),
   };
@@ -282,14 +321,15 @@ export function computeAllSmartMoney(
   liquidations: LiquidationEvent[],
   whaleAlerts: WhaleTradeEvent[],
   orderFlow: Map<string, OrderFlowData>,
-  cvdData?: Map<string, import('./derivatives-types').CVDData>
+  cvdData?: Map<string, import('./derivatives-types').CVDData>,
+  optionsData?: Map<string, import('./derivatives-types').OptionsIntelligence>
 ): Map<string, SmartMoneyPressure> {
   const result = new Map<string, SmartMoneyPressure>();
 
   for (const symbol of symbols) {
     try {
       const pressure = computeSmartMoneyPressure(
-        symbol, fundingRates, liquidations, whaleAlerts, orderFlow, cvdData
+        symbol, fundingRates, liquidations, whaleAlerts, orderFlow, cvdData, optionsData
       );
       
       // FIX: Always include if we have at least one data source (not if signals are non-zero)

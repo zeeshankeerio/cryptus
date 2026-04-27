@@ -62,6 +62,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
   const [fundingHistory, setFundingHistory] = useState<Map<string, import('@/lib/derivatives-types').FundingRateHistory>>(new Map());
   const [oiAnalysis, setOiAnalysis] = useState<Map<string, import('@/lib/derivatives-types').OpenInterestAnalysis>>(new Map());
   const [cascadeRisk, setCascadeRisk] = useState<Map<string, import('@/lib/derivatives-types').LiquidationCascadeRisk>>(new Map());
+  const [optionsIntel, setOptionsIntel] = useState<Map<string, import('@/lib/derivatives-types').OptionsIntelligence>>(new Map());
   
   const [isConnected, setIsConnected] = useState(false);
   const [streamHealth, setStreamHealth] = useState({
@@ -103,7 +104,8 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           liquidations,
           whaleAlerts,
           orderFlow,
-          cvd // Pass CVD data for Phase 1 calculation
+          cvd, // Pass CVD data for Phase 1 calculation
+          optionsIntel // Pass Options data for Phase 1 calculation
         );
         setSmartMoney(result);
         
@@ -119,7 +121,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     return () => {
       if (smartMoneyTimerRef.current) clearTimeout(smartMoneyTimerRef.current);
     };
-  }, [symbols, fundingRates, liquidations, whaleAlerts, orderFlow, cvd, enabled]);
+  }, [symbols, fundingRates, liquidations, whaleAlerts, orderFlow, cvd, optionsIntel, enabled]);
 
   // ── Worker Lifecycle ──────────────────────────────────────────
 
@@ -142,7 +144,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           break;
 
         case 'SNAPSHOT': {
-          const { fundingRates, liquidations, whaleAlerts, orderFlow, openInterest, cvd, fundingHistory, oiAnalysis, cascadeRisk } = payload;
+          const { fundingRates, liquidations, whaleAlerts, orderFlow, openInterest, cvd, fundingHistory, oiAnalysis, cascadeRisk, optionsIntel } = payload;
           if (fundingRates) setFundingRates(new Map(fundingRates));
           if (liquidations) setLiquidations(liquidations);
           if (whaleAlerts) setWhaleAlerts(whaleAlerts);
@@ -153,6 +155,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           if (fundingHistory) setFundingHistory(new Map(fundingHistory));
           if (oiAnalysis) setOiAnalysis(new Map(oiAnalysis));
           if (cascadeRisk) setCascadeRisk(new Map(cascadeRisk));
+          if (optionsIntel) setOptionsIntel(new Map(optionsIntel));
           break;
         }
 
@@ -317,6 +320,18 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
           });
           break;
         }
+
+        case 'OPTIONS_UPDATE': {
+          const entries = payload as [string, import('@/lib/derivatives-types').OptionsIntelligence][];
+          setOptionsIntel(prev => {
+            const next = new Map(prev);
+            for (const [sym, data] of entries) {
+              next.set(sym, data);
+            }
+            return next;
+          });
+          break;
+        }
       }
     };
 
@@ -387,6 +402,7 @@ export function useDerivativesIntel(symbols: Set<string>, enabled: boolean = tru
     fundingHistory,
     oiAnalysis,
     cascadeRisk,
+    optionsIntel,
     // Connection state
     isConnected,
     isStale,

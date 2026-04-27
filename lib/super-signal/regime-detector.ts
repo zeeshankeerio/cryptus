@@ -29,7 +29,7 @@ import { getConfig } from './config';
  * - volatile: Dampened toward neutral (score → 50), risk-off signal
  * - breakout: Directional boost (score > 60 or < 40), scaled by confidence
  */
-function mapRegimeToScore(classification: RegimeClassification): number {
+function mapRegimeToScore(classification: RegimeClassification, directionBias: number = 0): number {
   const { regime, confidence } = classification;
   
   // Confidence scaling: 0-100 → 0.0-1.0
@@ -37,27 +37,37 @@ function mapRegimeToScore(classification: RegimeClassification): number {
   
   switch (regime) {
     case 'trending':
-      // Trending = bullish bias, scaled by confidence
-      // Base score: 65, confidence boost: +0 to +30
-      return Math.round(65 + (confidenceScale * 30));
+      // Trending = directional bias, scaled by confidence
+      if (directionBias >= 0) {
+        // Bullish bias: Base 65, up to 95
+        return Math.round(65 + (confidenceScale * 30));
+      } else {
+        // Bearish bias: Base 35, down to 5
+        return Math.round(35 - (confidenceScale * 30));
+      }
       
     case 'ranging':
-      // Ranging = neutral with slight bearish bias (consolidation)
-      // Base score: 45, confidence dampens toward 50
-      return Math.round(45 + (confidenceScale * 5));
+      // Ranging = neutral with slight bias based on direction
+      if (directionBias >= 0) {
+        return Math.round(50 + (confidenceScale * 10)); // 50-60
+      } else {
+        return Math.round(50 - (confidenceScale * 10)); // 40-50
+      }
       
     case 'volatile':
       // Volatile = risk-off, dampen toward neutral
-      // Base score: 40, confidence dampens further
-      return Math.round(50 - (confidenceScale * 10));
+      return Math.round(50 - (directionBias * confidenceScale * 10));
       
     case 'breakout':
-      // Breakout = strong directional signal, scaled by confidence
-      // Base score: 70, confidence boost: +0 to +25
-      return Math.round(70 + (confidenceScale * 25));
+      // Breakout = strong directional signal
+      if (directionBias >= 0) {
+        return Math.round(75 + (confidenceScale * 25)); // 75-100
+      } else {
+        return Math.round(25 - (confidenceScale * 25)); // 0-25
+      }
       
     default:
-      return 50; // Neutral fallback
+      return 50;
   }
 }
 
@@ -84,7 +94,8 @@ export async function detectRegime(input: SuperSignalInput): Promise<ComponentSc
     
     // If regime is already computed in ScreenerEntry, use it
     if (input.regime) {
-      const score = mapRegimeToScore(input.regime);
+      const directionBias = input.change24h > 0 ? 1 : input.change24h < 0 ? -1 : 0;
+      const score = mapRegimeToScore(input.regime, directionBias);
       const result: ComponentScore = {
         score,
         confidence: input.regime.confidence,
@@ -130,6 +141,9 @@ export async function detectRegime(input: SuperSignalInput): Promise<ComponentSc
       ? curCandleVol / avgVolume1m
       : null;
     
+    // Determine direction bias for scoring
+    const directionBias = change24h > 0 ? 1 : change24h < 0 ? -1 : 0;
+
     // Call existing classifyRegime()
     const classification = classifyRegime({
       adx,
@@ -142,8 +156,8 @@ export async function detectRegime(input: SuperSignalInput): Promise<ComponentSc
       volumeRatio,
     });
     
-    // Map to 0-100 score
-    const score = mapRegimeToScore(classification);
+    // Map to 0-100 score with direction bias
+    const score = mapRegimeToScore(classification, directionBias);
     
     const result: ComponentScore = {
       score,

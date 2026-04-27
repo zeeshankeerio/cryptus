@@ -177,12 +177,25 @@ const showNativeNotification = (payload: any) => {
     options.vibrate = [100];
   }
 
-  try {
-    return self.registration.showNotification(title, options);
-  } catch (error) {
-    console.error('[sw] showNotification failed:', error);
+  // Safety check for Notification API existence in worker scope
+  if (typeof Notification === 'undefined') {
+    console.warn('[sw] Notification API not available in this environment');
     return Promise.resolve();
   }
+
+  // Double-check permission before attempting to show
+  if (Notification.permission !== 'granted') {
+    return Promise.resolve();
+  }
+
+  return self.registration.showNotification(title, options).catch(error => {
+    // Gracefully handle "No notification permission has been granted" and other async failures
+    if (error instanceof TypeError && error.message.includes('permission')) {
+      console.warn('[sw] Notification suppressed: Permission not granted');
+    } else {
+      console.error('[sw] showNotification async failure:', error);
+    }
+  });
 };
 
 // Listen for messages from the main thread (Foreground/UI fallback)

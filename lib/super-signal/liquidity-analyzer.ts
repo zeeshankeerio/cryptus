@@ -75,7 +75,8 @@ function computeVolumeImbalance(
 function computeLiquidityScore(
   vwapDeviation: number | null,
   volumeImbalance: number | null,
-  config: ReturnType<typeof getConfig>
+  config: ReturnType<typeof getConfig>,
+  trendBias: number = 0
 ): number {
   let score = 50; // Start neutral
   
@@ -84,16 +85,31 @@ function computeLiquidityScore(
     const { vwapDeviationThreshold } = config.liquidity;
     
     if (vwapDeviation < -vwapDeviationThreshold) {
-      // Price significantly below VWAP → accumulation zone (bullish)
+      // Price significantly below VWAP
       const magnitude = Math.min(Math.abs(vwapDeviation) / vwapDeviationThreshold, 2.0);
-      score += magnitude * 20; // +0 to +40
+      
+      if (trendBias < 0) {
+        // In a strong bear trend, being below VWAP is NOT necessarily bullish accumulation.
+        // It's often just trend continuation. We dampen the bullishness.
+        score -= magnitude * 5; // Slight bearish bias
+      } else {
+        // In a bull or neutral trend, below VWAP = accumulation zone (bullish)
+        score += magnitude * 20; 
+      }
     } else if (vwapDeviation > vwapDeviationThreshold) {
-      // Price significantly above VWAP → distribution zone (bearish)
+      // Price significantly above VWAP
       const magnitude = Math.min(vwapDeviation / vwapDeviationThreshold, 2.0);
-      score -= magnitude * 20; // -0 to -40
+      
+      if (trendBias > 0) {
+        // In a strong bull trend, being above VWAP is trend continuation.
+        score += magnitude * 5; // Slight bullish bias
+      } else {
+        // In a bear or neutral trend, above VWAP = distribution zone (bearish)
+        score -= magnitude * 20;
+      }
     } else {
-      // Price near VWAP → neutral, slight adjustment
-      score += (vwapDeviation / vwapDeviationThreshold) * -10; // -10 to +10
+      // Price near VWAP → neutral, slight adjustment based on trend
+      score += (vwapDeviation / vwapDeviationThreshold) * (trendBias !== 0 ? 5 : -10);
     }
   }
   
@@ -161,8 +177,9 @@ export async function analyzeLiquidity(input: SuperSignalInput): Promise<Compone
       };
     }
     
-    // Compute liquidity score
-    const score = computeLiquidityScore(vwapDeviation, volumeImbalance, config);
+    // Compute liquidity score with trend bias
+    const trendBias = change24h > 0 ? 1 : change24h < 0 ? -1 : 0;
+    const score = computeLiquidityScore(vwapDeviation, volumeImbalance, config, trendBias);
     
     // Compute confidence based on data availability
     let confidence = 0;

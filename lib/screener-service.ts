@@ -1601,6 +1601,7 @@ function buildEntry(
       market: getMarketType(sym),
       regime: regimeResult.regime as any,
       tradingStyle,
+      superSignalScore: prevEntry?.superSignal?.value ?? undefined,
     });
 
     // Custom analysis (Isolated from strategy)

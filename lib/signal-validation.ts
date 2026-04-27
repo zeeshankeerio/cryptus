@@ -43,8 +43,12 @@ export function validateWithSuperSignal(
     };
   }
   
+  // Super Signal arrives as 0-100, but logic expects -100 to +100
+  // Remap 0-100 to -100 to +100 (where 50 is 0)
+  const normalizedSuper = (superSignalScore - 50) * 2;
+  
   const stratDirection = strategyScore > 0 ? 'bullish' : strategyScore < 0 ? 'bearish' : 'neutral';
-  const superDirection = superSignalScore > 0 ? 'bullish' : superSignalScore < 0 ? 'bearish' : 'neutral';
+  const superDirection = normalizedSuper > 0 ? 'bullish' : normalizedSuper < 0 ? 'bearish' : 'neutral';
   
   // Both neutral = no validation needed
   if (stratDirection === 'neutral' || superDirection === 'neutral') {

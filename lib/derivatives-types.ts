@@ -75,6 +75,7 @@ export interface SmartMoneyPressure {
     whaleDirection: number;       // -100 to +100
     orderFlowPressure: number;   // -100 to +100
     cvdSignal?: number;          // -100 to +100 (Phase 1 addition)
+    optionsSignal?: number;      // -100 to +100 (Phase 1 addition)
   };
   updatedAt: number;
 }
@@ -139,6 +140,18 @@ export interface LiquidationCascadeRisk {
   updatedAt: number;
 }
 
+// ── Options Intelligence - Phase 1 ──────────────────────────────
+
+export interface OptionsIntelligence {
+  symbol: string;
+  putCallRatio: number;      // < 1 = bullish, > 1 = bearish
+  impliedVolatility: number; // 0-100
+  maxPainPrice: number;      // Price level magnet
+  openInterest: number;      // Options OI
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  updatedAt: number;
+}
+
 // ── Aggregated Derivatives State ────────────────────────────────
 
 export interface DerivativesState {
@@ -153,6 +166,7 @@ export interface DerivativesState {
   fundingHistory: Map<string, FundingRateHistory>;
   oiAnalysis: Map<string, OpenInterestAnalysis>;
   cascadeRisk: Map<string, LiquidationCascadeRisk>;
+  optionsIntel: Map<string, OptionsIntelligence>;
   isConnected: boolean;
   lastUpdate: number;
 }
@@ -172,4 +186,5 @@ export type DerivativesWorkerMessage =
   | { type: 'CVD_UPDATE'; payload: [string, CVDData][] }
   | { type: 'FUNDING_HISTORY_UPDATE'; payload: [string, FundingRateHistory][] }
   | { type: 'OI_ANALYSIS_UPDATE'; payload: [string, OpenInterestAnalysis][] }
-  | { type: 'CASCADE_RISK_UPDATE'; payload: [string, LiquidationCascadeRisk][] };
+  | { type: 'CASCADE_RISK_UPDATE'; payload: [string, LiquidationCascadeRisk][] }
+  | { type: 'OPTIONS_UPDATE'; payload: [string, OptionsIntelligence][] };

@@ -98,8 +98,8 @@ function computeAgreementScore(
   correlatedDirections: number[],
   config: ReturnType<typeof getConfig>
 ): number {
-  if (correlatedDirections.length === 0) {
-    return 50; // Neutral if no correlated data
+  if (correlatedDirections.length === 0 || primaryDirection === 0) {
+    return 50; // Neutral if no correlated data or no primary direction
   }
   
   // Count agreements
@@ -117,23 +117,40 @@ function computeAgreementScore(
   }
   
   const agreementRatio = total > 0 ? agreements / total : 0.5;
-  
-  // Map agreement ratio to score
   const { agreementThreshold, disagreementThreshold } = config.crossAsset;
   
-  if (agreementRatio >= agreementThreshold) {
-    // High agreement: score > 70
-    const magnitude = (agreementRatio - agreementThreshold) / (1.0 - agreementThreshold);
-    return Math.round(70 + (magnitude * 30)); // 70-100
-  } else if (agreementRatio <= disagreementThreshold) {
-    // High disagreement: score < 40
-    const magnitude = (disagreementThreshold - agreementRatio) / disagreementThreshold;
-    return Math.round(40 - (magnitude * 40)); // 0-40
+  // ── Direction-Aware Agreement Mapping ──
+  // If primary is Bullish (+1): Agreement → High Score (70-100), Disagreement → Low Score (0-40)
+  // If primary is Bearish (-1): Agreement → Low Score (0-30), Disagreement → High Score (60-100)
+  
+  if (primaryDirection > 0) {
+    if (agreementRatio >= agreementThreshold) {
+      const magnitude = (agreementRatio - agreementThreshold) / (1.0 - agreementThreshold);
+      return Math.round(70 + (magnitude * 30)); // 70-100
+    } else if (agreementRatio <= disagreementThreshold) {
+      const magnitude = (disagreementThreshold - agreementRatio) / disagreementThreshold;
+      return Math.round(40 - (magnitude * 40)); // 0-40
+    } else {
+      const range = agreementThreshold - disagreementThreshold;
+      const position = (agreementRatio - disagreementThreshold) / range;
+      return Math.round(40 + (position * 30)); // 40-70
+    }
   } else {
-    // Moderate agreement: score 40-70
-    const range = agreementThreshold - disagreementThreshold;
-    const position = (agreementRatio - disagreementThreshold) / range;
-    return Math.round(40 + (position * 30)); // 40-70
+    // Primary is Bearish
+    if (agreementRatio >= agreementThreshold) {
+      // High agreement with BEARISH signal → result should be low (0-30)
+      const magnitude = (agreementRatio - agreementThreshold) / (1.0 - agreementThreshold);
+      return Math.round(30 - (magnitude * 30)); // 30-0
+    } else if (agreementRatio <= disagreementThreshold) {
+      // High disagreement with BEARISH signal (i.e., others are bullish) → result should be high (60-100)
+      const magnitude = (disagreementThreshold - agreementRatio) / disagreementThreshold;
+      return Math.round(60 + (magnitude * 40)); // 60-100
+    } else {
+      // Moderate agreement with BEARISH signal
+      const range = agreementThreshold - disagreementThreshold;
+      const position = (agreementRatio - disagreementThreshold) / range;
+      return Math.round(60 - (position * 30)); // 60-30
+    }
   }
 }
 

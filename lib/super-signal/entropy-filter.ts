@@ -185,16 +185,22 @@ export async function filterEntropy(input: SuperSignalInput): Promise<ComponentS
   try {
     // Check cache first
     const cachedEntropy = getCachedEntropy(input.symbol);
+    const config = getConfig();
+    const directionBias = input.change24h > 0 ? 1 : input.change24h < 0 ? -1 : 0;
+
     if (cachedEntropy !== null) {
-      const score = Math.round((1 - cachedEntropy) * 100);
+      const rawScore = Math.round((1 - cachedEntropy) * 100);
+      // Map raw confidence score (0-100) to directional score (0-100)
+      // High confidence + Bullish bias → 100
+      // High confidence + Bearish bias → 0
+      const directionalScore = Math.round(50 + (directionBias * (rawScore / 2)));
+      
       return {
-        score,
+        score: directionalScore,
         confidence: 100,
         computeTimeMs: Date.now() - startTime,
       };
     }
-    
-    const config = getConfig();
     const { historicalCloses } = input;
     
     // Validate historical data
@@ -226,8 +232,12 @@ export async function filterEntropy(input: SuperSignalInput): Promise<ComponentS
     // Cache entropy value
     setCachedEntropy(input.symbol, result.entropy);
     
+    // Map raw confidence score (0-100) to directional score (0-100)
+    // Low entropy = high rawScore. Directional bias scales this around 50.
+    const directionalScore = Math.round(50 + (directionBias * (result.score / 2)));
+    
     const componentScore: ComponentScore = {
-      score: result.score,
+      score: directionalScore,
       confidence: 100,
       computeTimeMs: Date.now() - startTime,
     };
