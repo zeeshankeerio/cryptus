@@ -319,6 +319,9 @@ describe('SUPER_SIGNAL Property-Based Tests', () => {
         if (result.components.entropy.error) {
           expect(result.components.entropy.score).toBe(50);
         }
+        expect(result.confidence).toBeGreaterThanOrEqual(0);
+        expect(result.confidence).toBeLessThanOrEqual(100);
+        expect(['ok', 'low-confidence', 'insufficient-data']).toContain(result.status);
       }
     });
   });
@@ -355,6 +358,24 @@ describe('SUPER_SIGNAL Property-Based Tests', () => {
       
       // Should handle extreme values gracefully
       expect(result === null || result !== null).toBe(true);
+    });
+
+    it('should mark sparse inputs as low-confidence or insufficient-data', async () => {
+      const entry = createMockEntry({
+        atr: null,
+        adx: null,
+        vwap: null,
+        avgVolume1m: null,
+        curCandleVol: null,
+        historicalCloses: [50000, 50010],
+        regime: null,
+      });
+      const result = await computeSuperSignal(entry);
+      expect(result).not.toBeNull();
+      if (result) {
+        expect(['low-confidence', 'insufficient-data']).toContain(result.status);
+        expect(result.diagnostics.length).toBeGreaterThan(0);
+      }
     });
   });
 

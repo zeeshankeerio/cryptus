@@ -251,6 +251,28 @@ export async function computeRisk(
         score = Math.max(0, score - penalty);
       }
     }
+
+    // Funding-rate penalty/boost: extreme positive funding implies crowded longs (higher downside risk),
+    // extreme negative funding implies crowded shorts (higher squeeze risk for shorts).
+    if (input.fundingRate !== undefined && input.fundingRate !== null) {
+      const annualizedFundingPct = Math.abs(input.fundingRate) * 3 * 365 * 100;
+      if (annualizedFundingPct >= 80) {
+        const crowdedPenalty = Math.min(10, Math.round(annualizedFundingPct / 20));
+        score = Math.max(0, score - crowdedPenalty);
+      } else if (annualizedFundingPct >= 30) {
+        score = Math.max(0, score - 4);
+      }
+    }
+
+    // Order-flow confirmation: if flow aligns with strategy, reduce risk; else increase risk.
+    if (input.orderFlowRatio !== undefined && input.orderFlowRatio !== null) {
+      const buyPressure = input.orderFlowRatio;
+      const flowDirection = buyPressure > 0.55 ? 1 : buyPressure < 0.45 ? -1 : 0;
+      if (flowDirection !== 0) {
+        if (flowDirection === direction) score = Math.min(100, score + 8);
+        else score = Math.max(0, score - 8);
+      }
+    }
     
     const result: ComponentScore = {
       score,

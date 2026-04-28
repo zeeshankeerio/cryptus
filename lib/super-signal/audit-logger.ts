@@ -27,6 +27,13 @@ export interface AuditLogEntry {
   cacheHits?: number;
   cacheMisses?: number;
   errors?: string[];
+  weights?: {
+    regime: number;
+    liquidity: number;
+    entropy: number;
+    crossAsset: number;
+    risk: number;
+  };
 }
 
 export interface FailureEvent {
@@ -138,7 +145,8 @@ class AuditLogger {
     inputHash: string,
     computeTimeMs: number,
     cacheHits = 0,
-    cacheMisses = 0
+    cacheMisses = 0,
+    weights?: AuditLogEntry['weights']
   ): void {
     const entry: AuditLogEntry = {
       symbol,
@@ -151,6 +159,7 @@ class AuditLogger {
       computeTimeMs,
       cacheHits,
       cacheMisses,
+      weights,
     };
 
     this.auditLogs.push(entry);

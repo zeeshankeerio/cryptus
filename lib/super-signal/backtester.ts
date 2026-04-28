@@ -51,6 +51,15 @@ export interface BacktestResult {
   totalBars: number;
 }
 
+export interface AdaptiveThresholdRecommendation {
+  strongBuy: number;
+  buy: number;
+  neutral: number;
+  sell: number;
+  generatedAt: number;
+  nextRetrainAt: number;
+}
+
 export interface BacktestOptions {
   holdingPeriodBars?: number; // Default: 20 bars (20 minutes for 1m data)
   minTradesPerCategory?: number; // Minimum trades to consider category valid
@@ -322,5 +331,39 @@ export async function compareSignals(
     strategySignal: strategyMetrics,
     outperformance,
     recommendation,
+  };
+}
+
+/**
+ * Suggest adaptive threshold bands from recent SUPER_SIGNAL distribution.
+ * Designed to be run on a monthly cadence with 3-5 years of historical snapshots.
+ */
+export function recommendAdaptiveThresholds(
+  snapshots: ScreenerEntry[],
+  nowTs: number = Date.now()
+): AdaptiveThresholdRecommendation {
+  const values = snapshots
+    .map((s) => s.superSignal?.value)
+    .filter((v): v is number => typeof v === 'number')
+    .sort((a, b) => a - b);
+
+  const percentile = (p: number): number => {
+    if (values.length === 0) return 50;
+    const idx = Math.max(0, Math.min(values.length - 1, Math.round((values.length - 1) * p)));
+    return values[idx];
+  };
+
+  const sell = Math.round(percentile(0.2));
+  const neutral = Math.round(percentile(0.4));
+  const buy = Math.round(percentile(0.6));
+  const strongBuy = Math.round(percentile(0.8));
+
+  return {
+    strongBuy: Math.max(buy + 1, strongBuy),
+    buy: Math.max(neutral + 1, buy),
+    neutral: Math.max(sell + 1, neutral),
+    sell: Math.max(1, sell),
+    generatedAt: nowTs,
+    nextRetrainAt: nowTs + 30 * 24 * 60 * 60 * 1000,
   };
 }

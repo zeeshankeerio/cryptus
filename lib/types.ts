@@ -122,11 +122,18 @@ export interface ScreenerEntry {
   // ── Derivatives / Smart Money (injected at display layer) ──
   /** Smart Money Pressure Index score (-100 to +100). Injected from useDerivativesIntel. */
   smartMoneyScore?: number | null;
+  /** Funding rate (decimal, e.g. 0.0005 = 0.05%). */
+  fundingRate?: number | null;
+  /** Order flow buy ratio (0..1). */
+  orderFlowRatio?: number | null;
   // ── 2026 Intelligence: SUPER_SIGNAL (Institutional-Grade Composite Signal) ──
   /** SUPER_SIGNAL: Composite institutional-grade signal fusing regime, liquidity, entropy, cross-asset, and risk analysis. */
   superSignal?: {
     value: number;                    // 0-100 composite score
     category: 'Strong Buy' | 'Buy' | 'Neutral' | 'Sell' | 'Strong Sell';
+    confidence?: number;
+    status?: 'ok' | 'low-confidence' | 'insufficient-data';
+    diagnostics?: string[];
     components: {
       regime: { score: number; confidence?: number; error?: string };
       liquidity: { score: number; confidence?: number; error?: string };

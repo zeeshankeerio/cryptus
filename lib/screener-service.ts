@@ -6,7 +6,7 @@ import {
   detectVolumeSpike, computeStrategyScore,
   detectRsiDivergence, calculateROC, calculateConfluence,
   calculateAvgBarSize, calculateAvgVolume,
-  calculateATR, calculateADX, deriveSignal,
+  calculateATR, calculateADX, deriveCoherentSignal, type StrategySignal,
   calculateOBV, calculateWilliamsR,
   computeRiskParameters, detectHiddenDivergence, calculateFibonacciLevels,
   // 2026 Intelligence: Regime fix + Commodity Channel Index
@@ -1468,8 +1468,6 @@ function buildEntry(
 
     const volumeSpike = detectVolumeSpike(volumes1m);
 
-    // RSI-based signal baseline (used for extreme state detection)
-    const rsiSignal = deriveSignal(rsi15m ?? rsi1m, config?.overboughtThreshold, config?.oversoldThreshold);
     const stdRsiDivergence = detectRsiDivergence(closes15m, r15mP, 40);
 
     // Intelligence indicators (Using coin-specific periods)
@@ -1601,27 +1599,16 @@ function buildEntry(
       market: getMarketType(sym),
       regime: regimeResult.regime as any,
       tradingStyle,
-      superSignalScore: prevEntry?.superSignal?.value ?? undefined,
+      superSignalScore: undefined,
     });
 
-    // ── UNIFIED SIGNAL: Combine RSI extremes with Strategy direction ──
-    // Eliminates contradictions between Signal and Strategy columns.
-    // Signal reflects Strategy output but uses RSI-state labels for UI consistency.
     const primaryRsi = rsi15m ?? rsi1m;
-    let signal: 'oversold' | 'overbought' | 'neutral';
-    
-    if (strategy.signal.includes('buy')) {
-      // Bullish Strategy: Show 'oversold' if RSI isn't contradicting (too high)
-      signal = (primaryRsi !== null && primaryRsi < 60) ? 'oversold' : 'neutral';
-    } else if (strategy.signal.includes('sell')) {
-      // Bearish Strategy: Show 'overbought' if RSI isn't contradicting (too low)
-      signal = (primaryRsi !== null && primaryRsi > 40) ? 'overbought' : 'neutral';
-    } else {
-      // Neutral Strategy: Only show truly deep RSI extremes
-      if (primaryRsi !== null && primaryRsi <= 20) signal = 'oversold';
-      else if (primaryRsi !== null && primaryRsi >= 80) signal = 'overbought';
-      else signal = 'neutral';
-    }
+    const signal = deriveCoherentSignal(
+      strategy.signal,
+      primaryRsi,
+      config?.overboughtThreshold,
+      config?.oversoldThreshold
+    );
 
     // Custom analysis (Isolated from strategy)
     const customDivergence = detectRsiDivergence(closes15m, rsiPeriod, 40);
@@ -1763,6 +1750,65 @@ function buildEntry(
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
     return null;
+  }
+}
+
+function applyCurrentCycleCoherence(
+  entry: ScreenerEntry,
+  coinConfig: CoinConfig | undefined,
+  tradingStyle: TradingStyle,
+  prevEntry: ScreenerEntry | undefined,
+  nowTs: number
+): void {
+  const strategy = computeStrategyScore({
+    rsi1m: entry.rsi1m,
+    rsi5m: entry.rsi5m,
+    rsi15m: entry.rsi15m,
+    rsi1h: entry.rsi1h,
+    rsi4h: entry.rsi4h,
+    rsi1d: entry.rsi1d,
+    macdHistogram: entry.macdHistogram,
+    bbPosition: entry.bbPosition,
+    stochK: entry.stochK,
+    stochD: entry.stochD,
+    emaCross: entry.emaCross,
+    vwapDiff: entry.vwapDiff,
+    volumeSpike: entry.volumeSpike,
+    price: entry.price,
+    confluence: entry.confluence,
+    rsiDivergence: entry.rsiDivergence,
+    rsiCrossover: entry.rsiCrossover,
+    momentum: entry.momentum,
+    adx: entry.adx,
+    atr: entry.atr,
+    obvTrend: entry.obvTrend,
+    williamsR: entry.williamsR,
+    cci: entry.cci,
+    hiddenDivergence: entry.hiddenDivergence,
+    market: entry.market,
+    regime: entry.regime?.regime as any,
+    tradingStyle,
+    smartMoneyScore: entry.smartMoneyScore ?? undefined,
+    superSignalScore: entry.superSignal?.value ?? undefined,
+  });
+
+  entry.strategyScore = strategy.score;
+  entry.strategySignal = strategy.signal;
+  entry.strategyLabel = strategy.label;
+  entry.strategyReasons = strategy.reasons;
+
+  const primaryRsi = entry.rsi15m ?? entry.rsi1m;
+  entry.signal = deriveCoherentSignal(
+    strategy.signal,
+    primaryRsi,
+    coinConfig?.overboughtThreshold,
+    coinConfig?.oversoldThreshold
+  );
+
+  if (prevEntry && prevEntry.strategySignal === strategy.signal) {
+    entry.signalStartedAt = prevEntry.signalStartedAt || prevEntry.updatedAt || nowTs;
+  } else {
+    entry.signalStartedAt = nowTs;
   }
 }
 
@@ -2060,20 +2106,6 @@ function runRefresh(
           );
           if (entry) {
             debugLog(`[screener] ${sym}: Successfully built entry with indicators - rsi1m=${entry.rsi1m}, rsi5m=${entry.rsi5m}, rsi15m=${entry.rsi15m}, rsi1h=${entry.rsi1h}`);
-            
-            // ── 2026 Intelligence: SUPER_SIGNAL Integration ──
-            // Compute institutional-grade composite signal (non-blocking, fail-safe)
-            try {
-              const { computeSuperSignal } = await import('./super-signal');
-              const superSignal = await computeSuperSignal(entry);
-              if (superSignal) {
-                entry.superSignal = superSignal;
-              }
-            } catch (error) {
-              // Fail-safe: SUPER_SIGNAL computation errors don't break existing functionality
-              console.error(`[super-signal] Error computing SUPER_SIGNAL for ${sym}:`, error);
-            }
-            
             entries.push(entry);
             const cacheObj = { entry: entry, ts: nowTs };
             indicatorCache.set(getCacheKey(sym), cacheObj);
@@ -2100,6 +2132,48 @@ function runRefresh(
       // (common on Vercel cold starts where kline endpoints may be blocked)
       if (ticker) {
         entries.push(buildTickerOnlyEntry(sym, ticker, nowTs));
+      }
+    }
+
+    if (entries.length > 0) {
+      try {
+        const { computeSuperSignal } = await import('./super-signal');
+        const correlatedSignals = new Map<string, StrategySignal>();
+        for (const entry of entries) {
+          correlatedSignals.set(entry.symbol, entry.strategySignal);
+        }
+
+        await Promise.all(entries.map(async (entry) => {
+          try {
+            const superSignal = await computeSuperSignal(entry, {
+              correlatedSignals,
+              abortSignal: signal,
+            });
+            if (superSignal) {
+              entry.superSignal = superSignal;
+            }
+            const prevEntry = indicatorCache.get(getCacheKey(entry.symbol))?.entry;
+            applyCurrentCycleCoherence(
+              entry,
+              coinConfigs.get(entry.symbol),
+              tradingStyle,
+              prevEntry,
+              nowTs
+            );
+          } catch (error) {
+            console.error(`[super-signal] Error computing SUPER_SIGNAL for ${entry.symbol}:`, error);
+            const prevEntry = indicatorCache.get(getCacheKey(entry.symbol))?.entry;
+            applyCurrentCycleCoherence(
+              entry,
+              coinConfigs.get(entry.symbol),
+              tradingStyle,
+              prevEntry,
+              nowTs
+            );
+          }
+        }));
+      } catch (error) {
+        console.error('[super-signal] Failed to initialize SUPER_SIGNAL module:', error);
       }
     }
 

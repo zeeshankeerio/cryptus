@@ -48,6 +48,9 @@ function hashInput(input: SuperSignalInput): string {
     curCandleVol: input.curCandleVol,
     change24h: input.change24h,
     strategySignal: input.strategySignal,
+    smartMoneyScore: input.smartMoneyScore ?? null,
+    fundingRate: input.fundingRate ?? null,
+    orderFlowRatio: input.orderFlowRatio ?? null,
   });
   
   return createHash('sha256').update(serialized).digest('hex');
@@ -104,6 +107,60 @@ function fuseComponents(components: ComponentScores, assetClass: string): number
   return Math.round(Math.max(0, Math.min(100, value)));
 }
 
+function getComponentConfidence(component: { confidence?: number }): number {
+  return Math.max(0, Math.min(100, component.confidence ?? 0));
+}
+
+function summarizeDiagnostics(components: ComponentScores): { confidence: number; status: 'ok' | 'low-confidence' | 'insufficient-data'; diagnostics: string[] } {
+  const diagnostics: string[] = [];
+  const confidences = [
+    getComponentConfidence(components.regime),
+    getComponentConfidence(components.liquidity),
+    getComponentConfidence(components.entropy),
+    getComponentConfidence(components.crossAsset),
+    getComponentConfidence(components.risk),
+  ];
+  const confidence = Math.round(confidences.reduce((a, b) => a + b, 0) / confidences.length);
+  const errorCount = Object.values(components).filter((component) => !!component.error).length;
+
+  if (components.regime.error) diagnostics.push(`Regime: ${components.regime.error}`);
+  if (components.liquidity.error) diagnostics.push(`Liquidity: ${components.liquidity.error}`);
+  if (components.entropy.error) diagnostics.push(`Entropy: ${components.entropy.error}`);
+  if (components.crossAsset.error) diagnostics.push(`Cross-Asset: ${components.crossAsset.error}`);
+  if (components.risk.error) diagnostics.push(`Risk: ${components.risk.error}`);
+
+  let status: 'ok' | 'low-confidence' | 'insufficient-data' = 'ok';
+  if (confidence < 35 || errorCount >= 3) {
+    status = 'insufficient-data';
+  } else if (confidence < 60 || errorCount > 0) {
+    status = 'low-confidence';
+  }
+
+  if (status !== 'ok' && diagnostics.length === 0) {
+    diagnostics.push(status === 'insufficient-data' ? 'Insufficient component coverage' : 'Low component confidence');
+  }
+
+  return { confidence, status, diagnostics };
+}
+
+function runWithAbort<T>(
+  task: () => Promise<T>,
+  abortSignal: AbortSignal,
+  label: string
+): Promise<T> {
+  if (abortSignal.aborted) {
+    return Promise.reject(new Error(`Timeout before ${label}`));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error(`Timeout while computing ${label}`));
+    abortSignal.addEventListener('abort', onAbort, { once: true });
+    task()
+      .then((result) => resolve(result))
+      .catch((error) => reject(error))
+      .finally(() => abortSignal.removeEventListener('abort', onAbort));
+  });
+}
+
 // ── Parallel Component Computation ───────────────────────────────
 
 /**
@@ -115,24 +172,31 @@ function fuseComponents(components: ComponentScores, assetClass: string): number
  * @param input - SuperSignalInput
  * @returns ComponentScores or null if too many failures
  */
-async function computeAllComponents(input: SuperSignalInput): Promise<ComponentScores | null> {
+async function computeAllComponents(input: SuperSignalInput, externalAbortSignal?: AbortSignal): Promise<ComponentScores | null> {
   const config = getConfig();
   
   // Create abort controller for timeout
   const abortController = new AbortController();
+  const timeoutSignal = abortController.signal;
   const timeoutId = setTimeout(() => abortController.abort(), config.performance.timeoutMs);
+  const linkedAbort = () => abortController.abort();
+  if (externalAbortSignal) {
+    if (externalAbortSignal.aborted) abortController.abort();
+    else externalAbortSignal.addEventListener('abort', linkedAbort, { once: true });
+  }
   
   try {
     // Compute all components in parallel
     const results = await Promise.allSettled([
-      detectRegime(input),
-      analyzeLiquidity(input),
-      filterEntropy(input),
-      validateCrossAsset(input),
-      computeRisk(input),
+      runWithAbort(() => detectRegime(input), timeoutSignal, 'regime'),
+      runWithAbort(() => analyzeLiquidity(input), timeoutSignal, 'liquidity'),
+      runWithAbort(() => filterEntropy(input), timeoutSignal, 'entropy'),
+      runWithAbort(() => validateCrossAsset(input, input.correlatedSignals), timeoutSignal, 'crossAsset'),
+      runWithAbort(() => computeRisk(input), timeoutSignal, 'risk'),
     ]);
     
     clearTimeout(timeoutId);
+    if (externalAbortSignal) externalAbortSignal.removeEventListener('abort', linkedAbort);
     
     // Extract component scores
     const [regimeResult, liquidityResult, entropyResult, crossAssetResult, riskResult] = results;
@@ -182,6 +246,7 @@ async function computeAllComponents(input: SuperSignalInput): Promise<ComponentS
     
   } catch (error) {
     clearTimeout(timeoutId);
+    if (externalAbortSignal) externalAbortSignal.removeEventListener('abort', linkedAbort);
     console.error('[super-signal] Component computation error:', error);
     auditLogger.logFailure(input.symbol, 'fusion', String(error), false);
     return null;
@@ -202,7 +267,7 @@ async function computeAllComponents(input: SuperSignalInput): Promise<ComponentS
  * @param input - SuperSignalInput containing all required data
  * @returns SuperSignalResult or null if computation fails
  */
-export async function computeSuperSignal(input: SuperSignalInput): Promise<SuperSignalResult | null> {
+export async function computeSuperSignal(input: SuperSignalInput, abortSignal?: AbortSignal): Promise<SuperSignalResult | null> {
   const startTime = Date.now();
   
   try {
@@ -214,7 +279,7 @@ export async function computeSuperSignal(input: SuperSignalInput): Promise<Super
     }
     
     // Compute all components
-    const components = await computeAllComponents(input);
+    const components = await computeAllComponents(input, abortSignal);
     
     if (!components) {
       // Too many component failures
@@ -226,15 +291,20 @@ export async function computeSuperSignal(input: SuperSignalInput): Promise<Super
     
     // Map to category
     const category = mapValueToCategory(value);
+    const { confidence, status, diagnostics } = summarizeDiagnostics(components);
     
     // Compute input hash for deterministic replay
     const inputHash = hashInput(input);
+    const weights = getWeightsForAsset(input.assetClass as any);
     
     const computeTimeMs = Date.now() - startTime;
     
     const result: SuperSignalResult = {
       value,
       category,
+      confidence,
+      status,
+      diagnostics,
       components,
       algorithmVersion: ALGORITHM_VERSION,
       computeTimeMs,
@@ -243,7 +313,7 @@ export async function computeSuperSignal(input: SuperSignalInput): Promise<Super
     };
     
     // Log successful computation
-    auditLogger.logComputation(input.symbol, result, inputHash, computeTimeMs);
+    auditLogger.logComputation(input.symbol, result, inputHash, computeTimeMs, 0, 0, weights);
     
     return result;
     

@@ -38,7 +38,7 @@ import { OrderFlowIndicator } from '@/components/order-flow-indicator';
 import { CorrelationHeatmap } from '@/components/correlation-heatmap';
 import { PortfolioScannerPanel } from '@/components/portfolio-scanner-panel';
 import { approximateRsi, approximateEma, calculateRsiWithState } from '@/lib/rsi';
-import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState, calculateATR, calculateADX, calculateFibonacciLevels, computeRiskParameters } from '@/lib/indicators';
+import { computeStrategyScore, deriveCoherentSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState, calculateATR, calculateADX, calculateFibonacciLevels, computeRiskParameters } from '@/lib/indicators';
 import { classifyRegime } from '@/lib/market-regime';
 import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
 import { generateSignalNarration } from '@/lib/signal-narration';
@@ -469,8 +469,8 @@ function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry
   if (!superSignal) {
     return (
       <span className="inline-flex items-center justify-center px-1.5 py-1 w-full max-w-[105px] text-[9px] font-black uppercase tracking-tight leading-none whitespace-nowrap overflow-hidden rounded-lg border bg-slate-700/20 text-slate-600 border-slate-600/30">
-        <span className="text-[9px] shrink-0">⏳</span>
-        <span className="truncate ml-1">Loading</span>
+        <span className="text-[9px] shrink-0">🛡️</span>
+        <span className="truncate ml-1">Fallback</span>
       </span>
     );
   }
@@ -510,8 +510,11 @@ function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry
 
   const style = config[superSignal.category] || config.Neutral;
 
+  const diagnostics = superSignal.diagnostics?.length
+    ? `\n\nDiagnostics:\n${superSignal.diagnostics.map((line) => `• ${line}`).join('\n')}`
+    : '';
   const title = isOwner
-    ? `SUPER SIGNAL: ${superSignal.category} (${superSignal.value}/100)\n\nComponent Scores:\n• Regime: ${superSignal.components.regime.score.toFixed(1)}\n• Liquidity: ${superSignal.components.liquidity.score.toFixed(1)}\n• Entropy: ${superSignal.components.entropy.score.toFixed(1)}\n• Cross-Asset: ${superSignal.components.crossAsset.score.toFixed(1)}\n• Risk: ${superSignal.components.risk.score.toFixed(1)}\n\nAlgorithm: ${superSignal.algorithmVersion}`
+    ? `SUPER SIGNAL: ${superSignal.category} (${superSignal.value}/100)\nConfidence: ${superSignal.confidence ?? 0}%\nStatus: ${(superSignal.status ?? 'ok').toUpperCase()}\n\nComponent Scores:\n• Regime: ${superSignal.components.regime.score.toFixed(1)}\n• Liquidity: ${superSignal.components.liquidity.score.toFixed(1)}\n• Entropy: ${superSignal.components.entropy.score.toFixed(1)}\n• Cross-Asset: ${superSignal.components.crossAsset.score.toFixed(1)}\n• Risk: ${superSignal.components.risk.score.toFixed(1)}${diagnostics}\n\nAlgorithm: ${superSignal.algorithmVersion}`
     : undefined;
 
   return (
@@ -525,7 +528,11 @@ function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry
       title={title}
     >
       <span className="text-[9px] shrink-0">{style.icon}</span>
-      <span className="truncate">{superSignal.category.toUpperCase()}</span>
+      <span className="truncate">
+        {superSignal.status === 'insufficient-data'
+          ? 'LOW CONF'
+          : superSignal.category.toUpperCase()}
+      </span>
     </span>
   );
 }
@@ -781,53 +788,12 @@ const ScreenerRow = memo(function ScreenerRow({
       tick.avgVolume1m > 0 &&
       (tick.curCandleVol / tick.avgVolume1m) >= volumeSpikeThreshold;
 
+    const strategySignal = entry.strategySignal;
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
-      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
-
-    const liveStrategy = computeStrategyScore({
-      rsi1m, rsi5m, rsi15m, rsi1h,
-      rsi4h,
-      rsi1d,
-      tradingStyle,
-      macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
-      bbPosition,
-      stochK: tick.stochK ?? entry.stochK,
-      stochD: tick.stochD ?? entry.stochD,
-      emaCross,
-      vwapDiff: tick.vwapDiff ?? entry.vwapDiff,
-      volumeSpike: liveVolumeSpike || entry.volumeSpike,
-      price: tick.price,
-      confluence: tick.confluence ?? entry.confluence,
-      rsiDivergence: tick.rsiDivergence ?? entry.rsiDivergence,
-      momentum: tick.momentum ?? entry.momentum,
-      adx: tick.adx ?? entry.adx,
-      atr: tick.atr ?? entry.atr,
-      cci: entry.cci ?? null,
-      obvTrend: (tick as any).obvTrend ?? entry.obvTrend ?? 'none',
-      williamsR: (tick as any).williamsR ?? entry.williamsR ?? null,
-      smartMoneyScore: smartMoneyScore?.score ?? undefined,
-      superSignalScore: entry.superSignal?.value ?? undefined,
-      hiddenDivergence: entry.hiddenDivergence,
-      regime: entry.regime?.regime,
-      market: entry.market,
-      enabledIndicators: {
-        rsi: globalUseRsi,
-        macd: globalUseMacd,
-        bb: globalUseBb,
-        stoch: globalUseStoch,
-        ema: globalUseEma,
-        vwap: globalUseVwap,
-        confluence: globalUseConfluence,
-        divergence: globalUseDivergence,
-        momentum: globalUseMomentum,
-        obv: globalUseObv,
-        williamsR: globalUseWilliamsR,
-        cci: globalUseCci,
-      }
-    });
+      ? deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, obT, osT)
+      : deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, globalOverbought, globalOversold);
     return {
       price: tick.price,
       change24h: tick.change24h,
@@ -863,16 +829,10 @@ const ScreenerRow = memo(function ScreenerRow({
       vwap: tick.vwap ?? entry.vwap,
       macdLine: entry.macdLine,
       macdSignal: entry.macdSignal,
-      strategyScore: tick.strategyScore ?? liveStrategy.score,
-      strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
-      strategyLabel: tick.strategyScore !== undefined
-        ? (tick.strategyScore >= 55 ? 'Strong Buy'
-          : tick.strategyScore >= 25 ? 'Buy'
-            : tick.strategyScore <= -55 ? 'Strong Sell'
-              : tick.strategyScore <= -25 ? 'Sell'
-                : 'Neutral')
-        : liveStrategy.label,
-      strategyReasons: liveStrategy.reasons,
+      strategyScore: entry.strategyScore,
+      strategySignal: entry.strategySignal,
+      strategyLabel: entry.strategyLabel,
+      strategyReasons: entry.strategyReasons,
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
       curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
@@ -889,7 +849,7 @@ const ScreenerRow = memo(function ScreenerRow({
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalUseObv, globalUseWilliamsR, globalUseCci,
     globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold,
-    smartMoneyScore, tradingStyle
+    smartMoneyScore
   ]);
 
   const display = liveState || {
@@ -1822,55 +1782,13 @@ const ScreenerCard = memo(function ScreenerCard({
       tick.avgVolume1m > 0 &&
       (tick.curCandleVol / tick.avgVolume1m) >= volumeSpikeThreshold;
 
-    const liveStrategy = computeStrategyScore({
-
-      rsi1m, rsi5m, rsi15m, rsi1h,
-      rsi4h: entry.rsi4h,
-      rsi1d: entry.rsi1d,
-      macdHistogram: tick.macdHistogram ?? entry.macdHistogram,
-      bbPosition,
-      stochK: tick.stochK ?? entry.stochK,
-      stochD: tick.stochD ?? entry.stochD,
-      emaCross: (tick.emaCross as any) ?? emaCross,
-      vwapDiff: tick.vwapDiff ?? entry.vwapDiff,
-      volumeSpike: (tick.volumeSpike ?? liveVolumeSpike) || entry.volumeSpike,
-      price: tick.price,
-      confluence: tick.confluence ?? entry.confluence,
-      rsiDivergence: tick.rsiDivergence ?? entry.rsiDivergence,
-      momentum: tick.momentum ?? entry.momentum,
-      rsiCrossover: tick.rsiCrossover ?? entry.rsiCrossover,
-      market: entry.market,
-      adx: tick.adx ?? entry.adx,
-      atr: tick.atr ?? entry.atr,
-      cci: entry.cci ?? null,
-      obvTrend: (tick as any).obvTrend ?? entry.obvTrend ?? 'none',
-      williamsR: (tick as any).williamsR ?? entry.williamsR ?? null,
-      smartMoneyScore: smartMoneyScore?.score ?? undefined,
-      superSignalScore: entry.superSignal?.value ?? undefined,
-      hiddenDivergence: entry.hiddenDivergence,
-      regime: entry.regime?.regime,
-      tradingStyle,
-      enabledIndicators: {
-        rsi: globalUseRsi,
-        macd: globalUseMacd,
-        bb: globalUseBb,
-        stoch: globalUseStoch,
-        ema: globalUseEma,
-        vwap: globalUseVwap,
-        confluence: globalUseConfluence,
-        divergence: globalUseDivergence,
-        momentum: globalUseMomentum,
-        obv: globalUseObv,
-        williamsR: globalUseWilliamsR,
-        cci: globalUseCci,
-      }
-    });
+    const strategySignal = entry.strategySignal;
 
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
-      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
+      ? deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, obT, osT)
+      : deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, globalOverbought, globalOversold);
 
 
 
@@ -1911,16 +1829,10 @@ const ScreenerCard = memo(function ScreenerCard({
       vwap: tick.vwap ?? entry.vwap,
       macdLine: entry.macdLine,
       macdSignal: entry.macdSignal,
-      strategyScore: tick.strategyScore ?? liveStrategy.score,
-      strategySignal: (tick.strategySignal as any) ?? liveStrategy.signal,
-      strategyLabel: tick.strategyScore !== undefined
-        ? (tick.strategyScore >= 55 ? 'Strong Buy'
-          : tick.strategyScore >= 25 ? 'Buy'
-            : tick.strategyScore <= -55 ? 'Strong Sell'
-              : tick.strategyScore <= -25 ? 'Sell'
-                : 'Neutral')
-        : liveStrategy.label,
-      strategyReasons: liveStrategy.reasons,
+      strategyScore: entry.strategyScore,
+      strategySignal: entry.strategySignal,
+      strategyLabel: entry.strategyLabel,
+      strategyReasons: entry.strategyReasons,
       lastPriceChange: tick.tickDelta || 0,
       curCandleSize: tick.curCandleSize ?? entry.curCandleSize,
       curCandleVol: tick.curCandleVol ?? entry.curCandleVol,
@@ -1937,7 +1849,7 @@ const ScreenerCard = memo(function ScreenerCard({
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalUseObv, globalUseWilliamsR, globalUseCci,
     globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold,
-    smartMoneyScore, tradingStyle
+    smartMoneyScore
   ]);
 
   const display = liveState || {
@@ -3235,43 +3147,20 @@ export default function ScreenerDashboard() {
         merged = { ...merged, rsiCustom: approx };
       }
 
-      // 4. Final Signal Logic (Strict Gating)
-      // This ensures filtering, sorting, and display all use the same authoritative logic.
-      let customSignal = 'neutral' as 'oversold' | 'overbought' | 'neutral';
+      // 4. Final Signal Logic (Canonical)
       if (globalShowSignalTags && globalUseRsi) {
-        let obT = 70;
-        let osT = 30;
-        let hasThresholds = true;
-
+        let obT = globalOverbought;
+        let osT = globalOversold;
         if (globalSignalThresholdMode === 'custom') {
           const cfg = coinConfigs[entry.symbol];
-          const hasPerCoin = cfg && (cfg.overboughtThreshold !== undefined || cfg.oversoldThreshold !== undefined);
-          if (hasPerCoin) {
-            obT = cfg.overboughtThreshold ?? 70;
-            osT = cfg.oversoldThreshold ?? 30;
-          } else if (globalThresholdsEnabled) {
-            obT = globalOverbought;
-            osT = globalOversold;
-          } else {
-            hasThresholds = false;
-          }
+          obT = cfg?.overboughtThreshold ?? obT;
+          osT = cfg?.oversoldThreshold ?? osT;
         }
-
-        if (hasThresholds) {
-          const rsiVal = merged.rsi15m ?? merged.rsi1m ?? merged.rsiCustom;
-          if (rsiVal !== null) {
-            const isInverted = obT < osT;
-            if (isInverted) {
-              if (rsiVal >= osT) customSignal = 'oversold';
-              else if (rsiVal <= obT) customSignal = 'overbought';
-            } else {
-              if (rsiVal <= osT) customSignal = 'oversold';
-              else if (rsiVal >= obT) customSignal = 'overbought';
-            }
-          }
-        }
+        const rsiVal = merged.rsi15m ?? merged.rsi1m ?? merged.rsiCustom;
+        merged.signal = deriveCoherentSignal(merged.strategySignal, rsiVal, obT, osT);
+      } else {
+        merged.signal = 'neutral';
       }
-      merged.signal = customSignal;
 
       return merged;
     });
@@ -5742,7 +5631,7 @@ export default function ScreenerDashboard() {
                   {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
                   {visibleCols.has('superSignal') && (
                     <SortHeader
-                      label="Supper"
+                      label="Super Signal"
                       sortKey="superSignal"
                       currentKey={sortKey}
                       currentDir={sortKey === 'superSignal' ? sortDir : 'desc'}

@@ -17,7 +17,10 @@ import { getConfig } from './config';
  * Convert ScreenerEntry to SuperSignalInput.
  * Extracts only the fields needed for SUPER_SIGNAL computation.
  */
-function convertToInput(entry: ScreenerEntry): SuperSignalInput {
+function convertToInput(
+  entry: ScreenerEntry,
+  correlatedSignals?: Map<string, 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell'>
+): SuperSignalInput {
   return {
     symbol: entry.symbol,
     price: entry.price,
@@ -41,8 +44,11 @@ function convertToInput(entry: ScreenerEntry): SuperSignalInput {
     change24h: entry.change24h,
     strategySignal: entry.strategySignal,
     smartMoneyScore: entry.smartMoneyScore ?? null,
+    fundingRate: entry.fundingRate ?? null,
+    orderFlowRatio: entry.orderFlowRatio ?? null,
     historicalCloses: entry.historicalCloses,
     regime: entry.regime,
+    correlatedSignals,
   };
 }
 
@@ -60,7 +66,13 @@ function convertToInput(entry: ScreenerEntry): SuperSignalInput {
  * @param entry - ScreenerEntry with all indicator data
  * @returns SuperSignalResult or null if computation fails
  */
-export async function computeSuperSignal(entry: ScreenerEntry): Promise<SuperSignalResult | null> {
+export async function computeSuperSignal(
+  entry: ScreenerEntry,
+  options?: {
+    correlatedSignals?: Map<string, 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell'>;
+    abortSignal?: AbortSignal;
+  }
+): Promise<SuperSignalResult | null> {
   try {
     const config = getConfig();
     
@@ -70,10 +82,10 @@ export async function computeSuperSignal(entry: ScreenerEntry): Promise<SuperSig
     }
     
     // Convert to input format
-    const input = convertToInput(entry);
+    const input = convertToInput(entry, options?.correlatedSignals);
     
     // Compute SUPER_SIGNAL
-    const result = await fuseSuperSignal(input);
+    const result = await fuseSuperSignal(input, options?.abortSignal);
     
     return result;
     

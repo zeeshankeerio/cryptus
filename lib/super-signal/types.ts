@@ -37,6 +37,9 @@ export interface SuperSignalResult {
   value: number;                    // 0-100 composite score
   category: SuperSignalCategory;    // Signal category
   components: ComponentScores;      // Individual component scores
+  confidence: number;               // Blended component confidence (0-100)
+  status: 'ok' | 'low-confidence' | 'insufficient-data';
+  diagnostics: string[];
   algorithmVersion: string;         // Version tag for audit trail
   computeTimeMs: number;            // Total computation time
   timestamp: number;                // Unix timestamp
@@ -155,6 +158,8 @@ export interface SuperSignalInput {
   
   // Smart Money derivatives intelligence (-100 to +100)
   smartMoneyScore?: number | null;
+  fundingRate?: number | null;
+  orderFlowRatio?: number | null;
   
   // Historical data for entropy
   historicalCloses?: number[];
@@ -165,6 +170,7 @@ export interface SuperSignalInput {
     confidence: number;
     details: string;
   } | null;
+  correlatedSignals?: Map<string, 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell'>;
 }
 
 // ── Cache Entry ───────────────────────────────────────────────────

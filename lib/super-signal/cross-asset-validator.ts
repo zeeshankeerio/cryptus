@@ -26,22 +26,22 @@ function getCorrelatedAssets(assetClass: AssetClass, symbol: string): string[] {
     case 'Metal':
       // Metals: Gold, Silver, DXY (inverse correlation)
       if (symbol.includes('XAU') || symbol.includes('GOLD') || symbol === 'PAXGUSDT') {
-        return ['XAGUSD', 'EURUSDT']; // Silver, EUR (DXY proxy inverse)
+        return ['XAGUSD', 'DXY', 'EURUSDT']; // Silver, DXY, EUR (DXY proxy inverse)
       }
       if (symbol.includes('XAG') || symbol.includes('SILVER')) {
-        return ['PAXGUSDT', 'EURUSDT']; // Gold, EUR
+        return ['PAXGUSDT', 'DXY', 'EURUSDT']; // Gold, DXY, EUR
       }
-      return ['PAXGUSDT', 'XAGUSD', 'EURUSDT']; // Default: Gold, Silver, EUR
+      return ['PAXGUSDT', 'XAGUSD', 'DXY', 'EURUSDT']; // Default: Gold, Silver, DXY, EUR
       
     case 'Crypto':
       // Crypto: BTC, ETH, USDT dominance (inverse), NASDAQ (risk-on proxy)
       if (symbol === 'BTCUSDT') {
-        return ['ETHUSDT', 'BNBUSDT', 'SOLUSDT']; // Major alts
+        return ['ETHUSDT', 'NASDAQ', 'NQ1!', 'SOLUSDT']; // Major macro + alt proxies
       }
       if (symbol === 'ETHUSDT') {
-        return ['BTCUSDT', 'BNBUSDT', 'SOLUSDT'];
+        return ['BTCUSDT', 'NASDAQ', 'NQ1!', 'SOLUSDT'];
       }
-      return ['BTCUSDT', 'ETHUSDT']; // Default: BTC + ETH
+      return ['BTCUSDT', 'ETHUSDT', 'NASDAQ', 'NQ1!']; // Default macro-confirmed basket
       
     case 'Forex':
       // Forex: Major pairs correlation
@@ -202,12 +202,14 @@ export async function validateCrossAsset(
     const correlatedDirections: number[] = [];
     let availableAssets = 0;
     
+    const effectiveSignals = correlatedSignals ?? input.correlatedSignals;
+
     for (const correlatedSymbol of correlatedAssets) {
       // Use provided signals (for testing) or fetch from cache
       let signal: 'strong-buy' | 'buy' | 'neutral' | 'sell' | 'strong-sell' | null = null;
       
-      if (correlatedSignals) {
-        signal = correlatedSignals.get(correlatedSymbol) ?? null;
+      if (effectiveSignals) {
+        signal = effectiveSignals.get(correlatedSymbol) ?? null;
       }
       
       if (signal) {

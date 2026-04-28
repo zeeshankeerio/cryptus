@@ -1538,6 +1538,26 @@ export function deriveSignal(
   return 'neutral';
 }
 
+/**
+ * Canonical signal mapper used by both server and client.
+ * Strategy defines directional intent, RSI thresholds gate extreme labels.
+ */
+export function deriveCoherentSignal(
+  strategySignal: StrategySignal,
+  rsi: number | null,
+  overbought: number = RSI_DEFAULTS.overbought,
+  oversold: number = RSI_DEFAULTS.oversold
+): 'oversold' | 'overbought' | 'neutral' {
+  const rsiExtreme = deriveSignal(rsi, overbought, oversold);
+  if (strategySignal === 'strong-buy' || strategySignal === 'buy') {
+    return rsiExtreme === 'oversold' ? 'oversold' : 'neutral';
+  }
+  if (strategySignal === 'strong-sell' || strategySignal === 'sell') {
+    return rsiExtreme === 'overbought' ? 'overbought' : 'neutral';
+  }
+  return rsiExtreme;
+}
+
 // ── ATR-Based Risk Parameters ───────────────────────────────────
 
 export interface RiskParameters {
