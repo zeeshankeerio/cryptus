@@ -3291,7 +3291,11 @@ export default function ScreenerDashboard() {
         merged.regime = regime;
 
         // 3. Dynamic Risk Parameters (ATR-Based)
-        if (merged.strategySignal !== 'neutral') {
+        // Execution safety: if decision is neutral (including coherence-gated neutral),
+        // do not keep stale risk parameters around in live merges.
+        if (merged.strategySignal === 'neutral') {
+          merged.riskParams = null;
+        } else {
           const isBuy = merged.strategySignal?.includes('buy');
           const risk = computeRiskParameters(
             merged.price,

@@ -32,6 +32,7 @@ const ORDER_FLOW_WINDOW_MS = 60000;        // 1-minute accumulation window
 const MAX_LIQUIDATIONS = 100;
 const MAX_WHALE_ALERTS = 50;
 const HEARTBEAT_MS = 25000;
+const WS_CONNECT_TIMEOUT_MS = 8000; // force reconnect if handshake stalls
 
 // Top symbols for aggTrade monitoring (high liquidity, most whale activity)
 const WHALE_WATCH_SYMBOLS = [
@@ -321,11 +322,22 @@ function connectFundingStream() {
   const STREAM_KEY = 'funding';
   try {
     fundingWs = new WebSocket('wss://fstream.binance.com/ws/!markPrice@arr@1s');
+    const connectTimeout = setTimeout(() => {
+      // Sometimes sockets stall without firing onerror/onclose (mobile captive portals, ISP middleboxes).
+      // Force a close so our reconnect loop can recover.
+      try {
+        if (fundingWs && fundingWs.readyState !== WebSocket.OPEN) {
+          console.warn('[deriv-worker] Funding WS connect timeout - forcing reconnect');
+          fundingWs.close();
+        }
+      } catch (e) {}
+    }, WS_CONNECT_TIMEOUT_MS);
 
     fundingWs.onopen = () => {
       console.log('[deriv-worker] Funding rate stream connected (Binance Futures)');
       streamHealth.funding = true;
       resetReconnect(STREAM_KEY);
+      clearTimeout(connectTimeout);
 
       const sendPing = () => {
         if (fundingWs && fundingWs.readyState === WebSocket.OPEN) {
@@ -391,12 +403,14 @@ function connectFundingStream() {
       if (fundingWs && fundingWs._pingTimeout) {
         clearTimeout(fundingWs._pingTimeout);
       }
+      clearTimeout(connectTimeout);
       fundingWs = null;
       streamHealth.funding = false;
       if (isRunning) scheduleReconnect(STREAM_KEY, connectFundingStream);
     };
 
     fundingWs.onerror = () => {
+      clearTimeout(connectTimeout);
       fundingWs?.close();
     };
   } catch (e) {
@@ -424,11 +438,20 @@ function connectBybitLiquidationStream() {
   const STREAM_KEY = 'liquidation_bybit';
   try {
     liquidationWs = new WebSocket('wss://stream.bybit.com/v5/public/linear');
+    const connectTimeout = setTimeout(() => {
+      try {
+        if (liquidationWs && liquidationWs.readyState !== WebSocket.OPEN) {
+          console.warn('[deriv-worker] Bybit liq WS connect timeout - forcing reconnect');
+          liquidationWs.close();
+        }
+      } catch (e) {}
+    }, WS_CONNECT_TIMEOUT_MS);
 
     liquidationWs.onopen = () => {
       console.log('[deriv-worker] Liquidation stream connected (Bybit Linear)');
       streamHealth.liquidationBybit = true;
       resetReconnect(STREAM_KEY);
+      clearTimeout(connectTimeout);
 
       const symbolsToWatch = new Set([
         ...WHALE_WATCH_SYMBOLS.map(s => s.toUpperCase()),
@@ -501,10 +524,14 @@ function connectBybitLiquidationStream() {
       if (liquidationWs && liquidationWs._pingTimeout) {
         clearTimeout(liquidationWs._pingTimeout);
       }
+      clearTimeout(connectTimeout);
       streamHealth.liquidationBybit = false;
       if (isRunning) scheduleReconnect(STREAM_KEY, connectBybitLiquidationStream);
     };
-    liquidationWs.onerror = () => liquidationWs?.close();
+    liquidationWs.onerror = () => {
+      clearTimeout(connectTimeout);
+      liquidationWs?.close();
+    };
   } catch (e) {
     if (isRunning) scheduleReconnect(STREAM_KEY, connectBybitLiquidationStream);
   }
@@ -521,11 +548,20 @@ function connectBinanceLiquidationStream() {
   try {
     // !forceOrder@arr: Single stream for ALL Binance Futures liquidations
     binanceLiqWs = new WebSocket('wss://fstream.binance.com/ws/!forceOrder@arr');
+    const connectTimeout = setTimeout(() => {
+      try {
+        if (binanceLiqWs && binanceLiqWs.readyState !== WebSocket.OPEN) {
+          console.warn('[deriv-worker] Binance liq WS connect timeout - forcing reconnect');
+          binanceLiqWs.close();
+        }
+      } catch (e) {}
+    }, WS_CONNECT_TIMEOUT_MS);
 
     binanceLiqWs.onopen = () => {
       console.log('[deriv-worker] Liquidation stream connected (Binance Futures)');
       streamHealth.liquidationBinance = true;
       resetReconnect(STREAM_KEY);
+      clearTimeout(connectTimeout);
     };
 
     binanceLiqWs.onmessage = (event) => {
@@ -579,9 +615,13 @@ function connectBinanceLiquidationStream() {
 
     binanceLiqWs.onclose = () => {
       streamHealth.liquidationBinance = false;
+      clearTimeout(connectTimeout);
       if (isRunning) scheduleReconnect(STREAM_KEY, connectBinanceLiquidationStream);
     };
-    binanceLiqWs.onerror = () => binanceLiqWs?.close();
+    binanceLiqWs.onerror = () => {
+      clearTimeout(connectTimeout);
+      binanceLiqWs?.close();
+    };
   } catch (e) {
     if (isRunning) scheduleReconnect(STREAM_KEY, connectBinanceLiquidationStream);
   }
@@ -612,11 +652,20 @@ function connectWhaleStream() {
     // CRITICAL: Use fstream.binance.com for FUTURES market order flow, not Spot
     const url = `wss://fstream.binance.com/stream?streams=${streams}`;
     const ws = new WebSocket(url);
+    const connectTimeout = setTimeout(() => {
+      try {
+        if (ws && ws.readyState !== WebSocket.OPEN) {
+          console.warn('[deriv-worker] Whale WS connect timeout - forcing reconnect');
+          ws.close();
+        }
+      } catch (e) {}
+    }, WS_CONNECT_TIMEOUT_MS);
 
     ws.onopen = () => {
       console.log(`[deriv-worker] Whale/OrderFlow stream connected (${WHALE_WATCH_SYMBOLS.length} symbols)`);
       streamHealth.whale = true;
       resetReconnect(STREAM_KEY);
+      clearTimeout(connectTimeout);
 
       const sendPing = () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -706,10 +755,12 @@ function connectWhaleStream() {
       }
       streamHealth.whale = false;
       whaleWsSockets.delete('combined');
+      clearTimeout(connectTimeout);
       if (isRunning) scheduleReconnect(STREAM_KEY, connectWhaleStream);
     };
 
     ws.onerror = () => {
+      clearTimeout(connectTimeout);
       ws?.close();
     };
 

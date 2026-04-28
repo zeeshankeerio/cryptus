@@ -302,7 +302,8 @@ export const DerivativesPanel = memo(function DerivativesPanel({
 }: DerivativesPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('liquidations');
-  const [liqThreshold, setLiqThreshold] = useState<5000 | 10000>(10000);
+  // Default to $5K to ensure users see activity quickly (institutional discovery mode).
+  const [liqThreshold, setLiqThreshold] = useState<5000 | 10000>(5000);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null); // For detailed stats
 
   const handleToggleThreshold = (e: React.MouseEvent) => {

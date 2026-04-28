@@ -55,14 +55,19 @@ export function SignalNarrationModal({
   const [copied, setCopied] = useState(false);
   const [isChartOpen, setIsChartOpen] = useState(false);
 
+  const isRiskOff = useMemo(() => {
+    const h = (narration?.headline || '').toLowerCase();
+    return h.includes('indecision zone') || h.includes('no edge') || h.includes('equilibrium');
+  }, [narration?.headline]);
+
   const handleCopyBrief = async () => {
     if (!narration) return;
 
     const symbolUrl = `${window.location.origin}/symbol/${symbol}`;
     const priceText = entry ? `Current Price: $${entry.price?.toLocaleString()}\nRSI (15m): ${entry.rsi15m?.toFixed(1) || 'N/A'}` : '';
     
-    // Include risk params in brief if they exist
-    const riskText = entry?.riskParams ? `
+    // Include risk params in brief only when execution is permitted.
+    const riskText = !isRiskOff && entry?.riskParams ? `
 Risk/Reward: ${entry.riskParams.riskRewardRatio}:1
 Stop Loss: $${entry.riskParams.stopLoss.toLocaleString()}
 Take Profit 1: $${entry.riskParams.takeProfit1.toLocaleString()}
@@ -517,7 +522,7 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     )}
                   </div>
                   
-                  {entry?.riskParams ? (
+                  {!isRiskOff && entry?.riskParams ? (
                     <div className="grid grid-cols-2 gap-3">
                       <div className="p-2.5 bg-white/[0.02] border border-white/5 rounded-lg relative overflow-hidden group/tp transition-colors hover:border-[#39FF14]/30">
                         <div className="absolute inset-0 bg-[#39FF14]/5 translate-y-[100%] group-hover/tp:translate-y-0 transition-transform duration-300" />
@@ -546,7 +551,9 @@ Powered by Mindscape Analytics Signal Narration Engine™
                     </div>
                   ) : (
                     <div className="py-4 text-center border border-dashed border-white/10 rounded-lg">
-                      <p className="text-[8px] font-black text-slate-600 uppercase">Calculating Entry Strategy...</p>
+                      <p className="text-[8px] font-black text-slate-600 uppercase">
+                        {isRiskOff ? 'Risk Off — conflicting signals' : 'Calculating Entry Strategy...'}
+                      </p>
                     </div>
                   )}
                 </div>

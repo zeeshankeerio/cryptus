@@ -1839,6 +1839,20 @@ function applyCurrentCycleCoherence(
     ];
   }
 
+  // Execution safety: risk parameters must follow the final actionable direction.
+  // If strategy is neutral (including coherence-gated neutral), strip riskParams to avoid
+  // leaking stale TP/SL from earlier computations into "risk off" decisions.
+  if (entry.strategySignal === 'neutral') {
+    entry.riskParams = null;
+  } else if (entry.atr != null && entry.atr > 0 && entry.price > 0) {
+    entry.riskParams = computeRiskParameters(
+      entry.price,
+      entry.atr,
+      entry.strategySignal.includes('buy') ? 'buy' : 'sell',
+      entry.market
+    );
+  }
+
   const primaryRsi = entry.rsi15m ?? entry.rsi1m;
   entry.signal = deriveCoherentSignal(
     entry.strategySignal,
