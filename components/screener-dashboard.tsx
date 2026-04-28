@@ -3090,7 +3090,21 @@ export default function ScreenerDashboard() {
       strategyAlignedSignal === strategySignal ? (entry.strategyScore ?? 0) : finalScore;
     const strategyAlignedLabel = strategyLabelFromSignal(strategyAlignedSignal);
 
-    return { finalSignal, finalScore, finalSource, strategyAlignedSignal, strategyAlignedScore, strategyAlignedLabel };
+    // FIX: Suppress contradictory base signals (e.g., 'overbought' during a 'buy' signal)
+    // to prevent UI contradictions that confuse institutional traders.
+    let alignedBaseSignal = entry.signal;
+    if (toDir(strategyAlignedSignal) === 1 && entry.signal === 'overbought') alignedBaseSignal = 'neutral';
+    if (toDir(strategyAlignedSignal) === -1 && entry.signal === 'oversold') alignedBaseSignal = 'neutral';
+
+    return { 
+      finalSignal, 
+      finalScore, 
+      finalSource, 
+      strategyAlignedSignal, 
+      strategyAlignedScore, 
+      strategyAlignedLabel,
+      alignedBaseSignal
+    };
   }, []);
 
   // ─── Multi-Asset Market Data (Forex, Metals, Stocks) ───
@@ -3524,6 +3538,7 @@ export default function ScreenerDashboard() {
       const f = resolveFinal(e);
       return {
         ...e,
+        signal: f.alignedBaseSignal,
         strategySignal: f.strategyAlignedSignal,
         strategyScore: f.strategyAlignedScore,
         strategyLabel: f.strategyAlignedLabel,
