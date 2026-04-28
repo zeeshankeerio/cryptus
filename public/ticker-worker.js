@@ -22,9 +22,18 @@ const BYBIT_SPOT_REST_POLL_MS = 2000;  // Task 2.7: REST poll interval for stale
 const BYBIT_SPOT_STALE_THRESHOLD_MS = 5000; // Symbol is stale if no WS update for 5s
 const PERSIST_THROTTLE_MS = 2000; // Max 1 IndexedDB write per 2 seconds to reduce IO pressure
 const REST_FALLBACK_INTERVAL = 3000; // Fallback to REST API every 3s when WebSocket fails
+const WORKER_DEBUG = false; // Flip locally only when debugging worker issues
 
 // Institutional Precision Helper (1e8)
 const round8 = (n) => Math.round(n * 1e8) / 1e8;
+
+function isFiniteNumber(n) {
+  return typeof n === 'number' && Number.isFinite(n);
+}
+
+function dbg(...args) {
+  if (WORKER_DEBUG) console.log(...args);
+}
 
 // Internal buffer to minimize postMessage frequency
 let tickerBuffer = new Map();
@@ -685,7 +694,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
     ? 0
     : Math.round(((curC - curO) / curO) * 10000) / 100;
 
-    const alias = getSymbolAlias(t.s);
+  const alias = getSymbolAlias(t.s);
 
   // ── Volatility Monitor ──
   const now = t.ts || Date.now();
@@ -1924,6 +1933,7 @@ function computeWorkerStrategyScore(params) {
 
   // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
+  normalized = Number.isFinite(normalized) ? normalized : 0;
   
   // ── Accuracy Pivot Guard (Institutional Sanity & Stop-Loss) ──
   if (!params.volumeSpike) {
