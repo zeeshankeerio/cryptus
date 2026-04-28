@@ -3220,7 +3220,7 @@ export default function ScreenerDashboard() {
           : 0;
       if (
         superStatus === 'ok' &&
-        superConfidence >= 70 &&
+        superConfidence >= 60 &&
         superDirection !== 0 &&
         strategyDirection !== 0 &&
         superDirection !== strategyDirection

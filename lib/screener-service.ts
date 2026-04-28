@@ -1824,7 +1824,7 @@ function applyCurrentCycleCoherence(
   const strategyDirection = getStrategyDirection(entry.strategySignal);
   const hasCriticalConflict =
     superStatus === 'ok' &&
-    superConfidence >= 70 &&
+    superConfidence >= 60 &&
     superDirection !== 0 &&
     strategyDirection !== 0 &&
     superDirection !== strategyDirection;
