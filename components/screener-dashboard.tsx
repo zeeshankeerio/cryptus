@@ -887,6 +887,7 @@ const ScreenerRow = memo(function ScreenerRow({
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalUseObv, globalUseWilliamsR, globalUseCci,
+    globalShowSignalTags,
     globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold,
     smartMoneyScore
   ]);
@@ -967,7 +968,7 @@ const ScreenerRow = memo(function ScreenerRow({
         prevSignal.current = display.strategySignal;
       }
     }
-  }, [display.strategySignal, display.price, entry.symbol, isVisible]);
+  }, [display.strategySignal, display.price, entry.symbol, entry.market, entry.atr, isVisible]);
 
   const stickyOffsetSym = bulkMode
     ? (visibleCols.has('rank') ? 132 : 84)  // Add 44px for checkbox
@@ -1898,6 +1899,7 @@ const ScreenerCard = memo(function ScreenerCard({
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalUseObv, globalUseWilliamsR, globalUseCci,
+    globalShowSignalTags,
     globalSignalThresholdMode, globalOverbought, globalOversold, globalVolumeSpikeThreshold,
     smartMoneyScore
   ]);
@@ -3572,7 +3574,7 @@ export default function ScreenerDashboard() {
     processedData, coinConfigs, watchlist, syncStates, updateSymbols, postToWorker,
     globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch, globalUseEma,
     globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
-    globalUseObv, globalUseWilliamsR,
+    globalUseObv, globalUseWilliamsR, globalUseCci,
     alertsEnabled, globalThresholdsEnabled, globalLongCandleThreshold,
     globalVolumeSpikeThreshold, globalVolatilityEnabled, globalShowSignalTags,
     globalSignalThresholdMode, globalOverbought, globalOversold,
@@ -3607,6 +3609,7 @@ export default function ScreenerDashboard() {
           globalUseMomentum,
           globalUseObv,
           globalUseWilliamsR,
+          globalUseCci,
           visibleColumns: Array.from(visibleCols),
           refreshInterval,
           pairCount,
@@ -3655,6 +3658,7 @@ export default function ScreenerDashboard() {
         saveFlag('crypto-rsi-global-use-momentum', globalUseMomentum);
         saveFlag('crypto-rsi-global-use-obv', globalUseObv);
         saveFlag('crypto-rsi-global-use-williamsr', globalUseWilliamsR);
+        saveFlag('crypto-rsi-global-use-cci', globalUseCci);
 
         // ── Broadcast to other tabs for seamless "Zero-Lag" sync ──
         syncChannelRef.current?.postMessage({ type: 'PREFS_UPDATED', payload: body });
@@ -3672,6 +3676,7 @@ export default function ScreenerDashboard() {
     globalLongCandleThreshold, globalVolumeSpikeThreshold, globalVolatilityEnabled,
     globalSignalThresholdMode, globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch,
     globalUseEma, globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
+    globalUseObv, globalUseWilliamsR, globalUseCci, tradingStyle,
     visibleCols, refreshInterval, pairCount, smartMode, showHeader, rsiPeriod, soundEnabled,
     watchlist,
     alertsEnabled
