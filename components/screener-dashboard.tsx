@@ -1425,17 +1425,6 @@ const ScreenerRow = memo(function ScreenerRow({
         />
       </td>
 
-      {visibleCols.has('finalAction') && (
-        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          <FinalBadge
-            signal={(entry as any).finalSignal ?? entry.strategySignal}
-            source={(entry as any).finalSource ?? 'strategy'}
-            entry={entry}
-            onViewNarration={onViewNarration}
-          />
-        </td>
-      )}
-
       {visibleCols.has('strategy') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
           <StrategyBadge signal={display.strategySignal} label={display.strategyLabel} reasons={display.strategyReasons} entry={entry} onViewNarration={onViewNarration} isOwner={isOwner} />
@@ -1447,6 +1436,17 @@ const ScreenerRow = memo(function ScreenerRow({
           <SuperSignalBadge
             superSignal={entry.superSignal}
             isOwner={isOwner}
+            entry={entry}
+            onViewNarration={onViewNarration}
+          />
+        </td>
+      )}
+
+      {visibleCols.has('finalAction') && (
+        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
+          <FinalBadge
+            signal={(entry as any).finalSignal ?? entry.strategySignal}
+            source={(entry as any).finalSource ?? 'strategy'}
             entry={entry}
             onViewNarration={onViewNarration}
           />
@@ -1696,9 +1696,9 @@ const OPTIONAL_COLUMNS: ColumnDef[] = [
   { id: 'fundingRate', label: 'Funding', group: 'Derivatives', defaultVisible: true },
   { id: 'orderFlow', label: 'Flow', group: 'Derivatives', defaultVisible: true },
   { id: 'smartMoney', label: 'Smart $', group: 'Derivatives', defaultVisible: true },
+  { id: 'strategy', label: 'Strategy', group: 'Strategy', defaultVisible: true },
   { id: 'superSignal', label: 'SUPER SIGNAL', group: 'Intelligence', defaultVisible: true },
   { id: 'finalAction', label: 'FINAL', group: 'Execution', defaultVisible: true },
-  { id: 'strategy', label: 'Strategy', group: 'Strategy', defaultVisible: true },
 ];
 
 
@@ -6040,7 +6040,6 @@ export default function ScreenerDashboard() {
                   {visibleCols.has('winRate') && <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-right tracking-widest whitespace-nowrap", COL_WIDTHS.winRate)}>Win Rate</th>}
 
                   <SortHeader label="Signal" sortKey="signal" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />
-                  {visibleCols.has('finalAction') && <SortHeader label="Final" sortKey="finalScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
                   {visibleCols.has('strategy') && <SortHeader label="Strategy" sortKey="strategyScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
                   {visibleCols.has('superSignal') && (
                     <SortHeader
@@ -6053,6 +6052,7 @@ export default function ScreenerDashboard() {
                       widthClass={COL_WIDTHS.signal}
                     />
                   )}
+                  {visibleCols.has('finalAction') && <SortHeader label="Final" sortKey="finalScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
                   <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-widest whitespace-nowrap", COL_WIDTHS.edit)}>Edit</th>
                 </tr>
               </thead>
