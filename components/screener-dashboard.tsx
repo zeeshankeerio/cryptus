@@ -38,7 +38,7 @@ import { OrderFlowIndicator } from '@/components/order-flow-indicator';
 import { CorrelationHeatmap } from '@/components/correlation-heatmap';
 import { PortfolioScannerPanel } from '@/components/portfolio-scanner-panel';
 import { approximateRsi, approximateEma, calculateRsiWithState } from '@/lib/rsi';
-import { computeStrategyScore, deriveCoherentSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState, calculateATR, calculateADX, calculateFibonacciLevels, computeRiskParameters } from '@/lib/indicators';
+import { computeStrategyScore, deriveSignal, calculateRsi, latestEma, detectEmaCross, calculateMacd, calculateBollinger, calculateStochRsi, calculateROC, calculateConfluence, latestEmaWithState, calculateMacdWithState, calculateBollingerWithState, calculateATR, calculateADX, calculateFibonacciLevels, computeRiskParameters } from '@/lib/indicators';
 import { classifyRegime } from '@/lib/market-regime';
 import { getSymbolAlias, getSymbolTicker } from '@/lib/symbol-utils';
 import { generateSignalNarration } from '@/lib/signal-narration';
@@ -338,7 +338,15 @@ const PriceCell = memo(function PriceCell({
   );
 });
 
-function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
+function SignalBadge({
+  signal,
+  entry,
+  onViewNarration,
+}: {
+  signal: ScreenerEntry['signal'];
+  entry?: ScreenerEntry;
+  onViewNarration?: (entry: ScreenerEntry) => void;
+}) {
   const config: Record<string, { bg: string; text: string; border: string; dot: string; label: string }> = {
     oversold: {
       bg: 'bg-[#39FF14]/15',
@@ -376,6 +384,18 @@ function SignalBadge({ signal }: { signal: ScreenerEntry['signal'] }) {
       {/* Pulsing dot instead of pulsing the whole badge – no layout shift */}
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", style.dot, isActive && "animate-pulse")} />
       <span>{style.label}</span>
+      {entry && onViewNarration && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewNarration(entry);
+          }}
+          className="ml-0.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity p-0.5 hover:bg-white/10 rounded"
+          title="View detailed analysis"
+        >
+          <Info size={10} />
+        </button>
+      )}
     </span>
   );
 }
@@ -470,7 +490,17 @@ function StrategyBadge({ signal, label, reasons, entry, onViewNarration, isOwner
   );
 }
 
-function FinalBadge({ signal, source }: { signal: ScreenerEntry['strategySignal']; source: 'super' | 'strategy' }) {
+function FinalBadge({
+  signal,
+  source,
+  entry,
+  onViewNarration,
+}: {
+  signal: ScreenerEntry['strategySignal'];
+  source: 'super' | 'strategy';
+  entry?: ScreenerEntry;
+  onViewNarration?: (entry: ScreenerEntry) => void;
+}) {
   const cfg: Record<string, { bg: string; text: string; border: string; icon: string }> = {
     'strong-buy': { bg: 'bg-[#39FF14]/30', text: 'text-[#39FF14]', border: 'border-[#39FF14]/60', icon: '🔥' },
     'buy': { bg: 'bg-[#39FF14]/20', text: 'text-[#39FF14]/90', border: 'border-[#39FF14]/40', icon: '↗️' },
@@ -498,12 +528,34 @@ function FinalBadge({ signal, source }: { signal: ScreenerEntry['strategySignal'
       <span className="text-[9px] shrink-0">{style.icon}</span>
       <span className="truncate">{label}</span>
       <span className="text-[7px] font-black px-1 py-0.5 rounded bg-black/20 border border-white/10 text-white/70">{sourceLabel}</span>
+      {entry && onViewNarration && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewNarration(entry);
+          }}
+          className="ml-0.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity p-0.5 hover:bg-white/10 rounded"
+          title="View detailed analysis"
+        >
+          <Info size={10} />
+        </button>
+      )}
     </span>
   );
 }
 
 
-function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry['superSignal'], isOwner?: boolean }) {
+function SuperSignalBadge({
+  superSignal,
+  isOwner,
+  entry,
+  onViewNarration,
+}: {
+  superSignal: ScreenerEntry['superSignal'];
+  isOwner?: boolean;
+  entry?: ScreenerEntry;
+  onViewNarration?: (entry: ScreenerEntry) => void;
+}) {
   if (!superSignal) {
     return (
       <span className="inline-flex items-center justify-center px-1.5 py-1 w-full min-w-[112px] max-w-[112px] text-[9px] font-black uppercase tracking-tight leading-none whitespace-nowrap overflow-hidden rounded-lg border bg-slate-700/20 text-slate-600 border-slate-600/30">
@@ -572,6 +624,18 @@ function SuperSignalBadge({ superSignal, isOwner }: { superSignal: ScreenerEntry
           ? 'LOW CONF'
           : superSignal.category.toUpperCase()}
       </span>
+      {entry && onViewNarration && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onViewNarration(entry);
+          }}
+          className="ml-0.5 shrink-0 opacity-40 hover:opacity-100 transition-opacity p-0.5 hover:bg-white/10 rounded"
+          title="View detailed analysis"
+        >
+          <Info size={10} />
+        </button>
+      )}
     </span>
   );
 }
@@ -831,8 +895,8 @@ const ScreenerRow = memo(function ScreenerRow({
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, obT, osT)
-      : deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, globalOverbought, globalOversold);
+      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
+      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
     return {
       price: tick.price,
       change24h: tick.change24h,
@@ -1353,7 +1417,11 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-        <SignalBadge signal={display.signal.toLowerCase() as any} />
+        <SignalBadge
+          signal={display.signal.toLowerCase() as any}
+          entry={entry}
+          onViewNarration={onViewNarration}
+        />
       </td>
 
       {visibleCols.has('finalAction') && (
@@ -1361,6 +1429,8 @@ const ScreenerRow = memo(function ScreenerRow({
           <FinalBadge
             signal={(entry as any).finalSignal ?? entry.strategySignal}
             source={(entry as any).finalSource ?? 'strategy'}
+            entry={entry}
+            onViewNarration={onViewNarration}
           />
         </td>
       )}
@@ -1373,7 +1443,12 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('superSignal') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          <SuperSignalBadge superSignal={entry.superSignal} isOwner={isOwner} />
+          <SuperSignalBadge
+            superSignal={entry.superSignal}
+            isOwner={isOwner}
+            entry={entry}
+            onViewNarration={onViewNarration}
+          />
         </td>
       )}
 
@@ -1838,8 +1913,8 @@ const ScreenerCard = memo(function ScreenerCard({
     // Intelligence: Derive real-time signal tag based on user threshold preferences
     const isCustomMode = globalSignalThresholdMode === 'custom';
     const signal = isCustomMode
-      ? deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, obT, osT)
-      : deriveCoherentSignal(strategySignal, rsi15m ?? rsi1m, globalOverbought, globalOversold);
+      ? deriveSignal(rsi15m ?? rsi1m, obT, osT)
+      : deriveSignal(rsi15m ?? rsi1m, globalOverbought, globalOversold);
 
 
 
@@ -2019,7 +2094,11 @@ const ScreenerCard = memo(function ScreenerCard({
             </div>
             {display.signal !== 'neutral' && (
               <div className="scale-[0.65] origin-left -ml-1 -my-1">
-                <SignalBadge signal={display.signal.toLowerCase() as any} />
+                <SignalBadge
+                  signal={display.signal.toLowerCase() as any}
+                  entry={entry}
+                  onViewNarration={onViewNarration}
+                />
 
               </div>
             )}
@@ -3420,7 +3499,7 @@ export default function ScreenerDashboard() {
           osT = cfg?.oversoldThreshold ?? osT;
         }
         const rsiVal = merged.rsi15m ?? merged.rsi1m ?? merged.rsiCustom;
-        merged.signal = deriveCoherentSignal(merged.strategySignal, rsiVal, obT, osT);
+        merged.signal = deriveSignal(rsiVal, obT, osT);
       } else {
         merged.signal = 'neutral';
       }
@@ -3597,6 +3676,7 @@ export default function ScreenerDashboard() {
           globalLongCandleThreshold,
           globalVolumeSpikeThreshold,
           globalVolatilityEnabled,
+          globalShowSignalTags,
           globalSignalThresholdMode,
           globalUseRsi,
           globalUseMacd,
@@ -3674,7 +3754,7 @@ export default function ScreenerDashboard() {
     preferencesSynced, session?.user?.id,
     globalThresholdsEnabled, globalOverbought, globalOversold, globalThresholdTimeframes,
     globalLongCandleThreshold, globalVolumeSpikeThreshold, globalVolatilityEnabled,
-    globalSignalThresholdMode, globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch,
+    globalShowSignalTags, globalSignalThresholdMode, globalUseRsi, globalUseMacd, globalUseBb, globalUseStoch,
     globalUseEma, globalUseVwap, globalUseConfluence, globalUseDivergence, globalUseMomentum,
     globalUseObv, globalUseWilliamsR, globalUseCci, tradingStyle,
     visibleCols, refreshInterval, pairCount, smartMode, showHeader, rsiPeriod, soundEnabled,
