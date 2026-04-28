@@ -58,7 +58,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Missing symbols' }, { status: 400 });
   }
 
-  const symbols = symbolsParam.split(',').map(s => s.trim().toUpperCase()).filter(Boolean).slice(0, 50);
+  const symbols = symbolsParam
+    .split(',')
+    .map(s => s.trim().toUpperCase())
+    .filter((s) => /^[A-Z0-9]{2,20}USDT$/.test(s))
+    .slice(0, 50);
   if (symbols.length === 0) return NextResponse.json({ data: {} });
 
   try {

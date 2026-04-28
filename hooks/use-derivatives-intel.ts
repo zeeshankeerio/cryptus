@@ -422,10 +422,21 @@ export function useSymbolDerivatives(symbol: string, enabled: boolean = true) {
   const [pressure, setPressure] = useState<SmartMoneyPressure | null>(null);
 
   useEffect(() => {
-    if (!enabled || !derivativesWorker) return;
+    if (!enabled) return;
+    const worker = getOrCreateWorker();
+    if (!worker) return;
 
     const handleMessage = (e: MessageEvent) => {
       const { type, payload } = e.data;
+
+      if (type === 'SNAPSHOT') {
+        const fundingEntries = (payload?.fundingRates ?? []) as [string, FundingRateData][];
+        const flowEntries = (payload?.orderFlow ?? []) as [string, OrderFlowData][];
+        const fundingMatch = fundingEntries.find(([sym]) => sym === symbol);
+        const flowMatch = flowEntries.find(([sym]) => sym === symbol);
+        if (fundingMatch) setFunding(fundingMatch[1]);
+        if (flowMatch) setFlow(flowMatch[1]);
+      }
 
       if (type === 'FUNDING_UPDATE') {
         const entries = payload as [string, FundingRateData][];
@@ -447,9 +458,10 @@ export function useSymbolDerivatives(symbol: string, enabled: boolean = true) {
       }
     };
 
-    derivativesWorker.addEventListener('message', handleMessage);
+    worker.addEventListener('message', handleMessage);
+    worker.postMessage({ type: 'REQUEST_SNAPSHOT' });
     return () => {
-      derivativesWorker?.removeEventListener('message', handleMessage);
+      worker.removeEventListener('message', handleMessage);
     };
   }, [symbol, enabled]);
 

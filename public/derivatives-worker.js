@@ -852,6 +852,9 @@ async function pollOpenInterest() {
                 updatedAt: Date.now()
               });
             });
+            // REST fallback is a valid live data source while WS is down.
+            // Keep the health pulse fresh so UI does not show false staleness.
+            lastDataReceived = Date.now();
             fundingDirty = true;
           }
         }
