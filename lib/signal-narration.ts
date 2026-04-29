@@ -500,10 +500,16 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
 
       if (near618 || near500) {
         const isBullishTrend = entry.strategySignal?.includes('buy');
-        const zoneType = isBullishTrend ? 'Demand Zone' : 'Supply Zone';
+        const level = near618 ? fib.level618 : fib.level500;
+        const price = entry.price;
+        
+        // Institutional Directional Accuracy: A level is only "Demand" if price is ABOVE it.
+        // If price is below, it acts as resistance (Supply/Target).
+        const zoneType = price >= level ? 'Demand Zone' : 'Supply Zone';
+        
         reasons.push(`🏛️ Price testing Institutional ${zoneType} (${near618 ? '61.8% Golden Ratio' : '50% Level'}) - strong reversal potential`);
         totalPoints += 15;
-        if (isBullishTrend) bullishPoints += 15; else bearishPoints += 15;
+        if (zoneType === 'Demand Zone') bullishPoints += 15; else bearishPoints += 15;
       } else {
         // Standard fib proximity check
         const nearLevels: string[] = [];
@@ -524,7 +530,15 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
   if (entry.smc) {
     if (entry.smc.fvg) {
       const isBullishFvg = entry.smc.fvg.type === 'bullish';
-      reasons.push(`⚡ ${isBullishFvg ? 'Bullish' : 'Bearish'} Fair Value Gap (FVG) detected ($${formatPrice(entry.smc.fvg.bottom)} - $${formatPrice(entry.smc.fvg.top)}). Rapid institutional execution in progress`);
+      const isBullishSignal = entry.strategySignal?.includes('buy');
+      
+      // Clarify FVG role: If a bearish FVG exists in a bullish signal, it's a target/resistance.
+      const fvgRole = (isBullishFvg && isBullishSignal) ? 'Support' 
+                    : (!isBullishFvg && !isBullishSignal) ? 'Resistance'
+                    : (!isBullishFvg && isBullishSignal) ? 'Target Resistance'
+                    : 'Target Support';
+
+      reasons.push(`⚡ ${isBullishFvg ? 'Bullish' : 'Bearish'} Fair Value Gap (FVG) detected ($${formatPrice(entry.smc.fvg.bottom)} - $${formatPrice(entry.smc.fvg.top)}). ${fvgRole} - rapid institutional execution in progress`);
       totalPoints += 15;
       if (isBullishFvg) bullishPoints += 15; else bearishPoints += 15;
       pillars.liquidity = true;
@@ -659,9 +673,19 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       headline = 'Extended Market Condition | Pullback Risk Elevated';
       emoji = '🟡⚠️';
     } else if (conviction >= 80 && pillarCount >= 3) {
-      headline = market === 'Metal'
-        ? 'Institutional Commodity Buy | Demand Zone Confirmed'
-        : 'Institutional Buy Setup | High Confluence';
+      // 2026 FIX: Verify price is actually ABOVE demand before confirming it in headline
+      const hasDemandAbovePrice = entry.smc?.orderBlock?.type === 'bullish' && entry.price < entry.smc.orderBlock.bottom;
+      const isMetals = market === 'Metal';
+      
+      if (hasDemandAbovePrice) {
+        headline = isMetals 
+          ? 'Bullish Commodity Setup | Testing Broken Demand'
+          : 'Bullish Reversal Setup | Level Testing';
+      } else {
+        headline = isMetals
+          ? 'Institutional Commodity Buy | Demand Zone Confirmed'
+          : 'Institutional Buy Setup | High Confluence';
+      }
       emoji = conviction >= 70 ? '🟢🔥' : '🟢';
     } else if (conviction >= 60) {
       headline = market === 'Metal'

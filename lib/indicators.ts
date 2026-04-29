@@ -1624,13 +1624,28 @@ export interface RiskParameters {
  * @param direction - Trade direction ('buy' or 'sell')
  * @param market - Asset class for multiplier calibration
  */
+/**
+ * Compute institutional-grade risk parameters based on ATR and SMC Confluence.
+ *
+ * Stop Loss: price ± (ATR × multiplier) depending on direction, 
+ * further hardened by placement below/above nearest Order Block (OB).
+ *
+ * Take Profit 1: 1.33:1 R:R (conservative)
+ * Take Profit 2: 2.0:1 R:R (aggressive)
+ *
+ * @param price - Current asset price
+ * @param atr - Average True Range value
+ * @param direction - Trade direction ('buy' or 'sell')
+ * @param market - Asset class for multiplier calibration
+ * @param smc - Optional SMC data for OB confluence
+ */
 export function computeRiskParameters(
   price: number,
   atr: number,
   direction: 'buy' | 'sell',
   market: 'Crypto' | 'Metal' | 'Forex' | 'Index' | 'Stocks' = 'Crypto',
+  smc?: { orderBlock?: { type: string; top: number; bottom: number } | null }
 ): RiskParameters {
-  // Asset-class-aware ATR multiplier
   const multiplierMap: Record<string, number> = {
     Crypto: 1.5,
     Forex: 1.0,
@@ -1641,31 +1656,43 @@ export function computeRiskParameters(
   const atrMult = multiplierMap[market] ?? 1.5;
   const riskDistance = atr * atrMult;
 
+  let stopLoss: number;
+  let takeProfit1: number;
+  let takeProfit2: number;
+
   if (direction === 'buy') {
-    const stopLoss = round(price - riskDistance);
-    const takeProfit1 = round(price + riskDistance * 1.33);
-    const takeProfit2 = round(price + riskDistance * 2.0);
-    return {
-      stopLoss,
-      takeProfit1,
-      takeProfit2,
-      riskRewardRatio: round(1.33),
-      atrUsed: round(atr),
-      atrMultiplier: atrMult,
-    };
+    let rawStop = price - riskDistance;
+    // SMC Confluence: Place stop below OB if OB exists and is below price
+    if (smc?.orderBlock?.type === 'bullish' && smc.orderBlock.bottom < price) {
+      rawStop = Math.min(rawStop, smc.orderBlock.bottom);
+    }
+    stopLoss = round(rawStop);
+    takeProfit1 = round(price + riskDistance * 1.33);
+    takeProfit2 = round(price + riskDistance * 2.0);
   } else {
-    const stopLoss = round(price + riskDistance);
-    const takeProfit1 = round(price - riskDistance * 1.33);
-    const takeProfit2 = round(price - riskDistance * 2.0);
-    return {
-      stopLoss,
-      takeProfit1,
-      takeProfit2,
-      riskRewardRatio: round(1.33),
-      atrUsed: round(atr),
-      atrMultiplier: atrMult,
-    };
+    let rawStop = price + riskDistance;
+    // SMC Confluence: Place stop above OB if OB exists and is above price
+    if (smc?.orderBlock?.type === 'bearish' && smc.orderBlock.top > price) {
+      rawStop = Math.max(rawStop, smc.orderBlock.top);
+    }
+    stopLoss = round(rawStop);
+    takeProfit1 = round(price - riskDistance * 1.33);
+    takeProfit2 = round(price - riskDistance * 2.0);
   }
+
+  // Calculate dynamic R/R based on actual stop distance
+  const risk = Math.abs(price - stopLoss);
+  const reward = Math.abs(takeProfit1 - price);
+  const rr = risk > 0 ? round(reward / risk) : 1.33;
+
+  return {
+    stopLoss,
+    takeProfit1,
+    takeProfit2,
+    riskRewardRatio: rr,
+    atrUsed: round(atr),
+    atrMultiplier: atrMult,
+  };
 }
 
 // ── Hidden (Continuation) Divergence ────────────────────────────

@@ -468,22 +468,43 @@ Powered by Mindscape Analytics Signal Narration Engine™
                           </>
                         );
                         
-                        const isBearish = entry.strategySignal?.includes('sell');
-                        const demandZone = isBearish ? entry.fibLevels.swingLow : entry.fibLevels.level618;
-                        const supplyZone = isBearish ? entry.fibLevels.level618 : entry.fibLevels.swingHigh;
+                        const ob = entry.smc?.orderBlock;
+                        const fvg = entry.smc?.fvg;
+                        const fib = entry.fibLevels;
+                        const price = entry.price;
+                        
+                        // 2026 Institutional Logic: 
+                        // 1. Prioritize unmitigated Order Blocks (SMC) for "Zones"
+                        // 2. Fallback to Fibonacci Golden Ratio
+                        // 3. Labels are PRICE-RELATIVE (Demand = Below Price, Supply = Above Price)
+                        
+                        let demandZone: number | null = null;
+                        let supplyZone: number | null = null;
+
+                        if (ob) {
+                          if (ob.type === 'bullish') demandZone = ob.bottom;
+                          else supplyZone = ob.top;
+                        }
+
+                        if (!demandZone && fib) {
+                          demandZone = price > fib.level618 ? fib.level618 : fib.swingLow;
+                        }
+                        if (!supplyZone && fib) {
+                          supplyZone = price < fib.level618 ? fib.level618 : fib.swingHigh;
+                        }
                         
                         return (
                           <>
                             <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
                               <span className="text-[9px] font-bold text-slate-400">Demand Zone</span>
-                              <span className="text-[10px] font-black text-white font-mono">
-                                ${demandZone.toLocaleString()}
+                              <span className="text-[10px] font-black text-[#39FF14] font-mono">
+                                {demandZone ? `$${demandZone.toLocaleString()}` : '--'}
                               </span>
                             </div>
                             <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
                               <span className="text-[9px] font-bold text-slate-400">Supply Zone</span>
-                              <span className="text-[10px] font-black text-white font-mono">
-                                ${supplyZone.toLocaleString()}
+                              <span className="text-[10px] font-black text-[#FF4B5C] font-mono">
+                                {supplyZone ? `$${supplyZone.toLocaleString()}` : '--'}
                               </span>
                             </div>
                           </>

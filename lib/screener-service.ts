@@ -1767,7 +1767,7 @@ function buildEntry(
                              : 'neutral';
 
         return structuralBias !== 'neutral'
-          ? computeRiskParameters(price, atr, structuralBias as 'buy' | 'sell', getMarketType(sym))
+          ? computeRiskParameters(price, atr, structuralBias as 'buy' | 'sell', getMarketType(sym), smc)
           : null;
       })(),
     };
