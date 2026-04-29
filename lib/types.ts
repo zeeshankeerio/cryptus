@@ -128,6 +128,20 @@ export interface ScreenerEntry {
     level618: number;
     level786: number;
   } | null;
+  // ── 2026 Intelligence: Smart Money Concepts (SMC) ──
+  smc?: {
+    fvg?: {
+      type: 'bullish' | 'bearish';
+      top: number;
+      bottom: number;
+    } | null;
+    orderBlock?: {
+      type: 'bullish' | 'bearish';
+      top: number;
+      bottom: number;
+      strength: 'weak' | 'moderate' | 'strong';
+    } | null;
+  } | null;
   // ── Derivatives / Smart Money (injected at display layer) ──
   /** Smart Money Pressure Index score (-100 to +100). Injected from useDerivativesIntel. */
   smartMoneyScore?: number | null;

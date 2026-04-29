@@ -6,7 +6,7 @@ import {
   detectVolumeSpike, computeStrategyScore,
   detectRsiDivergence, calculateROC, calculateConfluence,
   calculateAvgBarSize, calculateAvgVolume,
-  calculateATR, calculateADX, deriveCoherentSignal, type StrategySignal,
+  calculateATR, calculateADX, deriveCoherentSignal, calculateSMC, type StrategySignal,
   calculateOBV, calculateWilliamsR,
   computeRiskParameters, detectHiddenDivergence, calculateFibonacciLevels,
   // 2026 Intelligence: Regime fix + Commodity Channel Index
@@ -1538,6 +1538,14 @@ function buildEntry(
     // Also used as a supplementary oscillator for crypto in ranging regimes.
     const cci = calculateCCI(highs15m, lows15m, closes15m, 20);
 
+    // 2026 Intelligence: Smart Money Concepts (FVG & Order Blocks)
+    const smc = calculateSMC(
+      agg15m.map(c => c.open),
+      highs15m,
+      lows15m,
+      closes15m
+    );
+
     // 2026 Intelligence: Market Regime Classification (FIXED)
     // Previously hardcoded atrAvg=null and bbWidthAvg=null which permanently
     // broke the trending/volatile distinction in classifyRegime().
@@ -1743,6 +1751,7 @@ function buildEntry(
       hiddenDivergence,
       regime: regimeResult,
       fibLevels: fibLevels ?? null,
+      smc: smc ?? null,
       riskParams: (atr !== null && strategy.signal !== 'neutral')
         ? computeRiskParameters(
             price,

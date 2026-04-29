@@ -520,10 +520,27 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
     }
   }
 
-  // ── 17. Fair Value Gap (FVG) & Momentum Gaps ──
-  if (entry.regime?.regime === 'breakout' && entry.longCandle && entry.volumeSpike) {
+  // ── 17. Fair Value Gap (FVG) & Order Blocks (SMC) ──
+  if (entry.smc) {
+    if (entry.smc.fvg) {
+      const isBullishFvg = entry.smc.fvg.type === 'bullish';
+      reasons.push(`⚡ ${isBullishFvg ? 'Bullish' : 'Bearish'} Fair Value Gap (FVG) detected ($${formatPrice(entry.smc.fvg.bottom)} - $${formatPrice(entry.smc.fvg.top)}). Rapid institutional execution in progress`);
+      totalPoints += 15;
+      if (isBullishFvg) bullishPoints += 15; else bearishPoints += 15;
+      pillars.liquidity = true;
+    }
+
+    if (entry.smc.orderBlock) {
+      const isBullishOb = entry.smc.orderBlock.type === 'bullish';
+      reasons.push(`🧱 Institutional ${isBullishOb ? 'Demand Order Block' : 'Supply Order Block'} detected at $${formatPrice(entry.smc.orderBlock.bottom)} - $${formatPrice(entry.smc.orderBlock.top)}.`);
+      totalPoints += 18;
+      if (isBullishOb) bullishPoints += 18; else bearishPoints += 18;
+      pillars.structure = true;
+    }
+  } else if (entry.regime?.regime === 'breakout' && entry.longCandle && entry.volumeSpike) {
+    // Fallback gap detection for when precise SMC geometry isn't present
     const direction = entry.candleDirection === 'bullish' ? 'Bullish' : 'Bearish';
-    reasons.push(`⚡ ${direction} Fair Value Gap (FVG) / Momentum Gap detected. Rapid institutional execution in progress`);
+    reasons.push(`⚡ ${direction} Momentum Gap detected. Rapid institutional execution in progress`);
     totalPoints += 12;
     if (entry.candleDirection === 'bullish') bullishPoints += 12;
     else if (entry.candleDirection === 'bearish') bearishPoints += 12;

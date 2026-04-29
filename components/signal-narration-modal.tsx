@@ -490,12 +490,12 @@ Powered by Mindscape Analytics Signal Narration Engine™
                         );
                       })()}
                       <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
-                        <span className="text-[9px] font-bold text-slate-400">Momentum Gap</span>
+                        <span className="text-[9px] font-bold text-slate-400">Smart Money Gap</span>
                         <span className={cn(
                           "text-[10px] font-black px-1.5 py-0.5 rounded",
-                          entry?.regime?.regime === 'breakout' && entry?.longCandle ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-500"
+                          entry?.smc?.fvg ? (entry.smc.fvg.type === 'bullish' ? "bg-[#39FF14]/10 text-[#39FF14]" : "bg-[#FF4B5C]/10 text-[#FF4B5C]") : (entry?.regime?.regime === 'breakout' && entry?.longCandle ? "bg-[#39FF14]/10 text-[#39FF14]" : "text-slate-500")
                         )}>
-                          {entry?.regime?.regime === 'breakout' && entry?.longCandle ? 'FVG DETECTED' : 'NEUTRAL'}
+                          {entry?.smc?.fvg ? `FVG: ${entry.smc.fvg.type.toUpperCase()}` : (entry?.regime?.regime === 'breakout' && entry?.longCandle ? 'MOMENTUM GAP' : 'NEUTRAL')}
                         </span>
                       </div>
                     </div>
