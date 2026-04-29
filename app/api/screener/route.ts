@@ -129,8 +129,8 @@ export async function GET(request: Request) {
     }
 
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
-    const key = user.id ? `user:${user.id}` : `anon:${ip}`;
-    const burstLimit = user.id ? 40 : 12; // Relaxed burst for institutional speed
+    const key = user?.id ? `user:${user.id}` : `anon:${ip}`;
+    const burstLimit = user?.id ? 40 : 12; // Relaxed burst for institutional speed
     const rate = takeRateLimitToken(key, burstLimit);
     
     if (!rate.ok) {
@@ -154,7 +154,9 @@ export async function GET(request: Request) {
     const includeCloses = searchParams.get('includeCloses') === '1';
     if (!includeCloses) {
       for (const entry of result.data) {
-        delete (entry as any).historicalCloses;
+        if ('historicalCloses' in entry) {
+          delete (entry as Record<string, unknown>).historicalCloses;
+        }
       }
     }
 
@@ -176,7 +178,7 @@ export async function GET(request: Request) {
         'Pragma': 'no-cache',
         'Expires': '0',
         'X-Accelerated-Flow': '1',
-        'X-Auth-Mode': (authInfo as any).isFastPath ? 'fast-path' : 'secure-fallback',
+        'X-Auth-Mode': 'isFastPath' in authInfo ? 'fast-path' : 'secure-fallback',
       },
     });
   } catch (err) {
