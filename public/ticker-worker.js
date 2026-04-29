@@ -1931,6 +1931,33 @@ function computeWorkerStrategyScore(params) {
     }
   }
 
+  // ── SMC STRUCTURAL CONFLUENCE (REAL-TIME) ──
+  const state = rsiStates.get(params.symbol);
+  if (state?.smc) {
+    const { smc } = state;
+    const p = params.price;
+    const smcWeight = 3.0 * rw.trend; // Heavy institutional weight
+    
+    // 1. Order Block Confluence
+    if (smc.orderBlock) {
+      const isInsideOB = p >= smc.orderBlock.bottom && p <= smc.orderBlock.top;
+      if (isInsideOB) {
+        factors += smcWeight;
+        const obBonus = smc.orderBlock.strength === 'strong' ? 100 : smc.orderBlock.strength === 'moderate' ? 70 : 40;
+        score += (smc.orderBlock.type === 'bullish' ? obBonus : -obBonus) * smcWeight;
+      }
+    }
+    
+    // 2. Fair Value Gap (FVG) Attraction/Rejection
+    if (smc.fvg) {
+      const isInsideFVG = p >= smc.fvg.bottom && p <= smc.fvg.top;
+      if (isInsideFVG) {
+        factors += smcWeight * 0.5;
+        score += (smc.fvg.type === 'bullish' ? 50 : -50) * (smcWeight * 0.5);
+      }
+    }
+  }
+
   // Final validation guard: normalized score
   let normalized = factors > 0 ? score / factors : 0;
   normalized = Number.isFinite(normalized) ? normalized : 0;

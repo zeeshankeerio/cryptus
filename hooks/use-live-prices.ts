@@ -368,6 +368,7 @@ class PriceTickEngine extends EventTarget {
             rsiDivergence: entry.rsiDivergence,
             adx: entry.adx,
             atr: entry.atr,
+            smc: entry.smc,
           };
         }
       });
