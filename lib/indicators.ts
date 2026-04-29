@@ -1901,7 +1901,8 @@ export function calculateCCI(
 
 /**
  * Detects Fair Value Gaps (FVG) and Order Blocks (OB).
- * Looks at the last 5-10 candles to find fresh imbalances.
+ * Institutional Grade: Only returns UNMITIGATED (valid) zones.
+ * Scans the last 20 candles to find the most recent valid structure.
  */
 export function calculateSMC(
   opens: number[],
@@ -1909,56 +1910,99 @@ export function calculateSMC(
   lows: number[],
   closes: number[]
 ) {
-  if (opens.length < 5) return null;
+  const LOOKBACK = 20;
+  if (opens.length < LOOKBACK) return null;
 
   const len = closes.length;
   let fvg: { type: 'bullish' | 'bearish'; top: number; bottom: number; } | null = null;
   let orderBlock: { type: 'bullish' | 'bearish'; top: number; bottom: number; strength: 'weak' | 'moderate' | 'strong'; } | null = null;
 
-  // 1. Detect FVG (3-candle pattern)
-  // Look back over the last few candles (e.g. index i-2, i-1, i)
-  for (let i = len - 1; i >= len - 3; i--) {
+  // 1. Detect Unmitigated FVG
+  for (let i = len - 1; i >= len - LOOKBACK; i--) {
     if (i < 2) break;
     const c1Low = lows[i - 2];
     const c1High = highs[i - 2];
     const c3Low = lows[i];
     const c3High = highs[i];
 
-    // Bullish FVG: Candle 1 High < Candle 3 Low (gap up)
+    // Bullish FVG: Candle 1 High < Candle 3 Low
     if (c1High < c3Low) {
-      fvg = { type: 'bullish', top: c3Low, bottom: c1High };
-      break;
+      const top = c3Low;
+      const bottom = c1High;
+      // Check if mitigated (any candle after i closed below the bottom)
+      let mitigated = false;
+      for (let j = i + 1; j < len; j++) {
+        if (closes[j] < bottom) {
+          mitigated = true;
+          break;
+        }
+      }
+      if (!mitigated && !fvg) {
+        fvg = { type: 'bullish', top, bottom };
+      }
     }
-    // Bearish FVG: Candle 1 Low > Candle 3 High (gap down)
+    // Bearish FVG: Candle 1 Low > Candle 3 High
     else if (c1Low > c3High) {
-      fvg = { type: 'bearish', top: c1Low, bottom: c3High };
-      break;
+      const top = c1Low;
+      const bottom = c3High;
+      // Check if mitigated (any candle after i closed above the top)
+      let mitigated = false;
+      for (let j = i + 1; j < len; j++) {
+        if (closes[j] > top) {
+          mitigated = true;
+          break;
+        }
+      }
+      if (!mitigated && !fvg) {
+        fvg = { type: 'bearish', top, bottom };
+      }
     }
   }
 
-  // 2. Detect Order Block (OB)
-  // A Bullish OB is the last bearish candle before a strong bullish impulse (which often creates an FVG).
-  // We'll scan the last 5 candles.
-  for (let i = len - 1; i >= len - 5; i--) {
+  // 2. Detect Unmitigated Order Block (OB)
+  for (let i = len - 1; i >= len - LOOKBACK; i--) {
     if (i < 1) break;
-    const isBullishImpulse = closes[i] > opens[i] && (closes[i] - opens[i]) > (highs[i] - lows[i]) * 0.7;
+    
+    const bodySize = Math.abs(closes[i] - opens[i]);
+    const range = highs[i] - lows[i];
+    const isStrongImpulse = bodySize > range * 0.7;
+
+    const isBullishImpulse = closes[i] > opens[i] && isStrongImpulse;
     const prevIsBearish = closes[i - 1] < opens[i - 1];
     
     if (isBullishImpulse && prevIsBearish) {
       const top = Math.max(opens[i - 1], closes[i - 1]);
       const bottom = lows[i - 1];
-      orderBlock = { type: 'bullish', top, bottom, strength: 'strong' };
-      break;
+      // Check if mitigated (any candle closed below the OB bottom)
+      let mitigated = false;
+      for (let j = i; j < len; j++) {
+        if (closes[j] < bottom) {
+          mitigated = true;
+          break;
+        }
+      }
+      if (!mitigated && !orderBlock) {
+        orderBlock = { type: 'bullish', top, bottom, strength: 'strong' };
+      }
     }
 
-    const isBearishImpulse = closes[i] < opens[i] && (opens[i] - closes[i]) > (highs[i] - lows[i]) * 0.7;
+    const isBearishImpulse = closes[i] < opens[i] && isStrongImpulse;
     const prevIsBullish = closes[i - 1] > opens[i - 1];
 
     if (isBearishImpulse && prevIsBullish) {
       const top = highs[i - 1];
       const bottom = Math.min(opens[i - 1], closes[i - 1]);
-      orderBlock = { type: 'bearish', top, bottom, strength: 'strong' };
-      break;
+      // Check if mitigated (any candle closed above the OB top)
+      let mitigated = false;
+      for (let j = i; j < len; j++) {
+        if (closes[j] > top) {
+          mitigated = true;
+          break;
+        }
+      }
+      if (!mitigated && !orderBlock) {
+        orderBlock = { type: 'bearish', top, bottom, strength: 'strong' };
+      }
     }
   }
 
