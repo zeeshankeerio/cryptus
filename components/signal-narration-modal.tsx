@@ -454,18 +454,41 @@ Powered by Mindscape Analytics Signal Narration Engine™
                       )}
                     </h4>
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
-                        <span className="text-[9px] font-bold text-slate-400">Demand Zone</span>
-                        <span className="text-[10px] font-black text-white font-mono">
-                          {entry?.fibLevels ? `$${entry.fibLevels.level618.toLocaleString()}` : '--'}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
-                        <span className="text-[9px] font-bold text-slate-400">Supply Zone</span>
-                        <span className="text-[10px] font-black text-white font-mono">
-                          {entry?.fibLevels ? `$${entry.fibLevels.swingHigh.toLocaleString()}` : '--'}
-                        </span>
-                      </div>
+                      {(() => {
+                        if (!entry?.fibLevels || !entry?.price) return (
+                          <>
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
+                              <span className="text-[9px] font-bold text-slate-400">Demand Zone</span>
+                              <span className="text-[10px] font-black text-white font-mono">--</span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
+                              <span className="text-[9px] font-bold text-slate-400">Supply Zone</span>
+                              <span className="text-[10px] font-black text-white font-mono">--</span>
+                            </div>
+                          </>
+                        );
+                        
+                        const isBearish = entry.strategySignal?.includes('sell');
+                        const demandZone = isBearish ? entry.fibLevels.swingLow : entry.fibLevels.level618;
+                        const supplyZone = isBearish ? entry.fibLevels.level618 : entry.fibLevels.swingHigh;
+                        
+                        return (
+                          <>
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
+                              <span className="text-[9px] font-bold text-slate-400">Demand Zone</span>
+                              <span className="text-[10px] font-black text-white font-mono">
+                                ${demandZone.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
+                              <span className="text-[9px] font-bold text-slate-400">Supply Zone</span>
+                              <span className="text-[10px] font-black text-white font-mono">
+                                ${supplyZone.toLocaleString()}
+                              </span>
+                            </div>
+                          </>
+                        );
+                      })()}
                       <div className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5">
                         <span className="text-[9px] font-bold text-slate-400">Momentum Gap</span>
                         <span className={cn(
