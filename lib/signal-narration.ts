@@ -674,12 +674,13 @@ export function generateSignalNarration(entry: ScreenerEntry, tradingStyle: Trad
       emoji = '🟡⚠️';
     } else if (conviction >= 80 && pillarCount >= 3) {
       // 2026 FIX: Verify price is actually ABOVE demand before confirming it in headline
-      const hasDemandAbovePrice = entry.smc?.orderBlock?.type === 'bullish' && entry.price < entry.smc.orderBlock.bottom;
+      const isBelowStructuralDemand = (entry.smc?.orderBlock?.type === 'bullish' && entry.price < entry.smc.orderBlock.bottom) ||
+                                      (entry.fibLevels && entry.price < entry.fibLevels.level618);
       const isMetals = market === 'Metal';
       
-      if (hasDemandAbovePrice) {
+      if (isBelowStructuralDemand) {
         headline = isMetals 
-          ? 'Bullish Commodity Setup | Testing Broken Demand'
+          ? 'Bullish Commodity Setup | Testing Potential Reversal'
           : 'Bullish Reversal Setup | Level Testing';
       } else {
         headline = isMetals
