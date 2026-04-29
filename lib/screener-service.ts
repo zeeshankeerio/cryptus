@@ -1752,14 +1752,24 @@ function buildEntry(
       regime: regimeResult,
       fibLevels: fibLevels ?? null,
       smc: smc ?? null,
-      riskParams: (atr !== null && strategy.signal !== 'neutral')
-        ? computeRiskParameters(
-            price,
-            atr,
-            strategy.signal.includes('buy') ? 'buy' : 'sell',
-            getMarketType(sym),
-          )
-        : null,
+      riskParams: (() => {
+        if (atr === null) return null;
+        
+        // 2026 FIX: Determine structural bias for Risk Parameters.
+        // Fallback through Strategy -> Final Signal -> SMC Geometry to ensure
+        // high-conviction SMC trades get proper TP/SL execution parameters.
+        const structuralBias = strategy.signal.includes('buy') ? 'buy'
+                             : strategy.signal.includes('sell') ? 'sell'
+                             : signal.includes('buy') ? 'buy'
+                             : signal.includes('sell') ? 'sell'
+                             : (smc?.orderBlock?.type === 'bullish' || smc?.fvg?.type === 'bullish') ? 'buy'
+                             : (smc?.orderBlock?.type === 'bearish' || smc?.fvg?.type === 'bearish') ? 'sell'
+                             : 'neutral';
+
+        return structuralBias !== 'neutral'
+          ? computeRiskParameters(price, atr, structuralBias as 'buy' | 'sell', getMarketType(sym))
+          : null;
+      })(),
     };
   } catch (err) {
     debugWarn(`[screener] buildEntry failed for ${sym}:`, err instanceof Error ? err.message : err);
