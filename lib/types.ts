@@ -142,8 +142,27 @@ export interface ScreenerEntry {
       strength: 'weak' | 'moderate' | 'strong';
     } | null;
   } | null;
+  // ── 2026 Intelligence: Liquidity Sweeps ──
+  liquidity?: {
+    bsl: number | null;
+    ssl: number | null;
+    sweep: 'bullish' | 'bearish' | 'none' | null;
+  } | null;
   // ── 2026 Intelligence: Institutional Decision ──
-  institutionalDecision?: any;
+  institutionalDecision?: {
+    state: 'TRENDING' | 'RANGING' | 'TRANSITION';
+    decision: 'NO TRADE' | 'WAIT' | 'LOW CONFIDENCE SETUP' | 'VALID TRADE';
+    score: number;
+    message: string;
+    checklist: {
+      liquiditySweep: boolean;
+      bosConfirmed: boolean;
+      volumeExpansion: boolean;
+      zoneAlignment: boolean;
+      momentumFlow: boolean;
+    };
+  };
+  conviction?: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
   // ── Derivatives / Smart Money (injected at display layer) ──
   /** Smart Money Pressure Index score (-100 to +100). Injected from useDerivativesIntel. */
   smartMoneyScore?: number | null;

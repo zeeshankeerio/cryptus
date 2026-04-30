@@ -961,6 +961,8 @@ const ScreenerRow = memo(function ScreenerRow({
       candleDirection: tick.candleDirection,
       obvTrend: (tick as any).obvTrend ?? entry.obvTrend ?? 'none',
       williamsR: (tick as any).williamsR ?? entry.williamsR ?? null,
+      conviction: (tick as any).conviction ?? entry.conviction ?? 'NONE',
+      institutionalDecision: (tick as any).institutionalDecision ?? entry.institutionalDecision,
       isLiveRsi: true
     };
   }, [
@@ -996,6 +998,8 @@ const ScreenerRow = memo(function ScreenerRow({
     rsiCrossover: entry.rsiCrossover,
     momentum: entry.momentum,
     atr: entry.atr,
+    conviction: entry.conviction ?? 'NONE',
+    institutionalDecision: entry.institutionalDecision,
     adx: entry.adx,
     vwapDiff: entry.vwapDiff,
     volumeSpike: entry.volumeSpike,
@@ -1460,23 +1464,26 @@ const ScreenerRow = memo(function ScreenerRow({
 
       {visibleCols.has('institutional') && (
         <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
-          {entry.institutionalDecision ? (
-            <div className="flex flex-col items-end cursor-help group relative" title={entry.institutionalDecision.message}>
-              <span className={cn(
-                "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded leading-tight",
-                entry.institutionalDecision.decision === 'VALID TRADE' ? 'bg-[#39FF14]/20 text-[#39FF14]' :
-                entry.institutionalDecision.decision === 'LOW CONFIDENCE SETUP' ? 'bg-amber-500/20 text-amber-500' :
-                'bg-rose-500/20 text-rose-500'
-              )}>
-                {entry.institutionalDecision.decision}
-              </span>
-              <span className="text-[7px] text-slate-500 font-bold uppercase mt-1 tracking-widest">
-                {entry.institutionalDecision.state} • {entry.institutionalDecision.score}/10
-              </span>
-            </div>
-          ) : (
-            <span className="text-slate-700">-</span>
-          )}
+          {(() => {
+            const instDec = (display as any).institutionalDecision || entry.institutionalDecision;
+            return instDec ? (
+              <div className="flex flex-col items-end cursor-help group relative" title={instDec.message}>
+                <span className={cn(
+                  "text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded leading-tight",
+                  instDec.decision === 'VALID TRADE' ? 'bg-[#39FF14]/20 text-[#39FF14]' :
+                  instDec.decision === 'LOW CONFIDENCE SETUP' ? 'bg-amber-500/20 text-amber-500' :
+                  'bg-rose-500/20 text-rose-500'
+                )}>
+                  {instDec.decision}
+                </span>
+                <span className="text-[7px] text-slate-500 font-bold uppercase mt-1 tracking-widest">
+                  {instDec.state} • {instDec.score}/10
+                </span>
+              </div>
+            ) : (
+              <span className="text-slate-700">-</span>
+            );
+          })()}
         </td>
       )}
 
@@ -2264,18 +2271,21 @@ const ScreenerCard = memo(function ScreenerCard({
                     {smartMoneyScore ? `${smartMoneyScore.score > 0 ? '+' : ''}${smartMoneyScore.score}` : '-'}
                   </span>
                 ) : col.id === 'institutional' ? (
-                  entry.institutionalDecision ? (
-                    <div className="flex flex-col items-center">
-                      <span className={cn(
-                        "text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded leading-none",
-                        entry.institutionalDecision.decision === 'VALID TRADE' ? 'bg-[#39FF14]/20 text-[#39FF14]' :
-                        entry.institutionalDecision.decision === 'LOW CONFIDENCE SETUP' ? 'bg-amber-500/20 text-amber-500' :
-                        'bg-rose-500/20 text-rose-500'
-                      )}>
-                        {entry.institutionalDecision.decision === 'VALID TRADE' ? 'VALID' : entry.institutionalDecision.decision === 'LOW CONFIDENCE SETUP' ? 'LOW CONF' : 'NO TRADE'}
-                      </span>
-                    </div>
-                  ) : <span className="text-slate-700 text-[9px]">-</span>
+                  (() => {
+                    const instDec = (display as any).institutionalDecision || entry.institutionalDecision;
+                    return instDec ? (
+                      <div className="flex flex-col items-center">
+                        <span className={cn(
+                          "text-[7px] font-black uppercase tracking-tighter px-1 py-0.5 rounded leading-none",
+                          instDec.decision === 'VALID TRADE' ? 'bg-[#39FF14]/20 text-[#39FF14]' :
+                          instDec.decision === 'LOW CONFIDENCE SETUP' ? 'bg-amber-500/20 text-amber-500' :
+                          'bg-rose-500/20 text-rose-500'
+                        )}>
+                          {instDec.decision === 'VALID TRADE' ? 'VALID' : instDec.decision === 'LOW CONFIDENCE SETUP' ? 'LOW CONF' : 'NO TRADE'}
+                        </span>
+                      </div>
+                    ) : <span className="text-slate-700 text-[9px]">-</span>;
+                  })()
                 ) : col.id === 'superSignal' ? (
                   <SuperSignalBadge
                     superSignal={entry.superSignal}

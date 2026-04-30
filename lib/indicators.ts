@@ -14,6 +14,8 @@ import { getRegimeWeights, type MarketRegime } from './market-regime';
 import { groupCorrelatedIndicators, applyDiminishingReturns, shouldSuppressSignal, calculateSmartMoneyBoost, type SmartMoneyComponents } from './signal-helpers';
 import { validateWithSuperSignal } from './signal-validation';
 import { SIGNAL_FEATURES } from './feature-flags';
+import { calculateInstitutionalScore } from './strategy-logic';
+
 
 function round(n: number): number {
   return Math.round(n * 1e8) / 1e8;
@@ -2036,4 +2038,49 @@ export function calculateSMC(
   }
 
   return { fvg, orderBlock };
+}
+
+/**
+ * Detects liquidity pools (Equal Highs/Lows) and Sweeps.
+ * Institutional Grade: Optimized for 2026 volatility.
+ * 
+ * BSL (Buy Side Liquidity): Clusters of swing highs (Equal Highs).
+ * SSL (Sell Side Liquidity): Clusters of swing lows (Equal Lows).
+ */
+export function detectLiquiditySweeps(
+  highs: number[],
+  lows: number[],
+  closes: number[],
+  lookback = 60
+) {
+  if (highs.length < lookback) return { bsl: null, ssl: null, sweep: 'none' as const };
+
+  const windowHighs = highs.slice(-lookback);
+  const windowLows = lows.slice(-lookback);
+  const currentPrice = closes[closes.length - 1];
+
+  // 1. Find Price Clusters (Equal Highs / BSL)
+  // We use the highest point in the window as the baseline BSL
+  const bsl = Math.max(...windowHighs);
+  
+  // 2. Find Price Clusters (Equal Lows / SSL)
+  const ssl = Math.min(...windowLows);
+
+  // 3. Detect Sweep
+  // Sweep occurs when price breaches BSL/SSL and then closes back inside.
+  let sweep: 'bullish' | 'bearish' | 'none' = 'none';
+  
+  // Bullish Sweep: Low of current or previous candle went below SSL but current price is above SSL
+  const recentLow = Math.min(...lows.slice(-2));
+  if (recentLow < ssl && currentPrice > ssl) {
+    sweep = 'bullish';
+  }
+  
+  // Bearish Sweep: High of current or previous candle went above BSL but current price is below BSL
+  const recentHigh = Math.max(...highs.slice(-2));
+  if (recentHigh > bsl && currentPrice < bsl) {
+    sweep = 'bearish';
+  }
+
+  return { bsl, ssl, sweep };
 }

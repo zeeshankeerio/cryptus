@@ -65,6 +65,7 @@ let lastTriggered = new Map();
 let configLastUpdated = new Map(); // Track manual updates for cold-start alerts
 let liveCandleStates = new Map(); // Track current 1m candle: { lastMin, open, volStart }
 let latestTickerState = new Map(); // Track last known valid values for partial updates
+let liquidityHistory = new Map(); // ── 2026: Structural History (1m OHLC) ──
 const COOLDOWN_MS = 3 * 60 * 1000;
 let globalRsiPeriod = 14;
 let globalAlertsEnabled = false;
@@ -78,6 +79,7 @@ let globalOverbought = 70;
 let globalOversold = 30;
 let globalTradingStyle = 'intraday';
 let globalEnabledIndicators = null;
+let globalMarket = 'Crypto'; 
 
 const TF_WEIGHTS = {
   scalping: {
@@ -726,16 +728,29 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
   };
   
   if (candleState.lastMin !== currentMinKey) {
+    // ── 2026 Structural History Update ──
+    const hist = liquidityHistory.get(t.s) || { highs: [], lows: [], closes: [] };
+    hist.highs.push(candleState.high || candleState.open);
+    hist.lows.push(candleState.low || candleState.open);
+    hist.closes.push(candleState.lastClose || candleState.open);
+    if (hist.closes.length > 100) { hist.highs.shift(); hist.lows.shift(); hist.closes.shift(); }
+    liquidityHistory.set(t.s, hist);
+
     candleState.lastMin = currentMinKey;
     candleState.open = curC;
+    candleState.high = curC;
+    candleState.low = curC;
     candleState.lastTickerVol = curV || 0;
     candleState.accumulatedVol = 0;
     liveCandleStates.set(trackingKey, candleState);
   } else if (!liveCandleStates.has(trackingKey)) {
-    // First time seeing this symbol in this minute
+    candleState.high = curC;
+    candleState.low = curC;
     liveCandleStates.set(trackingKey, candleState);
   } else {
-    // Accumulate volume delta securely to handle rolling 24h ticker volume
+    candleState.high = Math.max(candleState.high || curC, curC);
+    candleState.low = Math.min(candleState.low || curC, curC);
+    candleState.lastClose = curC;
     const tickVolDelta = Math.max(0, (curV || 0) - candleState.lastTickerVol);
     candleState.accumulatedVol += tickVolDelta;
     candleState.lastTickerVol = curV || 0;
@@ -744,10 +759,15 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
   const curCandleSize = Math.abs(curC - candleState.open);
   const curCandleVol = candleState.accumulatedVol;
 
+  // ── 2026: Real-time Liquidity Sweep Detection ──
+  const hist = liquidityHistory.get(t.s);
+  const structure = hist ? detectLiquiditySweeps(hist.highs, hist.lows, hist.closes) : { bsl: null, ssl: null, sweep: 'none' };
+
   let liveIndicators = {
     curCandleSize,
     curCandleVol,
     candleDirection: curC >= candleState.open ? 'bullish' : 'bearish',
+    structure, // Add structural context to indicators
     avgBarSize1m: state ? state.avgBarSize1m : null,
     avgVolume1m: state ? state.avgVolume1m : null
   };
@@ -831,6 +851,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       momentum,
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       emaCross,
+      structure,
       confluence: state.confluence,
       rsiDivergence: state.rsiDivergence,
       rsiCrossover: state.rsiCrossover,
@@ -876,6 +897,9 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       adx: state.adx,
       strategyScore: currentStrategy.score,
       strategySignal: currentStrategy.signal,
+      strategyReasons: currentStrategy.reasons,
+      conviction: currentStrategy.conviction,
+      institutionalDecision: currentStrategy.institutionalDecision,
       volumeSpike: liveVolumeSpike || state.volumeSpike,
       avgBarSize1m: state.avgBarSize1m,
       avgVolume1m: state.avgVolume1m,
@@ -1090,7 +1114,7 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
       const currentStrat = currentStrategy.signal;
 
       if (prevStrat !== undefined && prevStrat !== currentStrat &&
-        (currentStrat === 'strong-buy' || currentStrat === 'strong-sell')) {
+        (currentStrat === 'buy' || currentStrat === 'sell')) {
         // Cooldown key uses BARE symbol to match main-thread
         const alertKey = `${t.s}-STRAT`;
         const nowTs = Date.now();
@@ -1103,21 +1127,21 @@ function processNormalizedTicker(t, exchangeName = 'binance') {
               exchange: exchangeName,
               timeframe: 'STRATEGY',
               value: currentStrategy.score,
-              type: currentStrat === 'strong-buy' ? 'STRATEGY_STRONG_BUY' : 'STRATEGY_STRONG_SELL',
+              type: currentStrat === 'buy' ? 'STRATEGY_BUY' : 'STRATEGY_SELL',
               price: curC // GAP-A2 FIX: Include price in payload
             }
           });
 
           // Direct broadcast to Service Worker for background reliability
           if (alertChannel && globalAlertsEnabled && !isAnyTabVisible()) {
-            const isBuy = currentStrat === 'strong-buy';
+            const isBuy = currentStrat === 'buy';
             alertChannel.postMessage({
               type: 'ALERT_NOTIFICATION',
               payload: {
-                title: `${alias} ${isBuy ? 'Strong Buy' : 'Strong Sell'}`,
-                body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Strategy shift detected. Score: ${currentStrategy.score.toFixed(0)} @ $${curC.toLocaleString()}`,
+                title: `${alias} Institutional ${isBuy ? 'Buy' : 'Sell'}`,
+                body: `[${exchangeName.charAt(0).toUpperCase() + exchangeName.slice(1)}] Valid trade detected. Confluence Score: ${currentStrategy.score.toFixed(0)} @ $${curC.toLocaleString()}`,
                 exchange: exchangeName,
-                priority: config.priority || 'medium'
+                priority: config.priority || 'high'
               }
             });
           }
@@ -1659,351 +1683,195 @@ function computeHysteresis(obT, osT) {
 
 function getRegimeWeights(regime) {
   switch (regime) {
-    case 'trending':
-      return { oscillators: 0.7, trend: 1.3, volume: 1.0, momentum: 1.2 };
-    case 'ranging':
-      return { oscillators: 1.3, trend: 0.7, volume: 0.9, momentum: 0.8 };
-    case 'volatile':
-      return { oscillators: 0.8, trend: 0.8, volume: 1.2, momentum: 0.6 };
-    case 'breakout':
-      return { oscillators: 0.9, trend: 1.1, volume: 1.4, momentum: 1.3 };
-    default:
-      return { oscillators: 1.0, trend: 1.0, volume: 1.0, momentum: 1.0 };
+    case 'trending': return { oscillators: 0.7, trend: 1.3, volume: 1.0, momentum: 1.2 };
+    case 'ranging': return { oscillators: 1.3, trend: 0.7, volume: 0.9, momentum: 0.8 };
+    case 'volatile': return { oscillators: 0.8, trend: 0.8, volume: 1.2, momentum: 0.6 };
+    case 'breakout': return { oscillators: 0.9, trend: 1.1, volume: 1.4, momentum: 1.3 };
+    default: return { oscillators: 1.0, trend: 1.0, volume: 1.0, momentum: 1.0 };
   }
 }
 
 function computeWorkerStrategyScore(params) {
-  let score = 0;
-
-  // ── Regime-Aware Dynamic Weights ──
-  const rw = params.regime ? getRegimeWeights(params.regime) : { oscillators: 1.0, trend: 1.0, volume: 1.0, momentum: 1.0 };
-
-  // ── Style-Aware Timeframe Weights ──
-  const style = params.tradingStyle || 'intraday';
+  const market = params.market || globalMarket || 'Crypto';
+  const style = params.tradingStyle || globalTradingStyle || 'intraday';
+  const rw = getRegimeWeights(params.regime);
   const tw = TF_WEIGHTS[style] || TF_WEIGHTS.intraday;
+  
+  const zones = {
+    Crypto: { deepOS: 20, os: 30, ob: 70, deepOB: 80 },
+    Metal:  { deepOS: 22, os: 32, ob: 68, deepOB: 78 },
+    Index:  { deepOS: 22, os: 32, ob: 68, deepOB: 78 },
+    Stocks: { deepOS: 22, os: 32, ob: 68, deepOB: 78 },
+    Forex:  { deepOS: 25, os: 35, ob: 65, deepOB: 75 },
+  }[market] || { deepOS: 20, os: 30, ob: 70, deepOB: 80 };
 
-  // ── Asset-Aware Volatility Calibration ──
-  let volatilityMultiplier = 1.0;
-  if (params.market === 'Forex') volatilityMultiplier = 5.0;
-  else if (params.market === 'Index' || params.market === 'Stocks') volatilityMultiplier = 2.5;
-  else if (params.market === 'Metal') volatilityMultiplier = 1.5;
-
-  let factors = 0;
-  const enabled = params.enabledIndicators || {
-    rsi: true, macd: true, bb: true, stoch: true, ema: true,
-    vwap: true, confluence: true, divergence: true, momentum: true,
-    obv: true, williamsR: true, cci: true
+  const config = {
+    rw, tw, zones,
+    enabled: params.enabledIndicators || { rsi: true, macd: true, bb: true, stoch: true, ema: true, vwap: true },
+    volatilityMultiplier: (market === 'Forex' ? 5.0 : market === 'Index' ? 2.5 : 1.0),
+    buyThreshold: zones.os + 15,
+    sellThreshold: zones.ob - 15,
+    strongThreshold: 60,
+    actionThreshold: 25
   };
 
-  // ── Deterministic Quality Multiplier ──
-  // Keep worker scoring deterministic (no wall-clock dependence).
-  const sessionQuality = 1.0;
+  const result = calculateInstitutionalScore(params, config);
+  return {
+    score: result.score,
+    signal: result.signal,
+    reasons: result.reasons,
+    institutionalDecision: result.institutionalDecision
+  };
+}
 
-  // ── Asset-Specific RSI Zone Calibration ──
-  let rsiDeepOS = 20, rsiOS = 30, rsiOB = 70, rsiDeepOB = 80;
-  if (params.market === 'Forex') {
-    rsiDeepOS = 25; rsiOS = 35; rsiOB = 65; rsiDeepOB = 75;
-  } else if (params.market === 'Metal' || params.market === 'Index' || params.market === 'Stocks') {
-    rsiDeepOS = 22; rsiOS = 32; rsiOB = 68; rsiDeepOB = 78;
+// ── Injected Institutional Engine (Parity with strategy-logic.js) ──
+function detectLiquiditySweeps(highs, lows, closes, lookback = 60) {
+  if (!highs || highs.length < 5) return { bsl: null, ssl: null, sweep: 'none' };
+  const realLookback = Math.min(lookback, highs.length);
+  const windowHighs = highs.slice(-realLookback);
+  const windowLows = lows.slice(-realLookback);
+  const currentPrice = closes[closes.length - 1];
+  const bsl = Math.max(...windowHighs);
+  const ssl = Math.min(...windowLows);
+  let sweep = 'none';
+  const recentLow = lows.length >= 2 ? Math.min(...lows.slice(-2)) : currentPrice;
+  if (recentLow < ssl && currentPrice > ssl) sweep = 'bullish';
+  const recentHigh = highs.length >= 2 ? Math.max(...highs.slice(-2)) : currentPrice;
+  if (recentHigh > bsl && currentPrice < bsl) sweep = 'bearish';
+  return { bsl, ssl, sweep };
+}
+
+function applyDiminishingReturns(scores) {
+  if (!scores || scores.length === 0) return 0;
+  const sorted = [...scores].filter(s => s !== 0).sort((a, b) => Math.abs(b) - Math.abs(a));
+  if (sorted.length === 0) return 0;
+  let total = sorted[0];
+  for (let i = 1; i < sorted.length; i++) { total += sorted[i] * Math.pow(0.5, i); }
+  return total;
+}
+
+function groupCorrelatedIndicators(params) {
+  return [
+    { name: 'oscillators', scores: [params.rsi || 0, params.stoch || 0, params.williamsR || 0, params.cci || 0, params.bb || 0].filter(s => s !== 0) },
+    { name: 'trend', scores: [params.macd || 0, params.ema || 0].filter(s => s !== 0) },
+    { name: 'volume', scores: [params.obv || 0, params.vwap || 0, params.volumeSpikeScore || 0].filter(s => s !== 0) }
+  ];
+}
+
+function shouldSuppressSignal(params) {
+  const { normalized, rsi1m, rsi5m, rsi15m, rsi1h, volumeSpike } = params;
+  const rsiHighCount = [rsi1m, rsi5m, rsi15m].filter(r => r != null && r > 75).length;
+  const rsiLowCount = [rsi1m, rsi5m, rsi15m].filter(r => r != null && r < 25).length;
+  if (normalized > 25 && rsiHighCount >= 2) {
+    if (volumeSpike) return { suppress: false, multiplier: 1.0, reason: '✓ Overbought confirmed by volume' };
+    if (rsi1h !== null && rsi1h > 65) return { suppress: true, multiplier: 0.70, reason: '⚠ Buy dampened: 1h resistance' };
   }
+  if (normalized < -25 && rsiLowCount >= 2) {
+    if (volumeSpike) return { suppress: false, multiplier: 1.0, reason: '✓ Oversold confirmed by volume' };
+    if (rsi1h !== null && rsi1h < 35) return { suppress: true, multiplier: 0.70, reason: '⚠ Sell dampened: 1h support' };
+  }
+  return { suppress: false, multiplier: 1.0, reason: '' };
+}
 
-  // Multi-TF agreement thresholds (asset-aware, matches server logic)
-  const buyThreshold = rsiOS + 15;
-  const sellThreshold = rsiOB - 15;
-
-  const rsiScoreStyle = (val, weightKey, tf) => {
-    if (val === null || val === undefined || enabled.rsi === false) return;
-    const weight = tw[weightKey] || 0;
-    if (weight === 0) return;
-    
-    const effectiveWeight = weight * rw.oscillators;
-    factors += weight;
-    if (val <= rsiDeepOS) score += 100 * effectiveWeight;
-    else if (val <= rsiOS) score += 80 * effectiveWeight;
-    else if (val >= rsiDeepOB) score -= 100 * effectiveWeight;
-    else if (val >= rsiOB) score -= 80 * effectiveWeight;
-    else if (val < buyThreshold) score += 30 * effectiveWeight;
-    else if (val > sellThreshold) score -= 30 * effectiveWeight;
+function calculateInstitutionalScore(params, config) {
+  let score = 0;
+  const reasons = [];
+  const checklist = {
+    liquiditySweep: false,
+    bosConfirmed: false,
+    volumeExpansion: false,
+    zoneAlignment: false,
+    momentumFlow: false
   };
 
-  // 1. RSI (Style-Adaptive)
-  rsiScoreStyle(params.rsi1m, 'rsi1m', '1m');
-  rsiScoreStyle(params.rsi5m, 'rsi5m', '5m');
-  rsiScoreStyle(params.rsi15m, 'rsi15m', '15m');
-  rsiScoreStyle(params.rsi1h, 'rsi1h', '1h');
-  rsiScoreStyle(params.rsi4h, 'rsi4h', '4h');
-  rsiScoreStyle(params.rsi1d, 'rsi1d', '1d');
+  const {
+    macdHistogram, bbPosition, emaCross, vwapDiff, volumeSpike, momentum,
+    regime, obvTrend, smartMoneyScore, structure
+  } = params;
 
-  // 2. MACD (Style-Adaptive + Regime-Aware)
-  if (enabled.macd !== false && params.macdHistogram !== null && params.macdHistogram !== undefined) {
-    const macdWeight = tw.macd * rw.trend * sessionQuality;
-    factors += tw.macd;
-    let macdNorm;
-    if (params.atr != null && params.atr > 0) {
-      macdNorm = Math.abs(params.macdHistogram) / params.atr;
-      macdNorm = Math.min(macdNorm * 80, 100);
-    } else {
-      const p = params.price || 1;
-      const hPct = Math.abs(params.macdHistogram / p) * 100;
-      macdNorm = Math.min(hPct * 200, 100);
-    }
-    if (params.macdHistogram > 0) score += macdNorm * macdWeight;
-    else score -= macdNorm * macdWeight;
+  // STEP 1: Market State Classification
+  const state = regime === 'trending' ? 'TRENDING' : regime === 'ranging' ? 'RANGING' : 'TRANSITION';
+  if (state === 'RANGING') { score -= 2; reasons.push('Ranging market (-2)'); }
+
+  // STEP 2: Zone Detection
+  const zoneAligned = (bbPosition && (bbPosition <= 0.1 || bbPosition >= 0.9)) || (vwapDiff && Math.abs(vwapDiff) > 1);
+  if (zoneAligned) { score += 1; checklist.zoneAlignment = true; reasons.push('Zone Alignment (+1)'); }
+
+  // STEP 3: Liquidity Analysis (MANDATORY)
+  const sweep = structure?.sweep || 'none';
+  if (sweep !== 'none') {
+    score += 2;
+    checklist.liquiditySweep = true;
+    reasons.push(`Liquidity Sweep: ${sweep} (+2)`);
   }
 
-  // 3. Bollinger position
-  if (enabled.bb !== false && params.bbPosition !== null && params.bbPosition !== undefined) {
-    const bbW = 1.0 * rw.oscillators * sessionQuality;
-    factors += 1.0;
-    const bp = params.bbPosition;
-    if (bp <= 0.1) score += 80 * bbW;
-    else if (bp <= 0.25) score += 40 * bbW;
-    else if (bp >= 0.9) score -= 80 * bbW;
-    else if (bp >= 0.75) score -= 40 * bbW;
+  // STEP 4: Momentum & Flow Validation
+  if (volumeSpike) {
+    score += 2;
+    checklist.volumeExpansion = true;
+    reasons.push('Volume Expansion (+2)');
+  } else {
+    score -= 2; // No volume
   }
 
-  // 4. StochRSI
-  if (enabled.stoch !== false && params.stochK != null && params.stochD != null) {
-    const stochW = 1.0 * rw.oscillators * sessionQuality;
-    factors += 1.0;
-    if (params.stochK < 20 && params.stochD < 20) score += 80 * stochW;
-    else if (params.stochK < 30) score += 40 * stochW;
-    else if (params.stochK > 80 && params.stochD > 80) score -= 80 * stochW;
-    else if (params.stochK > 70) score -= 40 * stochW;
-
-    if (params.stochK > params.stochD && params.stochK < 30) {
-      factors += 0.5;
-      score += 70 * 0.5 * stochW;
-    } else if (params.stochK < params.stochD && params.stochK > 70) {
-      factors += 0.5;
-      score -= 70 * 0.5 * stochW;
-    }
+  const isMomentumWeak = Math.abs(momentum || 0) < 0.5 || obvTrend === 'none' || obvTrend === 'flat';
+  if (isMomentumWeak) {
+    score -= 2;
+    reasons.push('Weak Momentum (-2)');
+  } else {
+    checklist.momentumFlow = true;
   }
 
-  // 5. EMA cross
-  if (params.emaCross !== 'none' && enabled.ema !== false) {
-    const emaWeight = tw.ema * rw.trend * sessionQuality;
-    factors += tw.ema;
-    score += (params.emaCross === 'bullish' ? 60 : -60) * emaWeight;
+  // STEP 5: Confirmation (Critical)
+  const bosConfirmed = structure?.bos || (emaCross !== 'none' && volumeSpike && !isMomentumWeak);
+  if (bosConfirmed) {
+    score += 2;
+    checklist.bosConfirmed = true;
+    reasons.push('BOS Confirmation (+2)');
   }
 
-  // 6. VWAP
-  if (enabled.vwap !== false && params.vwapDiff != null) {
-    const volW = 1.0 * rw.volume * sessionQuality;
-    factors += 1.0;
-    const scaledVwapDiff = params.vwapDiff * volatilityMultiplier;
-    if (scaledVwapDiff < -2) score += 40 * volW;
-    else if (scaledVwapDiff > 2) score -= 40 * volW;
+  // STEP 6: Indicator Context (Secondary)
+  let indScore = 0;
+  if (macdHistogram && Math.abs(macdHistogram) > 0) indScore++;
+  if (vwapDiff && Math.abs(vwapDiff) > 0) indScore++;
+  if (smartMoneyScore && Math.abs(smartMoneyScore) > 30) indScore++;
+  if (indScore >= 2) {
+    score += 1;
+    reasons.push('Indicator Support (+1)');
   }
 
-  // 7. Volume spike
-  if (params.volumeSpike) {
-    const volW = 0.5 * rw.volume;
-    factors += 0.5;
-    const volBoost = score > 0 ? 30 : score < 0 ? -30 : 0;
-    score += volBoost * volW;
+  // Strict Institutional Filters
+  if (!checklist.liquiditySweep) score -= 10;
+  if (isMomentumWeak) score -= 10;
+  if (!checklist.volumeExpansion) score -= 10;
+  if (state === 'RANGING') score -= 10;
+
+  // STEP 8: Decision Logic
+  let decision = 'NO TRADE';
+  if (score >= 6 && checklist.liquiditySweep && checklist.volumeExpansion && checklist.momentumFlow) {
+    decision = 'VALID TRADE';
+  } else if (score >= 3) {
+    decision = 'LOW CONFIDENCE SETUP';
+    if (!checklist.bosConfirmed) reasons.push('WAIT - No confirmation');
+  } else {
+    if (!checklist.liquiditySweep) reasons.push('WAIT - Awaiting sweep');
   }
 
-  // 8. Multi-TF confluence
-  if (enabled.confluence !== false && typeof params.confluence === 'number' && Math.abs(params.confluence) >= 20) {
-    const confW = 2.5 * rw.trend;
-    factors += 2.5;
-    score += params.confluence * confW;
-  }
-
-  // 9. RSI crossover
-  if (enabled.rsi !== false && params.rsiCrossover && params.rsiCrossover !== 'none') {
-    factors += 1.5;
-    score += (params.rsiCrossover === 'bullish_reversal' ? 70 : -70) * 1.5;
-  }
-
-  // 10. RSI divergence
-  if (params.rsiDivergence && params.rsiDivergence !== 'none' && enabled.divergence !== false) {
-    const divWeight = tw.divergenceBonus;
-    const mainRsi = params.rsi15m ?? params.rsi5m ?? params.rsi1m ?? 50;
-    if (params.rsiDivergence === 'bullish' && mainRsi < 65) {
-      factors += divWeight;
-      score += 75 * divWeight;
-    } else if (params.rsiDivergence === 'bearish' && mainRsi > 35) {
-      factors += divWeight;
-      score -= 75 * divWeight;
-    }
-  }
-
-  // 11. Momentum
-  if (enabled.momentum !== false && params.momentum != null && Math.abs(params.momentum * volatilityMultiplier) > 0.5) {
-    const momW = 0.5 * rw.momentum;
-    factors += 0.5;
-    const scaledMomentum = params.momentum * volatilityMultiplier;
-    const mScore = Math.max(-60, Math.min(60, scaledMomentum * 15));
-    score += mScore * momW;
-  }
-
-  // 12. OBV trend
-  if (enabled.obv !== false && params.obvTrend && params.obvTrend !== 'none') {
-    const volW = 1.5 * rw.volume * sessionQuality;
-    factors += 1.5;
-    if (params.obvTrend === 'bullish') score += 55 * volW;
-    else score -= 55 * volW;
-  }
-
-  // 13. Williams %R
-  if (enabled.williamsR !== false && params.williamsR != null) {
-    const oscW = 0.8 * rw.oscillators;
-    factors += 0.8;
-    if (params.williamsR <= -85) score += 80 * oscW;
-    else if (params.williamsR <= -70) score += 45 * oscW;
-    else if (params.williamsR >= -15) score -= 80 * oscW;
-    else if (params.williamsR >= -30) score -= 45 * oscW;
-  }
-
-  // 13b. CCI
-  if (params.cci !== null && params.cci !== undefined && (enabled.cci !== false || params.market === 'Metal' || params.market === 'Forex')) {
-    const cciBaseW = 1.2;
-    const marketW = (params.market === 'Metal' || params.market === 'Forex') ? 1.8 : 1.0;
-    const cciW = cciBaseW * marketW * rw.trend * sessionQuality;
-    factors += (cciBaseW * marketW);
-    if (params.cci >= 200) score -= 100 * cciW;
-    else if (params.cci >= 100) score -= 60 * cciW;
-    else if (params.cci <= -200) score += 100 * cciW;
-    else if (params.cci <= -100) score += 60 * cciW;
-  }
-
-  // 14. Hidden divergence
-  if (params.hiddenDivergence && params.hiddenDivergence !== 'none' && enabled.divergence !== false) {
-    const hiddenDivWeight = tw.divergenceBonus * 0.75;
-    const hiddenW = hiddenDivWeight * rw.momentum;
-    factors += hiddenDivWeight;
-    if (params.hiddenDivergence === 'hidden-bullish') score += 20 * (volatilityMultiplier || 1) * hiddenW;
-    else score -= 20 * (volatilityMultiplier || 1) * hiddenW;
-  }
-
-  // ── TFA TREND GUARD ──
-  if (params.rsi1h !== null && params.rsi1h !== undefined) {
-    const is1hBullishTrend = params.rsi1h < buyThreshold;
-    const is1hBearishTrend = params.rsi1h > sellThreshold;
-    if (score > 0 && is1hBullishTrend) score *= 1.15;
-    else if (score < 0 && is1hBearishTrend) score *= 1.15;
-    else if (score > 0 && is1hBearishTrend) score *= 0.70;
-    else if (score < 0 && is1hBullishTrend) score *= 0.70;
-  }
-
-  // ── ADX CONTEXT ──
-  if (params.adx != null && params.adx > 0) {
-    if (params.adx < 20) score *= 0.75;
-    else if (params.adx > 30) score *= 1.10;
-  }
-
-  // ── SMART MONEY PRESSURE ──
-  if (params.smartMoneyScore != null && Math.abs(params.smartMoneyScore) >= 30) {
-    const smDir = params.smartMoneyScore > 0 ? 1 : -1;
-    const scoreDir = score > 0 ? 1 : score < 0 ? -1 : 0;
-    if (scoreDir !== 0) {
-      if (smDir === scoreDir) score *= 1.15;
-      else score *= 0.80;
-    } else {
-      score += (smDir * 10) * (volatilityMultiplier || 1);
-      factors += 1.0;
-    }
-  }
-
-  // ── FUNDING + ORDER FLOW DERIVATIVES CONTEXT ──
-  if (params.fundingRate != null) {
-    const annualizedFundingPct = Math.abs(params.fundingRate) * 3 * 365 * 100;
-    if (annualizedFundingPct >= 80) {
-      // Extreme funding suggests crowded positioning; dampen conviction.
-      score *= 0.85;
-    } else if (annualizedFundingPct >= 30) {
-      score *= 0.93;
-    }
-  }
-
-  if (params.orderFlowRatio != null) {
-    const flowDirection = params.orderFlowRatio > 0.55 ? 1 : params.orderFlowRatio < 0.45 ? -1 : 0;
-    if (flowDirection !== 0) {
-      const scoreDir = score > 0 ? 1 : score < 0 ? -1 : 0;
-      if (scoreDir !== 0) {
-        score *= flowDirection === scoreDir ? 1.08 : 0.88;
-      } else {
-        score += flowDirection * 6;
-        factors += 0.5;
-      }
-    }
-  }
-
-  // ── SMC STRUCTURAL CONFLUENCE (REAL-TIME) ──
-  const state = rsiStates.get(params.symbol);
-  if (state?.smc) {
-    const { smc } = state;
-    const p = params.price;
-    const smcWeight = 3.0 * rw.trend; // Heavy institutional weight
-    
-    // 1. Order Block Confluence
-    if (smc.orderBlock) {
-      const isInsideOB = p >= smc.orderBlock.bottom && p <= smc.orderBlock.top;
-      if (isInsideOB) {
-        factors += smcWeight;
-        const obBonus = smc.orderBlock.strength === 'strong' ? 100 : smc.orderBlock.strength === 'moderate' ? 70 : 40;
-        score += (smc.orderBlock.type === 'bullish' ? obBonus : -obBonus) * smcWeight;
-      }
-    }
-    
-    // 2. Fair Value Gap (FVG) Attraction/Rejection
-    if (smc.fvg) {
-      const isInsideFVG = p >= smc.fvg.bottom && p <= smc.fvg.top;
-      if (isInsideFVG) {
-        factors += smcWeight * 0.5;
-        score += (smc.fvg.type === 'bullish' ? 50 : -50) * (smcWeight * 0.5);
-      }
-    }
-  }
-
-  // Final validation guard: normalized score
-  let normalized = factors > 0 ? score / factors : 0;
-  normalized = Number.isFinite(normalized) ? normalized : 0;
+  // Output Mapping
+  const signal = decision === 'VALID TRADE' ? (sweep === 'bullish' ? 'buy' : 'sell') : 'neutral';
   
-  // ── Accuracy Pivot Guard (Institutional Sanity & Stop-Loss) ──
-  if (!params.volumeSpike) {
-    if (normalized > 40 && params.rsi1h !== null && params.rsi1h > 65) normalized *= 0.65;
-    else if (normalized < -40 && params.rsi1h !== null && params.rsi1h < 35) normalized *= 0.65;
-  }
-
-  const rsiHighCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r > 75).length;
-  const rsiLowCount = [params.rsi1m, params.rsi5m, params.rsi15m].filter(r => r != null && r < 25).length;
-  
-  if (normalized > 25 && rsiHighCount >= 2) normalized = Math.min(24, normalized * 0.4);
-  if (normalized < -25 && rsiLowCount >= 2) normalized = Math.max(-24, normalized * 0.4);
-
-  if (factors < 4.0) {
-    normalized *= 0.50;
-    if (factors < 2.5) normalized = Math.max(-15, Math.min(15, normalized));
-  } else if (factors < 5.0 && Math.abs(normalized) > 60) {
-    normalized *= 0.75;
-  }
-
-  normalized = Number.isFinite(normalized) ? Math.round(Math.max(-100, Math.min(100, normalized))) : 0;
-
-  // ── Multi-TF Agreement Gate ──
-  const rsiDirections = [
-    params.rsi1m != null ? (params.rsi1m < buyThreshold ? 'buy' : params.rsi1m > sellThreshold ? 'sell' : 'neutral') : null,
-    params.rsi5m != null ? (params.rsi5m < buyThreshold ? 'buy' : params.rsi5m > sellThreshold ? 'sell' : 'neutral') : null,
-    params.rsi15m != null ? (params.rsi15m < buyThreshold ? 'buy' : params.rsi15m > sellThreshold ? 'sell' : 'neutral') : null,
-    params.rsi1h != null ? (params.rsi1h < buyThreshold ? 'buy' : params.rsi1h > sellThreshold ? 'sell' : 'neutral') : null,
-  ].filter(d => d !== null);
-  
-  const buyAgreement = rsiDirections.filter(d => d === 'buy').length;
-  const sellAgreement = rsiDirections.filter(d => d === 'sell').length;
-  const availableTFs = rsiDirections.length;
-  const hasStrongBuyAgreement = availableTFs >= 3 && buyAgreement >= 3;
-  const hasStrongSellAgreement = availableTFs >= 3 && sellAgreement >= 3;
-
-  let signal = 'neutral';
-  if (normalized >= 60) signal = hasStrongBuyAgreement ? 'strong-buy' : 'buy';
-  else if (normalized >= 25) signal = 'buy';
-  else if (normalized <= -60) signal = hasStrongSellAgreement ? 'strong-sell' : 'sell';
-  else if (normalized <= -25) signal = 'sell';
-
-  return { score: normalized, signal };
+  return {
+    score,
+    signal,
+    reasons,
+    institutionalDecision: {
+      state,
+      decision,
+      score: Math.max(0, score),
+      message: reasons[0] || 'Awaiting Confluence',
+      checklist
+    }
+  };
 }
 
 // ── Task 2.3: Staleness Detection ────────────────────────────────

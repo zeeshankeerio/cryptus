@@ -25,74 +25,82 @@ export function evaluateInstitutionalProtocol(entry: ScreenerEntry): Institution
   };
 
   // STEP 1: Market State Classification
-  let state: InstitutionalDecision['state'] = 'RANGING';
-  const adx = entry.adx ?? 0;
-  if (adx > 25) {
-    state = 'TRENDING';
-  } else if (adx > 18) {
-    state = 'TRANSITION';
-  } else {
-    state = 'RANGING';
+  const state: InstitutionalDecision['state'] = entry.regime?.regime === 'trending' ? 'TRENDING' : entry.regime?.regime === 'ranging' ? 'RANGING' : 'TRANSITION';
+  if (state === 'RANGING') score -= 2;
+
+  // STEP 2: Zone Detection
+  const zoneAligned = (entry.bbPosition && (entry.bbPosition <= 0.1 || entry.bbPosition >= 0.9)) || 
+                      (entry.vwapDiff && Math.abs(entry.vwapDiff) > 1);
+  if (zoneAligned) { 
+    score += 1; 
+    checklist.zoneAlignment = true; 
   }
 
-  // STEP 2 & 3: Zone Detection & Liquidity Analysis (Mandatory)
-  const isNearFvg = !!entry.smc?.fvg;
-  const isNearOb = !!entry.smc?.orderBlock;
-  checklist.zoneAlignment = isNearFvg || isNearOb;
-
-  // Assuming price testing near an OB or extreme RSI divergence indicates a potential sweep or trap
-  checklist.liquiditySweep = !!entry.rsiDivergence || !!entry.rsiDivergenceCustom || (isNearOb && !!entry.volumeSpike);
+  // STEP 3: Liquidity Analysis (MANDATORY)
+  const sweep = (entry as any).structure?.sweep || (entry.smc as any)?.sweep || entry.liquidity?.sweep || 'none';
+  if (sweep !== 'none') {
+    score += 2;
+    checklist.liquiditySweep = true;
+  }
 
   // STEP 4: Momentum & Flow Validation
-  const smartMoneyScore = Math.abs(entry.smartMoneyScore ?? 0);
-  checklist.momentumFlow = smartMoneyScore > 30 || !!entry.obvTrend || (entry.macdHistogram !== null && Math.abs(entry.macdHistogram) > 0.5);
-
-  // STEP 5: Confirmation (Critical)
-  checklist.bosConfirmed = checklist.zoneAlignment && checklist.momentumFlow && !!entry.emaCross;
-
-  // STEP 6: Indicator Context (Secondary)
-  const hasIndicatorSupport = entry.confluence !== undefined && Math.abs(entry.confluence) > 30;
-
-  // STEP 7: Scoring System
-  if (checklist.liquiditySweep) score += 2;
-  if (checklist.bosConfirmed) score += 2;
   if (entry.volumeSpike) {
-    checklist.volumeExpansion = true;
     score += 2;
+    checklist.volumeExpansion = true;
   } else {
     score -= 2; // No volume
   }
-  if (checklist.zoneAlignment) score += 1;
-  if (hasIndicatorSupport) score += 1;
 
-  if (!checklist.momentumFlow) score -= 2;
-  if (state === 'RANGING') score -= 2;
+  const isMomentumWeak = Math.abs(entry.momentum || 0) < 0.5 || entry.obvTrend === 'none';
+  if (isMomentumWeak) {
+    score -= 2;
+  } else {
+    checklist.momentumFlow = true;
+  }
+
+  // STEP 5: Confirmation (Critical)
+  const bosConfirmed = (entry as any).structure?.bos || (entry.smc as any)?.bos || (entry.emaCross !== 'none' && entry.volumeSpike && !isMomentumWeak);
+  if (bosConfirmed) {
+    score += 2;
+    checklist.bosConfirmed = true;
+  }
+
+  // STEP 6: Indicator Context (Secondary)
+  let indScore = 0;
+  if (entry.macdHistogram && Math.abs(entry.macdHistogram) > 0) indScore++;
+  if (entry.vwapDiff && Math.abs(entry.vwapDiff) > 0) indScore++;
+  if (entry.smartMoneyScore && Math.abs(entry.smartMoneyScore) > 30) indScore++;
+  if (indScore >= 2) {
+    score += 1;
+  }
+
+  // Strict Institutional Filters
+  if (!checklist.liquiditySweep) score -= 10;
+  if (isMomentumWeak) score -= 10;
+  if (!checklist.volumeExpansion) score -= 10;
+  if (state === 'RANGING') score -= 10;
 
   // STEP 8 & 9 & 10: Decision Logic & Output Format
   let decision: InstitutionalDecision['decision'] = 'NO TRADE';
   let message = 'Market invalid';
 
-  if (!checklist.liquiditySweep) {
-    decision = 'WAIT';
-    message = 'WAIT - Awaiting liquidity sweep';
-  } else if (!checklist.bosConfirmed) {
-    decision = 'WAIT';
-    message = 'WAIT - No BOS/Displacement confirmation';
-  } else if (!checklist.momentumFlow) {
-    decision = 'NO TRADE';
-    message = 'NO TRADE - Weak momentum/order flow';
+  if (score >= 6 && checklist.liquiditySweep && checklist.volumeExpansion && checklist.momentumFlow) {
+    decision = 'VALID TRADE';
+    message = 'VALID TRADE - All institutional conditions met';
+  } else if (score >= 3) {
+    decision = 'LOW CONFIDENCE SETUP';
+    if (!checklist.bosConfirmed) message = 'WAIT - No confirmation';
+    else message = 'LOW CONFIDENCE SETUP - Not recommended due to low score';
   } else {
-    if (score >= 6) {
-      decision = 'VALID TRADE';
-      message = 'VALID TRADE - All institutional conditions met';
-    } else if (score >= 3) {
-      decision = 'LOW CONFIDENCE SETUP';
-      message = 'LOW CONFIDENCE SETUP - Not recommended due to low score';
-    } else {
-      decision = 'NO TRADE';
-      message = 'NO TRADE - Setup scored too low';
-    }
+    if (!checklist.liquiditySweep) message = 'WAIT - Awaiting sweep';
+    else message = 'NO TRADE - Setup scored too low';
   }
 
-  return { state, decision, score, message, checklist };
+  return { 
+    state, 
+    decision, 
+    score: Math.max(0, score), 
+    message, 
+    checklist 
+  };
 }
