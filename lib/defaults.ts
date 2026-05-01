@@ -86,6 +86,7 @@ export const DASHBOARD_DEFAULTS = {
     'smartMoney',     // Smart money score
     'strategy',       // Strategy signal
     'superSignal',    // Institutional SUPER_SIGNAL
+    'institutional',  // Institutional evaluation
     'finalAction',    // Final fused execution signal
   ] as readonly string[],
   /** Default trading style */

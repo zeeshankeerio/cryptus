@@ -174,6 +174,9 @@ const COL_WIDTHS = {
   flow: "w-[95px] min-w-[95px]",      // Increased from 90px to prevent overflow
   smart: "w-[90px] min-w-[90px]",
   winRate: "w-[90px] min-w-[90px]",   // Win Rate column
+  institutional: "w-[125px] min-w-[125px]", // Institutional column
+  superSignal: "w-[110px] min-w-[110px]",   // Super signal column
+  finalAction: "w-[100px] min-w-[100px]",   // Final execution column
 };
 
 // ─── Atomic Components ──────────────────────────────────────────
@@ -1452,7 +1455,7 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('superSignal') && (
-        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
+        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.superSignal)}>
           <SuperSignalBadge
             superSignal={entry.superSignal}
             isOwner={isOwner}
@@ -1463,7 +1466,7 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('institutional') && (
-        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
+        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.institutional)}>
           {(() => {
             const instDec = (display as any).institutionalDecision || entry.institutionalDecision;
             return instDec ? (
@@ -1488,7 +1491,7 @@ const ScreenerRow = memo(function ScreenerRow({
       )}
 
       {visibleCols.has('finalAction') && (
-        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.signal)}>
+        <td className={cn("px-3 py-3 text-right overflow-hidden", COL_WIDTHS.finalAction)}>
           <FinalBadge
             signal={entry.finalSignal ?? entry.strategySignal}
             source={entry.finalSource ?? 'strategy'}
@@ -1674,6 +1677,9 @@ function SkeletonRows({ visibleCols }: { visibleCols: Set<string> }) {
             else if (id === 'orderFlow') width = COL_WIDTHS.flow;
             else if (id === 'smartMoney') width = COL_WIDTHS.smart;
             else if (id === 'strategy') width = COL_WIDTHS.signal;
+            else if (id === 'superSignal') width = COL_WIDTHS.superSignal;
+            else if (id === 'institutional') width = COL_WIDTHS.institutional;
+            else if (id === 'finalAction') width = COL_WIDTHS.finalAction;
 
             // Skip core cols already handled above
             if (['rank', 'symbol', 'price', 'change24h', 'volume24h'].includes(id)) return null;
@@ -6145,11 +6151,11 @@ export default function ScreenerDashboard() {
                       currentDir={sortKey === 'superSignal' ? sortDir : 'desc'}
                       onSort={(k) => handleSort(k as any)}
                       align="right"
-                      widthClass={COL_WIDTHS.signal}
+                      widthClass={COL_WIDTHS.superSignal}
                     />
                   )}
-                  {visibleCols.has('institutional') && <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-right tracking-widest whitespace-nowrap", COL_WIDTHS.signal)}>INSTITUTIONAL</th>}
-                  {visibleCols.has('finalAction') && <SortHeader label="Final" sortKey="finalScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.signal} />}
+                  {visibleCols.has('institutional') && <th className={cn("px-3 py-3 text-[10px] font-bold uppercase text-slate-500 text-right tracking-widest whitespace-nowrap", COL_WIDTHS.institutional)}>INSTITUTIONAL</th>}
+                  {visibleCols.has('finalAction') && <SortHeader label="Final" sortKey="finalScore" currentKey={sortKey} currentDir={sortDir} onSort={handleSort} align="right" widthClass={COL_WIDTHS.finalAction} />}
                   <th className={cn("px-3 py-3 text-right text-[10px] font-bold uppercase text-slate-500 tracking-widest whitespace-nowrap", COL_WIDTHS.edit)}>Edit</th>
                 </tr>
               </thead>
