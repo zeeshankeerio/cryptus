@@ -82,6 +82,8 @@ Conviction: ${narration.conviction}% (${narration.convictionLabel})
 ${riskText}
 
 Institutional Flow:
+• Protocol: ${entry?.institutionalDecision?.decision || 'N/A'} (Score: ${entry?.institutionalDecision?.score || 0}/10)
+• Status: ${entry?.institutionalDecision?.message || 'N/A'}
 • Smart Money: ${smartMoneyScore || 0}
 • Funding: ${((fundingRate?.rate || 0) * 100).toFixed(4)}%
 
